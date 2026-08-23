@@ -12,10 +12,13 @@ Por la misma razón, tampoco hay pruebas que correr todavía. Se documenta aquí
 
 ## Restricciones y decisiones clave
 
+Las restricciones completas, clasificadas en técnicas, organizativas y legales, están en la [sección 2 del arc42](docs/arc42/arc42-template-ES.md). Las principales:
+
 - Solo evalúa exámenes de opción múltiple con hoja de respuestas de formato fijo; no procesa desarrollo libre.
 - Dominio acotado a cálculo diferencial: límites, derivadas y simplificaciones algebraicas.
 - Usuarios: profesores y TAs autenticados. El estudiante no interactúa con el sistema, solo es la fuente de las marcas en la hoja.
 - Los resultados se presentan en un dashboard interactivo, no como archivo aislado ni salida de consola.
+- Las calificaciones y los escaneos son datos personales de estudiantes: su tratamiento se rige por el régimen colombiano de protección de datos, y ningún dato personal se envía al proveedor de LLM.
 
 ## Objetivos de calidad
 
@@ -26,16 +29,28 @@ Por la misma razón, tampoco hay pruebas que correr todavía. Se documenta aquí
 
 ## Metodología
 
-El desarrollo sigue Aspect Driven Development (ADD): cada funcionalidad se declara como un aspecto que se puede trazar de principio a fin, desde el requisito hasta la evidencia de que funciona (ver `docs/aspectos.md`).
+El desarrollo sigue Aspect Driven Development (ADD): cada funcionalidad se declara como un aspecto que se puede trazar de principio a fin, desde el requisito hasta la evidencia de que funciona (ver [`docs/aspectos.md`](docs/aspectos.md)).
+
+## Decisiones de arquitectura
+
+| ADR | Título | Estado |
+|---|---|---|
+| [0001](docs/adr/0001-usar-monolito-modular.md) | Arquitectura de Monolito Modular | reemplazado por 0002 |
+| [0002](docs/adr/0002-procesar-calificacion-de-forma-asincrona.md) | Procesar la calificación de forma asíncrona sobre el monolito modular | aceptado |
+
+Los ADR aceptados no se editan ni se borran: si una decisión cambia, se escribe uno nuevo y el anterior pasa a estado *reemplazado por*.
 
 ## Estado actual
 
-- [x] Aspecto A-01 (carga de examen)
-- [x] arc42: contexto, restricciones y objetivos de calidad
+- [x] Aspecto A-01 (carga de examen) especificado; A-02 a A-05 declarados
+- [x] arc42: objetivos de calidad, restricciones clasificadas y contexto
+- [x] arc42: estrategia de solución, decisiones de arquitectura y riesgos
+- [x] Escenarios de calidad: 5 priorizados y 2 complementarios
 - [x] C4 Nivel 1
-- [ ] arc42: Building Block View, Runtime View, Deployment View, Architecture Decisions
-- [ ] C4 Niveles 2 a 4
-- [ ] ADR
+- [x] ADR 0001 y 0002
+- [ ] arc42: Building Block View, Runtime View, Deployment View, Cross-cutting Concepts
+- [ ] C4 Niveles 2 y 3
+- [ ] Elección de stack y de proveedor de LLM
 - [ ] Código
 
 ## Documentación
@@ -43,11 +58,12 @@ El desarrollo sigue Aspect Driven Development (ADD): cada funcionalidad se decla
 ```
 docs/
 ├── arc42/
-│   └── arc42-template-ES.md   # documento de arquitectura completo (arc42)
+│   └── arc42-template-ES.md                            # documento de arquitectura (arc42)
 ├── adr/
-│   └── docr-adr.md            # plantilla de ADR y convenciones (sin decisiones registradas aún)
+│   ├── 0001-usar-monolito-modular.md                   # reemplazado por 0002
+│   └── 0002-procesar-calificacion-de-forma-asincrona.md
 ├── c4/
-│   └── doc-c4.md              # modelo C4 (Nivel 1 definido; 2-4 pendientes)
-├── aspectos.md                # aspectos identificados y tabla de trazabilidad
-└── ia.md                      # registro de uso de IA durante el desarrollo
+│   └── doc-c4.md                                       # modelo C4 (Nivel 1; 2-3 pendientes)
+├── aspectos.md                                         # aspectos y tabla de trazabilidad
+└── ia.md                                               # registro de uso de IA
 ```
