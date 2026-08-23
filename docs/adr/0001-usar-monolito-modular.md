@@ -1,6 +1,6 @@
 # 0001 — Arquitectura de Monolito Modular
 
-- **Estado:** aceptado
+- **Estado:** reemplazado por [0002](0002-procesar-calificacion-de-forma-asincrona.md)
 - **Fecha:** 2026-08-22
 - **Decide:** Josué Ortega De Arco, María Restrepo Licona, Sebastián Cañas Plata, Susana Rosales Castellar
 - **Escenario de calidad relacionado:** ninguno (decisión fundacional)
