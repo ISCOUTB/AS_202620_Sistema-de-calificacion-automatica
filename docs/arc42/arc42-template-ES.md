@@ -120,7 +120,7 @@ describen el espacio dentro del cual se puede diseñar.
 | **RNF-05** | **Usuarios objetivo: profesores y TAs, no estudiantes.** | Enunciado del problema (alcance definido por el cliente) | El sistema está dirigido a docentes y asistentes de cátedra. El estudiante es la fuente de las marcas en la hoja, pero no es usuario ni interactúa con el sistema. Condiciona el diseño de roles y permisos: no existe interfaz ni cuenta de estudiante, y todo el flujo se diseña para el rol docente. |
 | **RNF-06** | **Dominio acotado a cálculo diferencial.** | Alcance acordado con el cliente | El alcance temático se limita a límites, derivadas y simplificaciones algebraicas. Acota el motor de validación simbólica y evita sobredimensionar el sistema para integrales, ecuaciones diferenciales o álgebra lineal. |
 | **RNF-07** | **Arranque reproducible con un solo comando.** | Condición de entrega del curso (`CONTRATO.md`) | El repositorio debe levantarse con un único comando y presentar un esqueleto ejecutable con una prueba automatizada en verde. Es la restricción con más peso en [ADR-0002](../adr/0002-procesar-calificacion-de-forma-asincrona.md), porque penaliza cualquier topología que exija orquestar varios despliegues. |
-| **RNF-08** | **Stack de implementación limitado a las opciones del curso:** backend en NestJS o FastAPI; frontend en Flutter o Next.js. | Impuesta por la asignatura | El equipo no puede elegir libremente el lenguaje ni el framework. Combinada con RNF-01, condiciona fuertemente la elección de backend, porque SymPy y el ecosistema de visión por computador solo existen con madurez en Python. Se decidirá en un ADR propio. |
+| **RNF-08** | **Stack de implementación limitado a las opciones del curso:** backend en NestJS o FastAPI; frontend en Flutter o Next.js. | Impuesta por la asignatura | El equipo no puede elegir libremente el lenguaje ni el framework. Combinada con RNF-01, condiciona fuertemente la elección de backend, porque SymPy y el ecosistema de visión por computador solo existen con madurez en Python. En el frontend, lo determinante es la experiencia previa del equipo bajo el cronograma de RNF-09. Resuelta en [ADR-0003](../adr/0003-usar-fastapi-y-flutter.md). |
 | **RNF-09** | **Equipo de cuatro estudiantes con dedicación parcial y cronograma fijado por el curso** (cortes en las semanas 5 y 10, entrega final en la 16). | Contexto académico | Limita la complejidad operacional asumible: no hay capacidad para operar infraestructura distribuida ni para sostener varios despliegues. Es uno de los argumentos que sostiene la elección de monolito modular frente a microservicios en ADR-0002. |
 | **RNF-10** | **Todos los integrantes deben contribuir al historial del repositorio**, con código y documentación repartidos a lo largo del semestre. | `CONTRATO.md` §10 del curso | Criterio calificado. Obliga a repartir el trabajo por módulos y a usar ramas y *pull requests* en lugar de commits directos de una sola persona, lo que a su vez favorece una descomposición con fronteras claras que puedan asignarse por separado. |
 | **RNF-11** | **Repositorio público, en la organización `ISCOUTB` y con la convención de nombres del curso.** | `CONTRATO.md` del curso | Ninguna parte del sistema puede depender de artefactos privados ni de secretos versionados. Cualquier credencial (por ejemplo, la clave del proveedor de LLM) debe leerse de variables de entorno y nunca del repositorio. |
@@ -180,6 +180,39 @@ diagrama C4 de contexto en [`../c4/doc-c4.md`](../c4/doc-c4.md).
 ---
 
 # 4. Solution Strategy
+
+## 4.1 Matriz comparativa de los tres estilos frente al árbol de utilidad
+
+Antes de elegir estilo se compararon los tres candidatos **contra los escenarios de calidad de
+este proyecto**, no en abstracto. La pregunta en cada celda es: *¿este estilo hace más
+alcanzable o menos alcanzable este escenario concreto?*
+
+| Escenario / atributo | Capas (Layered) | Hexagonal completa | Monolito modular + asíncrono |
+|---|---|---|---|
+| **[EC-01](#ec-01)** · Exactitud OMR ≥98% | **Neutro con reserva.** La exactitud depende del algoritmo, no del estilo. Pero el código de detección queda mezclado en una única capa de negocio con la calificación y la autoría, lo que dificulta iterar sobre él de forma aislada. | **Mejora.** El dominio de detección se prueba sin base de datos ni web, lo que permite ciclos de ajuste rápidos sobre el algoritmo. | **Mejora.** El módulo `omr` tiene frontera propia: se puede optimizar y medir sin arrastrar el resto del sistema. |
+| **[EC-02](#ec-02)** · Marcas ambiguas ≥99% | **Empeora.** La política de umbral y el manejo de la incertidumbre se dispersan entre la capa de negocio y la de presentación. | **Mejora.** La política de confianza vive en el dominio, aislada de cómo se muestre o se persista. | **Mejora.** Contenida en `omr`, junto a la detección que la produce. |
+| **[EC-03](#ec-03)** · ≤5 s por hoja (p95) | **Neutro.** Nada en el estilo ayuda ni estorba a la latencia de una hoja suelta. | **Neutro.** Las capas de indirección añaden un coste despreciable frente al de procesar una imagen. | **Neutro.** |
+| **[EC-04](#ec-04)** · 200 hojas en ≤10 min | **Empeora, y es determinante.** El estilo no dice nada sobre concurrencia: el flujo ocurre dentro de la petición, de forma secuencial, y 200 × 5 s = 16,6 min incumple el escenario. | **Neutro.** Es ortogonal al problema: aísla el dominio, pero no resuelve el caudal. | **Mejora, y es determinante.** Es el único de los tres que incorpora cola y workers, que es lo que hace el escenario alcanzable. |
+| **[EC-05](#ec-05)** · Validez de la clave 100% | **Empeora.** El validador simbólico y el consumo del LLM quedan acoplados a la infraestructura, y la salida no determinista del LLM se vuelve difícil de aislar para probar. | **Mejora.** Aislar el proveedor de LLM tras un puerto es exactamente lo que permite verificar la validación simbólica sin depender del servicio externo. | **Mejora.** Se obtiene el mismo beneficio aplicando el aislamiento **solo** en `autoria`, donde compensa, en lugar de en los siete módulos. |
+| **[EC-06](#ec-06)** · Aislamiento por curso | **Empeora.** La autorización se reparte entre los controladores de la capa de presentación, sin un lugar único donde auditarla. | **Mejora.** | **Mejora.** El módulo `identidad` concentra la autorización con frontera declarada. |
+| **[EC-07](#ec-07)** · Recepción sin pérdida | **Empeora.** Sin cola persistente no hay durabilidad: una caída a mitad del lote pierde el trabajo en curso. | **Neutro.** No aporta durabilidad por sí mismo. | **Mejora.** La cola persistente da la garantía de que nada se pierde entre la carga y el procesamiento. |
+| **Mantenibilidad** *(atributo del árbol)* | **Empeora.** Las capas cortan en horizontal, pero el cambio en este sistema llega en vertical: tocar el OMR no debería tocar el dashboard, y en capas ambos viven en la misma capa de negocio. | **Mejora mucho.** | **Mejora.** Los módulos coinciden con las fronteras funcionales reales y con los aspectos del ADD. |
+| **Coste de montaje** *(RNF-07, RNF-09)* | **El más bajo.** Es lo que se monta más rápido con un equipo sin experiencia. | **El más alto.** Puertos y adaptadores en los siete módulos, con curva de aprendizaje, compitiendo con el tiempo de entrega. | **Intermedio.** Siete paquetes con frontera, más el coste de modelar los estados del trabajo asíncrono. |
+
+**Lectura de la matriz.** Capas es el más barato de montar pero empeora cinco de los siete
+escenarios, incluidos los dos de mayor impacto. Hexagonal mejora casi todo, pero su coste se
+paga por igual en los siete módulos, y en los más delgados —`dashboard`, `identidad`— produce
+indirección sin contenido; además no resuelve EC-04, que es el escenario que más aprieta. El
+monolito modular con procesamiento asíncrono mejora seis de siete y es el único que hace
+alcanzable EC-04, a un coste de montaje intermedio.
+
+De ahí sale la decisión registrada en
+[ADR-0002](../adr/0002-procesar-calificacion-de-forma-asincrona.md), incluido el matiz de
+adoptar el aislamiento hexagonal **de forma selectiva** en los dos puntos donde la matriz
+muestra que compensa —el proveedor de LLM y el almacenamiento de imágenes— en lugar de como
+política global.
+
+## 4.2 Tácticas frente a los escenarios priorizados
 
 | Decisión | Motivación | Objetivo de calidad | Registro |
 |---|---|---|---|
@@ -266,6 +299,7 @@ decisión cambia, se escribe uno nuevo y el anterior pasa a estado *reemplazado 
 |---|---|---|---|---|
 | [0001](../adr/0001-usar-monolito-modular.md) | Arquitectura de Monolito Modular | reemplazado por 0002 | 2026-08-22 | ninguno declarado |
 | [0002](../adr/0002-procesar-calificacion-de-forma-asincrona.md) | Procesar la calificación de forma asíncrona sobre el monolito modular | **aceptado** | 2026-08-23 | [EC-03](#ec-03), [EC-04](#ec-04) |
+| [0003](../adr/0003-usar-fastapi-y-flutter.md) | Usar FastAPI en el backend y Flutter en el frontend | **aceptado** | 2026-08-23 | [EC-01](#ec-01), [EC-05](#ec-05) |
 
 **Por qué 0002 reemplaza a 0001.** La revisión de coherencia previa al corte 1 encontró que
 EC-03 y EC-04 no se pueden cumplir a la vez con procesamiento síncrono —200 hojas × 5 s son
@@ -278,8 +312,8 @@ frente a capas o microservicios— se confirma sin cambios en 0002.
 
 **Decisiones previstas (aún no tomadas):**
 
-- Elección de stack dentro de las opciones de RNF-08, y del proveedor de LLM y su modo de
-  consumo (externo o local) — ver R-02.
+- Proveedor de LLM y su modo de consumo, externo o local — ver R-02. (La elección de stack de
+  RNF-08 quedó resuelta en ADR-0003.)
 - Mecanismo de persistencia y almacenamiento de las imágenes, con su política de retención
   (RNF-14).
 - Estrategia de calibración del umbral de confianza del OMR.
@@ -355,7 +389,7 @@ de carga.
 | **Entorno** | Operación normal, carga individual. |
 | **Respuesta** | El sistema identifica correctamente la opción marcada en cada pregunta. |
 | **Medida de respuesta** | **≥98% de exactitud** en la detección de la marca correcta, sobre un dataset de prueba de 300 hojas escaneadas con etiquetado manual de referencia. |
-| **Relacionado** | QG-1 · RF-02 · Aspecto [A-02](../aspectos.md#a-02) |
+| **Relacionado** | QG-1 · RF-02 · [ADR-0003](../adr/0003-usar-fastapi-y-flutter.md) · Aspecto [A-02](../aspectos.md#a-02) |
 
 <a id="ec-02"></a>
 
@@ -383,7 +417,7 @@ de carga.
 | **Entorno** | Operación normal, carga típica del servidor, sin lote masivo en curso. |
 | **Respuesta** | El sistema procesa la hoja y el resultado queda visible en el dashboard. |
 | **Medida de respuesta** | **Tiempo end-to-end ≤5 segundos** por examen (percentil 95), medido desde la confirmación de carga hasta la disponibilidad del resultado. |
-| **Relacionado** | QG-2 · RF-01, RF-04, RF-05 · Aspecto [A-03](../aspectos.md#a-03) |
+| **Relacionado** | QG-2 · RF-01, RF-04, RF-05 · [ADR-0002](../adr/0002-procesar-calificacion-de-forma-asincrona.md) · Aspecto [A-03](../aspectos.md#a-03) |
 
 <a id="ec-04"></a>
 
@@ -397,13 +431,14 @@ de carga.
 | **Entorno** | Pico de carga (fin de periodo de examen). |
 | **Respuesta** | El sistema confirma la recepción del lote de inmediato, lo encola y lo procesa completo sin caídas ni pérdida de datos, mostrando el avance en el dashboard. |
 | **Medida de respuesta** | **100% de las hojas procesadas correctamente en ≤10 minutos** desde la confirmación de recepción, con uso de CPU y memoria del servidor por debajo del 85% durante todo el proceso. |
-| **Relacionado** | QG-2 · RF-01 · ADR-0002 · Aspecto [A-03](../aspectos.md#a-03) |
+| **Relacionado** | QG-2 · RF-01 · [ADR-0002](../adr/0002-procesar-calificacion-de-forma-asincrona.md) · Aspecto [A-03](../aspectos.md#a-03) |
 
 > **Nota de coherencia entre EC-03 y EC-04.** 200 hojas × 5 s = 16,6 min de trabajo
 > secuencial, por encima del límite de 10 minutos. Los dos escenarios solo son satisfacibles a
 > la vez si el procesamiento del lote es paralelo: con 4 workers concurrentes el lote baja a
 > ~4,2 min. Por eso el procesamiento asíncrono no es una optimización futura sino parte de la
-> decisión estructural registrada en ADR-0002. El número de workers es el parámetro que se
+> decisión estructural registrada en [ADR-0002](../adr/0002-procesar-calificacion-de-forma-asincrona.md).
+> El número de workers es el parámetro que se
 > ajusta si la medición real se desvía.
 
 <a id="ec-05"></a>
@@ -418,7 +453,7 @@ de carga.
 | **Entorno** | **Fase de autoría**, antes de aplicar el examen. Fuera de la ruta crítica de calificación. |
 | **Respuesta** | El sistema verifica simbólicamente que solo una opción es equivalente a la respuesta esperada, y alerta si dos opciones resultan equivalentes entre sí. |
 | **Medida de respuesta** | **100% de los exámenes habilitados han pasado la validación de unicidad**; **tiempo de validación ≤5 segundos por pregunta**. |
-| **Relacionado** | QG-1 · RF-06, RF-07 · Aspecto [A-04](../aspectos.md#a-04) |
+| **Relacionado** | QG-1 · RF-06, RF-07 · [ADR-0003](../adr/0003-usar-fastapi-y-flutter.md) · Aspecto [A-04](../aspectos.md#a-04) |
 
 > **Nota.** El límite de 5 segundos de EC-05 es *por pregunta y en fase de autoría*; no entra
 > en conflicto con los 5 segundos *por hoja completa* de EC-03, que corresponden a la fase de
@@ -459,7 +494,8 @@ fallos. Se documentan aparte para no alterar la priorización original.
 | **Relacionado** | QG-2, QG-3 · RF-01 · Aspecto [A-01](../aspectos.md#a-01) |
 
 > **Nota.** EC-07 mide la *recepción*, no la calificación. La separación es consecuencia de
-> ADR-0002: al procesar de forma asíncrona, la carga promete que nada se pierde, mientras que
+> [ADR-0002](../adr/0002-procesar-calificacion-de-forma-asincrona.md): al procesar de forma asíncrona, la carga
+> promete que nada se pierde, mientras que
 > la promesa de calificar en tiempo la sostienen EC-03 y EC-04.
 
 ---
