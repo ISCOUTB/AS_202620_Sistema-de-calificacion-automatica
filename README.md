@@ -19,6 +19,7 @@ Las restricciones completas, clasificadas en técnicas, organizativas y legales,
 - Usuarios: profesores y TAs autenticados. El estudiante no interactúa con el sistema, solo es la fuente de las marcas en la hoja.
 - Los resultados se presentan en un dashboard interactivo, no como archivo aislado ni salida de consola.
 - Las calificaciones y los escaneos son datos personales de estudiantes: su tratamiento se rige por el régimen colombiano de protección de datos, y ningún dato personal se envía al proveedor de LLM.
+- El stack está limitado a las opciones del curso. Se eligió FastAPI en el backend, porque SymPy y el ecosistema de OpenCV solo existen con madurez en Python, y Flutter en el frontend, por la experiencia previa del equipo.
 
 ## Objetivos de calidad
 
@@ -37,6 +38,7 @@ El desarrollo sigue Aspect Driven Development (ADD): cada funcionalidad se decla
 |---|---|---|
 | [0001](docs/adr/0001-usar-monolito-modular.md) | Arquitectura de Monolito Modular | reemplazado por 0002 |
 | [0002](docs/adr/0002-procesar-calificacion-de-forma-asincrona.md) | Procesar la calificación de forma asíncrona sobre el monolito modular | aceptado |
+| [0003](docs/adr/0003-usar-fastapi-y-flutter.md) | Usar FastAPI en el backend y Flutter en el frontend | aceptado |
 
 Los ADR aceptados no se editan ni se borran: si una decisión cambia, se escribe uno nuevo y el anterior pasa a estado *reemplazado por*.
 
@@ -47,10 +49,12 @@ Los ADR aceptados no se editan ni se borran: si una decisión cambia, se escribe
 - [x] arc42: estrategia de solución, decisiones de arquitectura y riesgos
 - [x] Escenarios de calidad: 5 priorizados y 2 complementarios
 - [x] C4 Nivel 1
-- [x] ADR 0001 y 0002
+- [x] ADR 0001, 0002 y 0003
+- [x] Elección de stack: FastAPI en el backend, Flutter en el frontend
 - [ ] arc42: Building Block View, Runtime View, Deployment View, Cross-cutting Concepts
 - [ ] C4 Niveles 2 y 3
-- [ ] Elección de stack y de proveedor de LLM
+- [ ] Esqueleto ejecutable
+- [ ] Elección de proveedor de LLM
 - [ ] Código
 
 ## Documentación
@@ -61,7 +65,8 @@ docs/
 │   └── arc42-template-ES.md                            # documento de arquitectura (arc42)
 ├── adr/
 │   ├── 0001-usar-monolito-modular.md                   # reemplazado por 0002
-│   └── 0002-procesar-calificacion-de-forma-asincrona.md
+│   ├── 0002-procesar-calificacion-de-forma-asincrona.md
+│   └── 0003-usar-fastapi-y-flutter.md
 ├── c4/
 │   └── doc-c4.md                                       # modelo C4 (Nivel 1; 2-3 pendientes)
 ├── aspectos.md                                         # aspectos y tabla de trazabilidad
