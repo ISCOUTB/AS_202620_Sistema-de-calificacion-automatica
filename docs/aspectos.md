@@ -28,7 +28,7 @@ alcanzables desde la fila del aspecto que los realiza.
 | **[A-01](#a-01)** | Carga de examen para calificación | Especificado | RF-01 | [EC-07](arc42/arc42-template-ES.md#ec-07) | C1: Sistema de Calificación OMR · C2 pendiente (S4) | [0002](adr/0002-procesar-calificacion-de-forma-asincrona.md) | Pendiente (S4) | Pendiente (S4) | Pendiente (S4) |
 | **[A-02](#a-02)** | Detección de marcas y nivel de confianza | Declarado | RF-02, RF-03 | [EC-01](arc42/arc42-template-ES.md#ec-01) · [EC-02](arc42/arc42-template-ES.md#ec-02) | Pendiente (S4) | ADR de umbral previsto (S4) | Pendiente | Pendiente | Pendiente |
 | **[A-03](#a-03)** | Calificación contra la clave y publicación | Declarado | RF-04, RF-05, RF-08 | [EC-03](arc42/arc42-template-ES.md#ec-03) · [EC-04](arc42/arc42-template-ES.md#ec-04) | Pendiente (S4) | [0002](adr/0002-procesar-calificacion-de-forma-asincrona.md) | Pendiente | Pendiente | Pendiente |
-| **[A-04](#a-04)** | Autoría y validación de la clave | Declarado | RF-06, RF-07 | [EC-05](arc42/arc42-template-ES.md#ec-05) | Pendiente (S4) | ADR de validación previsto (S4) | Pendiente | Pendiente | Pendiente |
+| **[A-04](#a-04)** | Autoría y validación de la clave | Declarado | RF-06, RF-07 | [EC-05](arc42/arc42-template-ES.md#ec-05) | Pendiente (S4) | [0003](adr/0003-usar-fastapi-y-flutter.md) · ADR de validación previsto (S4) | Pendiente | Pendiente | Pendiente |
 | **[A-05](#a-05)** | Identidad y aislamiento por curso | Declarado | RF-09, RF-10 | [EC-06](arc42/arc42-template-ES.md#ec-06) | Pendiente (S4) | ADR de auditoría previsto (S6) | Pendiente | Pendiente | Pendiente |
 
 **Estados:** *Declarado* = pasos 1 y 3 parciales (nombre, para quién, qué resuelve, requisitos
@@ -104,7 +104,7 @@ alcance mayor.
 Queda **una decisión estructural pendiente** que sí ameritará su propio ADR: **dónde y cómo se
 almacenan las imágenes cargadas**, incluyendo la política de retención que exige RNF-14 (los
 escaneos no pueden conservarse indefinidamente). Se pospone a la semana 4 porque depende de la
-decisión de despliegue y de stack, todavía abiertas (riesgos R-02 y R-06 del arc42).
+decisión de persistencia, todavía abierta (riesgo R-06 del arc42).
 
 ### 5. Construir
 
@@ -189,6 +189,9 @@ Pendiente. No existe evidencia de calidad para este aspecto en esta entrega.
 - **Requisitos:** RF-06, RF-07.
 - **Escenario:** [EC-05](arc42/arc42-template-ES.md#ec-05).
 - **Tensión que lo condiciona:** [T-2](#t-2).
+- **Decisión que ya lo condiciona:** [ADR-0003](adr/0003-usar-fastapi-y-flutter.md) — la
+  elección de FastAPI se apoya precisamente en que SymPy, del que depende EC-05, solo existe
+  en Python.
 - **Restricción legal relevante:** RNF-13 — ningún dato personal de estudiantes se envía al
   proveedor de LLM. Este aspecto es el único que se comunica con un servicio externo, así que
   es donde esa restricción se hace efectiva.
