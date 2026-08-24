@@ -1,0 +1,25 @@
+# Entorno
+.env
+
+# Configuración local de Claude Code (permisos específicos de esta máquina)
+.claude/settings.local.json
+
+# Python (backend)
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# Flutter/Dart (frontend)
+frontend/.dart_tool/
+frontend/.flutter-plugin-dependencies
+frontend/build/
+frontend/.packages
+
+# Editor/OS
+.vscode/
+.idea/
+*.iml
+.DS_Store
+Thumbs.db

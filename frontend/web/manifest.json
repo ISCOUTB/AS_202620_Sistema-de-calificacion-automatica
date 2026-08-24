@@ -1,0 +1,12 @@
+{
+    "name": "Sistema de Calificación OMR",
+    "short_name": "OMR",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#0175C2",
+    "theme_color": "#0175C2",
+    "description": "Sistema de calificación automática de exámenes de opción múltiple mediante OMR.",
+    "orientation": "portrait-primary",
+    "prefer_related_applications": false,
+    "icons": []
+}
