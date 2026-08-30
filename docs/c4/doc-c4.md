@@ -7,7 +7,7 @@ cambios y no se desincronicen en silencio.
 | | |
 |---|---|
 | **Sistema** | Sistema de Calificación OMR |
-| **Última actualización** | 2026-08-23 |
+| **Última actualización** | 2026-08-29 |
 | **Niveles completos** | Nivel 1 (Contexto) |
 | **Notación** | C4 model — [c4model.com](https://c4model.com) · Renderizado con Mermaid `flowchart` |
 | **Documentos relacionados** | [`../arc42/arc42-template-ES.md`](../arc42/arc42-template-ES.md) · [`../adr/`](../adr/) · [`../aspectos.md`](../aspectos.md) |
@@ -18,7 +18,7 @@ cambios y no se desincronicen en silencio.
 
 **Tipo de diagrama:** C4 Nivel 1 — Contexto del Sistema
 **Ámbito:** Sistema de Calificación OMR
-**Fecha:** 2026-08-23
+**Fecha:** 2026-08-29
 **Audiencia:** cualquier persona, técnica o no
 
 El diagrama representa el Sistema de Calificación OMR **como una caja negra**, junto a sus
@@ -27,38 +27,34 @@ interna: eso corresponde al Nivel 2.
 
 ```mermaid
 ---
-title: "C4 Nivel 1 · Contexto — Sistema de Calificación OMR (2026-08-23)"
+title: "C4 Nivel 1 · Contexto — Sistema de Calificación OMR (2026-08-29)"
 ---
 flowchart TB
     profesor["<b>Profesor / TA</b>
     [Persona]
 
-    Docente autorizado que crea exámenes,
+    Docente autorizado que registra exámenes,
     sube escaneos y revisa resultados."]
 
     sistema["<b>Sistema de Calificación OMR</b>
     [Sistema de software]
 
-    Genera y valida bancos de preguntas,
-    procesa hojas escaneadas, califica
-    y presenta los resultados."]
+    Procesa las hojas escaneadas,
+    califica contra la clave y presenta
+    los resultados."]
 
     llm["<b>Proveedor de LLM</b>
-    [Sistema externo · PENDIENTE]
+    [Sistema externo]
 
-    Genera enunciados y distractores
-    candidatos durante la autoría.
-    Proveedor aún sin decidir."]
+    Propone distractores cuando
+    el profesor lo pide."]
 
-    profesor -->|"Crea exámenes, carga hojas,
-    gestiona cursos y resuelve ambigüedades
+    profesor -->|"Registra exámenes y sube escaneos
     <b>[HTTPS · Web UI]</b>"| sistema
-    sistema -->|"Presenta notas, estadísticas
-    y alertas de revisión manual
+    sistema -->|"Devuelve notas y alertas
     <b>[HTTPS · HTML/JSON]</b>"| profesor
-    sistema -.->|"Solicita enunciados
-    y distractores candidatos
-    <b>[HTTPS/JSON · por confirmar]</b>"| llm
+    sistema -.->|"Pide distractores
+    <b>[HTTPS/JSON]</b>"| llm
 
     classDef person fill:#08427B,stroke:#073B6F,color:#ffffff
     classDef system fill:#1168BD,stroke:#3379B7,color:#ffffff
@@ -83,17 +79,17 @@ flowchart TB
 
 | Elemento | Tipo | Descripción |
 |---|---|---|
-| **Profesor / TA** | Persona | Docente autorizado que crea los bancos de preguntas, sube los escaneos de las hojas de respuesta, resuelve las marcas ambiguas y consulta los resultados. Es el **único** usuario humano del sistema (restricción RNF-05). |
-| **Sistema de Calificación OMR** | Sistema en alcance | Genera y valida bancos de preguntas de cálculo diferencial, procesa las hojas escaneadas mediante reconocimiento óptico de marcas, calcula las calificaciones y las presenta en un dashboard interactivo. |
-| **Proveedor de LLM** | Sistema externo *(pendiente)* | Servicio de modelo de lenguaje usado en la **fase de autoría** para proponer enunciados y distractores. Su salida nunca se acepta directamente: siempre pasa por la validación simbólica con SymPy dentro del sistema (RF-07). |
+| **Profesor / TA** | Persona | Docente autorizado que registra los bancos de preguntas y la clave, sube los escaneos de las hojas de respuesta, resuelve las marcas ambiguas y consulta los resultados. Es el **único** usuario humano del sistema (restricción RNF-05). |
+| **Sistema de Calificación OMR** | Sistema en alcance | Recibe el banco de preguntas y la clave que registra el profesor, procesa las hojas escaneadas mediante reconocimiento óptico de marcas, calcula las calificaciones y las presenta en un dashboard interactivo. |
+| **Proveedor de LLM** | Sistema externo *(opcional y pendiente)* | Servicio de modelo de lenguaje que el profesor puede invocar en la **fase de autoría** para que le proponga distractores diagnósticos (RF-11). No participa en la calificación, y el sistema opera completo sin invocarlo nunca. Su salida nunca se acepta sola: el profesor decide qué acepta y habilita el examen (RF-07). |
 
 ### Relaciones
 
 | # | Origen → Destino | Propósito | Tecnología |
 |---|---|---|---|
-| 1 | Profesor / TA → Sistema | Crea exámenes, carga hojas escaneadas, gestiona cursos y resuelve marcas ambiguas. | HTTPS · Web UI |
+| 1 | Profesor / TA → Sistema | Registra el banco de preguntas y la clave, habilita el examen, sube las hojas escaneadas, gestiona sus cursos y resuelve las marcas ambiguas. | HTTPS · Web UI |
 | 2 | Sistema → Profesor / TA | Presenta notas, estadísticas por pregunta y alertas de revisión manual. | HTTPS · HTML/JSON |
-| 3 | Sistema → Proveedor de LLM *(pendiente)* | Solicita la generación de enunciados y distractores candidatos. | HTTPS/JSON, por confirmar |
+| 3 | Sistema → Proveedor de LLM *(opcional, pendiente)* | Solicita distractores diagnósticos para una pregunta, a petición del profesor. | HTTPS/JSON, por confirmar |
 
 ---
 
@@ -117,13 +113,10 @@ sube manualmente.
 el sistema ni tiene cuenta en él (RNF-05). Es un stakeholder afectado —está registrado como
 tal en la sección 1.3 del [arc42](../arc42/arc42-template-ES.md)— pero no un actor del diagrama de contexto.
 
-**Por qué SymPy no está aquí.** SymPy es una **librería** que se ejecuta dentro del proceso del
-sistema, no un servicio con el que el sistema se comunique. Las librerías nunca son sistemas
-externos en C4; aparecen, si acaso, como parte de la tecnología de un contenedor en el Nivel 2.
-Esta es la diferencia con el proveedor de LLM, que sí es un servicio con frontera de red.
-
-**Por qué el proveedor de LLM aparece punteado.** El equipo aún no ha decidido cómo se consume
-el modelo de lenguaje (riesgo R-02 del arc42, y elección de stack RNF-08). La decisión cambia este diagrama:
+**Por qué el proveedor de LLM aparece punteado.** Por dos razones, no una. La primera: su uso
+es **opcional** (RF-11), así que la relación existe pero no se recorre en todos los casos. La
+segunda: el equipo aún no ha decidido cómo se consume el modelo (riesgo R-02 del arc42). Esa
+segunda decisión cambia el diagrama:
 
 - **Si se consume una API alojada** (Google AI Studio, Groq, GitHub Models u otra), el nodo se
   confirma como sistema externo, la flecha 3 pasa a continua y hay que documentar sus modos de
@@ -131,9 +124,22 @@ el modelo de lenguaje (riesgo R-02 del arc42, y elección de stack RNF-08). La d
 - **Si se aloja un modelo local**, el nodo **desaparece** de este nivel y el modelo pasa a ser
   un contenedor del Nivel 2.
 
-Se dibuja punteado en lugar de omitirlo porque el LLM es parte del stack obligatorio (RNF-01):
-omitirlo daría a entender que el sistema no lo usa, que sería falso. Se documenta como decisión
-abierta, no como hueco.
+El nodo no lleva esas dos condiciones escritas en su etiqueta. Un elemento de Nivel 1 se rotula
+con su tipo —«Sistema externo»— y nada más; que el uso sea opcional y el proveedor esté sin
+decidir lo comunican el trazo discontinuo, la leyenda y esta nota, y el Nivel 3 lo detallará
+cuando se dibuje. Cargar la caja de calificativos la vuelve ilegible sin agregar información
+que no esté ya en el documento.
+
+Se dibuja en lugar de omitirlo porque el sistema sí ofrece esa capacidad, aunque no dependa de
+ella: omitirlo daría a entender que la función no existe. Desde [ADR-0005](../adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md)
+el LLM ya no es un componente obligatorio de RNF-01, sino una capacidad de apoyo, y el trazo
+discontinuo es justamente lo que comunica esa diferencia.
+
+**Por qué las etiquetas de las flechas son cortas.** Cada una nombra el propósito en unas pocas
+palabras y la tecnología entre corchetes, que es lo que pide la notación. La descripción completa
+de cada relación —incluida la revisión de marcas ambiguas, que la flecha 1 no alcanza a
+nombrar— está en la tabla de relaciones de arriba. El diagrama se lee de un vistazo; la tabla se
+lee cuando hace falta el detalle.
 
 **Ausencia deliberada de otros sistemas externos.** No hay integración con el sistema académico
 institucional ni con ningún servicio de autenticación externo: la autenticación es propia del
