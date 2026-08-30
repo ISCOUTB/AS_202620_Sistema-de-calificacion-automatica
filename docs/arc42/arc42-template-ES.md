@@ -1,5 +1,5 @@
 ---
-date: 2026-08-23
+date: 2026-08-24
 title: "Arquitectura del Sistema de Calificación OMR"
 ---
 
@@ -35,16 +35,19 @@ explícitamente cuándo se llena y por qué todavía no se puede.
 
 El **Sistema de Calificación OMR** automatiza la evaluación y calificación de exámenes de
 opción múltiple para la asignatura de **Cálculo Diferencial** en facultades de ingeniería,
-ciencias exactas y economía. La solución integra **Reconocimiento Óptico de Marcas (OMR)**,
-**Modelos de Lenguaje (LLM)** y **Computación Simbólica (SymPy)** para ofrecer un flujo
-extremo a extremo seguro, preciso e interactivo.
+ciencias exactas y economía. El profesor carga su banco de preguntas y su clave de respuestas,
+aplica el examen en papel, y el sistema lee las hojas escaneadas mediante **Reconocimiento
+Óptico de Marcas (OMR)**, califica contra esa clave y publica los resultados. Un **modelo de
+lenguaje (LLM)** está disponible como apoyo opcional durante la preparación del examen, para
+proponer distractores diagnósticos (ver [ADR-0005](../adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md)).
 
 El sistema opera en **dos fases temporalmente separadas**, distinción que condiciona toda la
 arquitectura:
 
-- **Fase de autoría (antes del examen):** el profesor construye el banco de preguntas con
-  apoyo de LLM y el sistema valida simbólicamente la clave con SymPy. Es una fase sin
-  presión de tiempo real.
+- **Fase de autoría (antes del examen):** el profesor registra su banco de preguntas y su
+  clave de respuestas, opcionalmente pide al sistema que le proponga distractores
+  diagnósticos, y habilita el examen. Es una fase sin presión de tiempo real, y es la única en
+  la que puede intervenir el modelo de lenguaje.
 - **Fase de calificación (después del examen):** el sistema ingesta escaneos, detecta marcas
   y produce notas. Es la fase con exigencias de latencia y de volumen.
 
@@ -56,12 +59,13 @@ arquitectura:
 | **RF-02** | El sistema debe detectar, para cada pregunta de una hoja escaneada, la casilla marcada, junto con un nivel de confianza asociado a esa detección. | Calificación |
 | **RF-03** | El sistema debe marcar como *requiere revisión manual* toda detección cuya confianza no supere el umbral configurado, en lugar de asignar una respuesta arbitraria. | Calificación |
 | **RF-04** | El sistema debe comparar las respuestas detectadas contra la clave validada del examen y calcular la calificación resultante. | Calificación |
-| **RF-05** | El sistema debe presentar los resultados en un dashboard interactivo con notas por curso, estadísticas por examen y por pregunta, y alertas de revisión manual. | Calificación |
-| **RF-06** | El sistema debe permitir crear bancos de preguntas de cálculo diferencial (límites, derivadas y simplificaciones algebraicas), con apoyo de un LLM para la generación de enunciados y distractores. | Autoría |
-| **RF-07** | El sistema debe verificar simbólicamente con SymPy que exactamente una opción es equivalente a la respuesta esperada, y alertar cuando dos distractores sean matemáticamente equivalentes entre sí, antes de habilitar el examen. | Autoría |
+| **RF-05** | El sistema debe presentar los resultados en un dashboard interactivo con notas por curso, estadísticas por examen y por pregunta, y alertas de revisión manual. Las estadísticas por pregunta informan la distribución de respuestas por opción; cuando una opción tiene registrada la etiqueta del error que representa (ver RF-11), la muestra junto a la distribución. | Calificación |
+| **RF-06** | El sistema debe permitir a un docente registrar su banco de preguntas de cálculo diferencial (límites, derivadas y simplificaciones algebraicas) junto con la clave de respuestas del examen. | Autoría |
+| **RF-07** | El sistema debe presentar al profesor el examen completo —enunciados, opción correcta y distractores— y no debe habilitarlo para calificación hasta que el profesor lo habilite explícitamente, registrando quién lo hizo y cuándo. | Autoría |
 | **RF-08** | El sistema debe permitir a un docente resolver manualmente las preguntas marcadas como ambiguas y recalcular la nota afectada. | Calificación |
 | **RF-09** | El sistema debe restringir el acceso a usuarios registrados y limitar cada docente a los cursos que tiene autorizados. | Transversal |
 | **RF-10** | El sistema debe registrar quién modificó una calificación y cuándo, de forma consultable. | Transversal |
+| **RF-11** *(opcional)* | El sistema debe permitir al profesor solicitar, para una pregunta dada, la generación de **distractores diagnósticos** con apoyo de un modelo de lenguaje: opciones incorrectas que corresponden a un error de procedimiento identificable, cada una con la etiqueta del error que representa. El profesor decide cuáles acepta. El sistema opera completo sin invocar nunca esta función (ver [ADR-0005](../adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md)). | Autoría |
 
 ## 1.2 Quality Goals
 
@@ -108,7 +112,7 @@ describen el espacio dentro del cual se puede diseñar.
 
 | ID | Restricción | Origen | Justificación e impacto en el diseño |
 |---|---|---|---|
-| **RNF-01** | **Stack obligatorio: OMR + LLM + SymPy.** | Enunciado del problema | El planteamiento fija la solución técnica: la calificación se realiza mediante OMR, y la generación y validación del banco de preguntas mediante LLM y SymPy. No es una decisión libre del equipo. Es la restricción más determinante: obliga a que existan módulos separados para visión por computador y para cómputo simbólico, y condiciona la elección de lenguaje (ver ADR previsto). |
+| **RNF-01** | **Stack obligatorio: OMR. El LLM es una capacidad de apoyo, no un paso del flujo.** | Enunciado del problema, ajustado dos veces: por retroalimentación del profesor ([ADR-0004](../adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md)) y por precisión del equipo sobre el flujo real ([ADR-0005](../adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md)) | La calificación se realiza mediante OMR: es el único componente sin el cual el sistema no funciona, y obliga a que exista un módulo separado para visión por computador. El LLM queda disponible como capacidad de apoyo en la fase de autoría (RF-11), a solicitud del profesor, y **no participa en ningún paso de la calificación** —lo que además es condición para cumplir EC-03 y EC-04, porque una llamada a un modelo externo dentro del procesamiento de cada hoja rompería el techo de cinco segundos. La versión original incluía también SymPy para validar la clave automáticamente; el profesor confirmó que esa automatización no es necesaria (ADR-0004). Sigue sin ser una decisión libre del equipo, y sigue condicionando la elección de lenguaje por el lado de OpenCV (ver ADR-0003). |
 | **RNF-02** | **Entrada: hoja de respuestas estructurada con casillas en posiciones fijas.** | Enunciado del problema | El examen se resuelve en una hoja física de formato estandarizado, no en papel de escritura libre. Obliga a que el layout sea conocido de antemano para que el OMR pueda localizar las marcas por posición, y a incluir marcas de registro que permitan corregir inclinación del escaneo. |
 | **RNF-03** | **Solo preguntas evaluables como opción múltiple.** | Consecuencia de RNF-01 y RNF-02 | Al procesar marcas y no expresiones escritas, el sistema solo puede evaluar preguntas con una única respuesta final identificable entre varias opciones. Las preguntas de desarrollo o demostración quedan fuera de alcance. Define directamente cómo se construye el banco de preguntas. |
 | **RNF-04** | **Salida obligatoria en dashboard interactivo.** | Enunciado del problema | Los resultados se presentan en un dashboard, no como archivo aislado ni reporte por correo. Fija que la arquitectura incluya una capa de visualización, y que la estructura de datos esté pensada para agregación (por curso, examen y pregunta), no solo para almacenamiento. |
@@ -118,9 +122,9 @@ describen el espacio dentro del cual se puede diseñar.
 | ID | Restricción | Origen | Justificación e impacto en el diseño |
 |---|---|---|---|
 | **RNF-05** | **Usuarios objetivo: profesores y TAs, no estudiantes.** | Enunciado del problema (alcance definido por el cliente) | El sistema está dirigido a docentes y asistentes de cátedra. El estudiante es la fuente de las marcas en la hoja, pero no es usuario ni interactúa con el sistema. Condiciona el diseño de roles y permisos: no existe interfaz ni cuenta de estudiante, y todo el flujo se diseña para el rol docente. |
-| **RNF-06** | **Dominio acotado a cálculo diferencial.** | Alcance acordado con el cliente | El alcance temático se limita a límites, derivadas y simplificaciones algebraicas. Acota el motor de validación simbólica y evita sobredimensionar el sistema para integrales, ecuaciones diferenciales o álgebra lineal. |
+| **RNF-06** | **Dominio acotado a cálculo diferencial.** | Alcance acordado con el cliente | El alcance temático se limita a límites, derivadas y simplificaciones algebraicas. Acota lo que el LLM debe generar y lo que el profesor debe revisar al aprobar la clave, y evita sobredimensionar el sistema para integrales, ecuaciones diferenciales o álgebra lineal. |
 | **RNF-07** | **Arranque reproducible con un solo comando.** | Condición de entrega del curso (`CONTRATO.md`) | El repositorio debe levantarse con un único comando y presentar un esqueleto ejecutable con una prueba automatizada en verde. Es la restricción con más peso en [ADR-0002](../adr/0002-procesar-calificacion-de-forma-asincrona.md), porque penaliza cualquier topología que exija orquestar varios despliegues. |
-| **RNF-08** | **Stack de implementación limitado a las opciones del curso:** backend en NestJS o FastAPI; frontend en Flutter o Next.js. | Impuesta por la asignatura | El equipo no puede elegir libremente el lenguaje ni el framework. Combinada con RNF-01, condiciona fuertemente la elección de backend, porque SymPy y el ecosistema de visión por computador solo existen con madurez en Python. En el frontend, lo determinante es la experiencia previa del equipo bajo el cronograma de RNF-09. Resuelta en [ADR-0003](../adr/0003-usar-fastapi-y-flutter.md). |
+| **RNF-08** | **Stack de implementación limitado a las opciones del curso:** backend en NestJS o FastAPI; frontend en Flutter o Next.js. | Impuesta por la asignatura | El equipo no puede elegir libremente el lenguaje ni el framework. Combinada con RNF-01, condiciona fuertemente la elección de backend, porque el ecosistema de visión por computador (OpenCV) solo existe con madurez en Python. En el frontend, lo determinante es la experiencia previa del equipo bajo el cronograma de RNF-09. Resuelta en [ADR-0003](../adr/0003-usar-fastapi-y-flutter.md); [ADR-0004](../adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md) deja constancia de que la elección se sostiene sin cambios aunque SymPy deje de ser obligatorio. |
 | **RNF-09** | **Equipo de cuatro estudiantes con dedicación parcial y cronograma fijado por el curso** (cortes en las semanas 5 y 10, entrega final en la 16). | Contexto académico | Limita la complejidad operacional asumible: no hay capacidad para operar infraestructura distribuida ni para sostener varios despliegues. Es uno de los argumentos que sostiene la elección de monolito modular frente a microservicios en ADR-0002. |
 | **RNF-10** | **Todos los integrantes deben contribuir al historial del repositorio**, con código y documentación repartidos a lo largo del semestre. | `CONTRATO.md` §10 del curso | Criterio calificado. Obliga a repartir el trabajo por módulos y a usar ramas y *pull requests* en lugar de commits directos de una sola persona, lo que a su vez favorece una descomposición con fronteras claras que puedan asignarse por separado. |
 | **RNF-11** | **Repositorio público, en la organización `ISCOUTB` y con la convención de nombres del curso.** | `CONTRATO.md` del curso | Ninguna parte del sistema puede depender de artefactos privados ni de secretos versionados. Cualquier credencial (por ejemplo, la clave del proveedor de LLM) debe leerse de variables de entorno y nunca del repositorio. |
@@ -146,7 +150,7 @@ convierte en calificaciones y métricas analíticas para los usuarios docentes.
 | Socio de comunicación | Entradas al sistema | Salidas desde el sistema |
 |---|---|---|
 | **Profesor / TA** | Creación y edición de bancos de preguntas; claves de respuesta; parámetros de evaluación; archivos escaneados (imágenes o PDF); resolución manual de casos ambiguos. | Vistas del dashboard interactivo; reportes consolidados por curso; analítica de ítems por pregunta; alertas de casos dudosos y de claves inválidas. |
-| **Proveedor de LLM** *(sistema externo, pendiente de decisión — ver R-02)* | Especificación del tipo de pregunta a generar. **Nunca datos personales** (RNF-13). | Enunciados y distractores candidatos, que **siempre** pasan después por la validación simbólica de SymPy antes de aceptarse. |
+| **Proveedor de LLM** *(sistema externo, pendiente de decisión — ver R-02)* | Especificación del tipo de pregunta a generar. **Nunca datos personales** (RNF-13). | Enunciados y distractores candidatos, que **siempre** pasan después por la revisión y aprobación manual del profesor antes de aceptarse (ver [ADR-0004](../adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md)). |
 
 > **Nota de modelado.** La *hoja de respuestas física* no se representa como socio de
 > comunicación. Un documento en papel no es un actor ni un sistema: es el **artefacto de
@@ -163,12 +167,7 @@ diagrama C4 de contexto en [`../c4/doc-c4.md`](../c4/doc-c4.md).
 |---|---|---|---|---|
 | **Interfaz Web (Dashboard)** | Autenticación, gestión de cursos y bancos de preguntas, carga de escaneos, resolución de marcas ambiguas | Notas, gráficos, alertas de ambigüedad y de clave inválida | HTTPS · HTML5 / CSS / JSON | Profesor / TA |
 | **Canal de ingesta OMR** | Lote de imágenes o PDF de hojas escaneadas | Matriz de respuestas detectadas con nivel de confianza (%) por pregunta | Carga HTTP multipart; procesamiento con OpenCV sobre PNG, JPG o PDF a 300 DPI | Profesor / TA |
-| **Motor de validación simbólica (SymPy)** | Expresiones matemáticas de la opción correcta y de los distractores | Veredicto de unicidad y de equivalencia entre opciones | API Python in-process (SymPy es una librería, no un servicio) | — (interno) |
-| **Proveedor de LLM** *(pendiente)* | Especificación del tipo de pregunta a generar | Enunciados y distractores candidatos | **Pendiente de decidir.** Si se usa una API alojada, es HTTPS/JSON contra un sistema externo; si se usa un modelo local, es in-process. Ver R-02. | Proveedor de LLM |
-
-> **Nota.** SymPy y el LLM se documentan por separado a propósito. SymPy es una librería que
-> corre dentro del proceso; el LLM puede ser un servicio externo con latencia de red, costo
-> por uso y modo de fallo propio. Tienen implicaciones arquitectónicas opuestas.
+| **Proveedor de LLM** *(pendiente y opcional)* | Especificación de la pregunta para la que se piden distractores | Distractores candidatos, cada uno con la etiqueta del error de procedimiento que representa, sujetos a la decisión del profesor (RF-11) | **Pendiente de decidir.** Si se usa una API alojada, es HTTPS/JSON contra un sistema externo; si se usa un modelo local, es in-process. Ver R-02. | Proveedor de LLM |
 
 ## 3.3 Fuera de alcance
 
@@ -176,6 +175,8 @@ diagrama C4 de contexto en [`../c4/doc-c4.md`](../c4/doc-c4.md).
 - Interfaz o cuenta para estudiantes (RNF-05).
 - Evaluación de preguntas abiertas o de desarrollo (RNF-03).
 - Impresión o distribución física de los exámenes generados.
+- Verificación automática por computación simbólica de la equivalencia entre opciones de la
+  clave de respuestas (ver [ADR-0004](../adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md)): esa verificación la hace el profesor manualmente.
 
 ---
 
@@ -193,7 +194,7 @@ alcanzable o menos alcanzable este escenario concreto?*
 | **[EC-02](#ec-02)** · Marcas ambiguas ≥99% | **Empeora.** La política de umbral y el manejo de la incertidumbre se dispersan entre la capa de negocio y la de presentación. | **Mejora.** La política de confianza vive en el dominio, aislada de cómo se muestre o se persista. | **Mejora.** Contenida en `omr`, junto a la detección que la produce. |
 | **[EC-03](#ec-03)** · ≤5 s por hoja (p95) | **Neutro.** Nada en el estilo ayuda ni estorba a la latencia de una hoja suelta. | **Neutro.** Las capas de indirección añaden un coste despreciable frente al de procesar una imagen. | **Neutro.** |
 | **[EC-04](#ec-04)** · 200 hojas en ≤10 min | **Empeora, y es determinante.** El estilo no dice nada sobre concurrencia: el flujo ocurre dentro de la petición, de forma secuencial, y 200 × 5 s = 16,6 min incumple el escenario. | **Neutro.** Es ortogonal al problema: aísla el dominio, pero no resuelve el caudal. | **Mejora, y es determinante.** Es el único de los tres que incorpora cola y workers, que es lo que hace el escenario alcanzable. |
-| **[EC-05](#ec-05)** · Validez de la clave 100% | **Empeora.** El validador simbólico y el consumo del LLM quedan acoplados a la infraestructura, y la salida no determinista del LLM se vuelve difícil de aislar para probar. | **Mejora.** Aislar el proveedor de LLM tras un puerto es exactamente lo que permite verificar la validación simbólica sin depender del servicio externo. | **Mejora.** Se obtiene el mismo beneficio aplicando el aislamiento **solo** en `autoria`, donde compensa, en lugar de en los siete módulos. |
+| **[EC-05](#ec-05)** · Validez de la clave 100% | **Empeora.** El flujo de aprobación de la clave y el consumo del LLM quedan acoplados a la infraestructura, y la salida no determinista del LLM se vuelve difícil de aislar para probar. | **Mejora.** Aislar el proveedor de LLM tras un puerto es exactamente lo que permite probar el flujo de aprobación sin depender del servicio externo. | **Mejora.** Se obtiene el mismo beneficio aplicando el aislamiento **solo** en `autoria`, donde compensa, en lugar de en los siete módulos. |
 | **[EC-06](#ec-06)** · Aislamiento por curso | **Empeora.** La autorización se reparte entre los controladores de la capa de presentación, sin un lugar único donde auditarla. | **Mejora.** | **Mejora.** El módulo `identidad` concentra la autorización con frontera declarada. |
 | **[EC-07](#ec-07)** · Recepción sin pérdida | **Empeora.** Sin cola persistente no hay durabilidad: una caída a mitad del lote pierde el trabajo en curso. | **Neutro.** No aporta durabilidad por sí mismo. | **Mejora.** La cola persistente da la garantía de que nada se pierde entre la carga y el procesamiento. |
 | **Mantenibilidad** *(atributo del árbol)* | **Empeora.** Las capas cortan en horizontal, pero el cambio en este sistema llega en vertical: tocar el OMR no debería tocar el dashboard, y en capas ambos viven en la misma capa de negocio. | **Mejora mucho.** | **Mejora.** Los módulos coinciden con las fronteras funcionales reales y con los aspectos del ADD. |
@@ -219,7 +220,7 @@ política global.
 | **Monolito modular** con siete módulos de fronteras explícitas (`autoria`, `ingesta`, `omr`, `calificacion`, `dashboard`, `identidad`, `infraestructura`). | Un único despliegue satisface RNF-07 sin renunciar a fronteras internas claras, que además permiten repartir el trabajo entre los cuatro integrantes (RNF-10). | Mantenibilidad | [ADR-0002](../adr/0002-procesar-calificacion-de-forma-asincrona.md) |
 | **Procesamiento asíncrono con cola de trabajos y workers**; la respuesta HTTP confirma la recepción, no la calificación. | Es la única forma de cumplir EC-04 (200 hojas en ≤10 min) sin romper EC-03 (≤5 s por hoja). Además da la persistencia del trabajo pendiente que exige la recuperación ante fallos. | QG-2 | [ADR-0002](../adr/0002-procesar-calificacion-de-forma-asincrona.md) |
 | **Umbral de confianza explícito** en la detección OMR, con desvío a revisión manual en vez de decisión automática. | El OMR es intrínsecamente probabilístico. Convertir la incertidumbre en un estado visible del sistema es preferible a ocultarla tras una respuesta inventada. | QG-1, QG-3 | ADR previsto, semana 4 |
-| **Validación simbólica obligatoria antes de habilitar un examen**: ninguna pregunta generada por LLM se acepta sin pasar por SymPy. | El LLM genera texto plausible, no matemáticas correctas. SymPy actúa como verificador determinista sobre una salida no determinista. | QG-1 | ADR previsto, semana 4 |
+| **Aprobación manual obligatoria antes de habilitar un examen**: ninguna pregunta generada por LLM se acepta sin que el profesor la revise y apruebe explícitamente. | El LLM genera texto plausible, no necesariamente matemáticas correctas. La aprobación del profesor actúa como el único filtro determinista antes de una salida no determinista. | QG-1 | [ADR-0004](../adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md) |
 | **Separación temporal entre fase de autoría y fase de calificación.** | Aísla la dependencia del LLM (lenta, externa, potencialmente costosa) de la ruta crítica de calificación. Es además lo que hace cumplible RNF-13: ningún dato personal circula por el proveedor externo. | QG-2, RNF-13 | Implícita en ADR-0002 |
 | **Registro de auditoría sobre las calificaciones** (quién modificó qué y cuándo). | Exigido por RNF-15 para poder responder a una reclamación de nota con evidencia. | QG-4 | ADR previsto, semana 6 |
 
@@ -257,7 +258,7 @@ política global.
 > 1. **Calificación de un lote de exámenes** — recorre RF-01 → RF-02 → RF-03 → RF-04 → RF-05 y
 >    es donde se manifiestan EC-03, EC-04 y EC-07.
 > 2. **Resolución manual de una marca ambigua** — RF-08 y RF-10, verifica EC-02.
-> 3. **Generación y validación de un examen** — RF-06 → RF-07, verifica EC-05.
+> 3. **Generación y aprobación de un examen** — RF-06 → RF-07, verifica EC-05.
 >
 > No se describen todavía porque la interacción entre bloques depende de la descomposición de
 > la sección 5, que aún no está cerrada.
@@ -280,8 +281,9 @@ política global.
 >   que acompaña a toda respuesta detectada a lo largo del pipeline.
 > - **Seguridad y autorización por curso:** cómo se aplica el aislamiento de RNF-05 y QG-4 de
 >   forma uniforme en todos los módulos.
-> - **Auditoría de calificaciones:** registro de quién modificó una nota y cuándo, exigido por
->   RNF-15 y RF-10.
+> - **Auditoría de calificaciones y de aprobaciones de clave:** registro de quién modificó una
+>   nota y cuándo (RF-10, RNF-15), extendido a quién aprobó una clave de respuestas y cuándo
+>   (RF-07, ADR-0004).
 > - **Ciclo de vida de los datos personales:** retención y eliminación de escaneos conforme a
 >   RNF-14.
 > - **Manejo de errores del proveedor de LLM:** política de reintento y degradación cuando la
@@ -300,6 +302,8 @@ decisión cambia, se escribe uno nuevo y el anterior pasa a estado *reemplazado 
 | [0001](../adr/0001-usar-monolito-modular.md) | Arquitectura de Monolito Modular | reemplazado por 0002 | 2026-08-22 | ninguno declarado |
 | [0002](../adr/0002-procesar-calificacion-de-forma-asincrona.md) | Procesar la calificación de forma asíncrona sobre el monolito modular | **aceptado** | 2026-08-23 | [EC-03](#ec-03), [EC-04](#ec-04) |
 | [0003](../adr/0003-usar-fastapi-y-flutter.md) | Usar FastAPI en el backend y Flutter en el frontend | **aceptado** | 2026-08-23 | [EC-01](#ec-01), [EC-05](#ec-05) |
+| [0004](../adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md) | Quitar la validación simbólica obligatoria de la clave de respuestas | **aceptado** | 2026-08-24 | [EC-05](#ec-05) |
+| [0005](../adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md) | Acotar el LLM a la generación de distractores diagnósticos | **aceptado** | 2026-08-29 | [EC-05](#ec-05) |
 
 **Por qué 0002 reemplaza a 0001.** La revisión de coherencia previa al corte 1 encontró que
 EC-03 y EC-04 no se pueden cumplir a la vez con procesamiento síncrono —200 hojas × 5 s son
@@ -310,6 +314,29 @@ ausencia de LLM y de equivalencia matemática) y que su descomposición en cuatr
 sin ubicación los requisitos RF-06, RF-07 y RF-09. La elección de fondo —monolito modular
 frente a capas o microservicios— se confirma sin cambios en 0002.
 
+**Por qué 0004 no reemplaza a 0002 ni a 0003.** 0004 retira la obligatoriedad de SymPy
+(RNF-01), lo que toca a los dos ADR anteriores sin invalidar la decisión de ninguno:
+
+- **0003** apoyaba la elección de FastAPI en dos argumentos duros, SymPy y OpenCV. Se retira el
+  primero, pero la decisión no cambia porque el segundo —OpenCV solo existe con madurez en
+  Python— ya bastaba por sí mismo.
+- **0002** describe en su tabla de módulos la responsabilidad de `autoria` incluyendo la
+  «validación simbólica con SymPy». Esa descripción queda superada por 0004, pero su decisión
+  de fondo —siete módulos y procesamiento asíncrono— se mantiene intacta, y `autoria` conserva
+  los mismos requisitos y las mismas fronteras de importación.
+
+En ambos casos el texto original se conserva sin editar, como exige la convención del curso: es
+0004 el que los deja sin efecto en ese punto concreto, y lo hace explícito en su trazabilidad.
+
+**Por qué 0005 no reemplaza a 0004.** Las dos decisiones acotan RNF-01, pero por razones y
+fuentes distintas, y ninguna anula a la otra. 0004 nace de la retroalimentación del profesor y
+retira SymPy del stack obligatorio. 0005 nace de una revisión interna del equipo, que encontró
+que la documentación seguía describiendo la generación con LLM como el camino principal de la
+autoría cuando el flujo real es otro: el profesor llega con sus preguntas escritas. 0005 no
+reintroduce SymPy ni contradice nada de 0004; precisa dónde queda el LLM. Se registran por
+separado porque tuvieron disparadores distintos y en momentos distintos, y esa secuencia es
+parte de lo que el historial de decisiones debe conservar.
+
 **Decisiones previstas (aún no tomadas):**
 
 - Proveedor de LLM y su modo de consumo, externo o local — ver R-02. (La elección de stack de
@@ -317,6 +344,11 @@ frente a capas o microservicios— se confirma sin cambios en 0002.
 - Mecanismo de persistencia y almacenamiento de las imágenes, con su política de retención
   (RNF-14).
 - Estrategia de calibración del umbral de confianza del OMR.
+- Si EC-05 necesita una medida de tiempo de revisión, y con qué valor — ver ADR-0004.
+- Si la calificación de riesgo técnico de EC-05 en el árbol de utilidad (hoy *Alto*) debe
+  bajar, ahora que el riesgo dejó de ser de cómputo simbólico y pasó a ser de criterio humano.
+  Se dejó sin cambiar a propósito: es una decisión del equipo sobre el árbol, no una
+  consecuencia automática de ADR-0004.
 
 ---
 
@@ -333,8 +365,14 @@ riesgo técnico. Las hojas marcadas con `EC-nn` están formalizadas como escenar
   ≥98% de exactitud sobre un dataset de 300 hojas. *(Impacto: Alto | Riesgo técnico: Alto)*
 - **[EC-02](#ec-02) · Manejo de marcas ambiguas:** ≥99% de las marcas bajo umbral se envían a
   revisión manual. *(Impacto: Alto | Riesgo técnico: Alto)*
-- **[EC-05](#ec-05) · Validez de la clave de respuestas:** verificación simbólica de unicidad
-  en el 100% de los exámenes generados. *(Impacto: Alto | Riesgo técnico: Alto)*
+- **[EC-05](#ec-05) · Validez de la clave de respuestas:** aprobación manual del profesor
+  registrada en el 100% de los exámenes habilitados. *(Impacto: Alto | Riesgo técnico: Alto)*
+  **La naturaleza del riesgo cambió con [ADR-0004](../adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md)**:
+  ya no es el de que el cómputo simbólico falle, sino el de que el profesor no advierta una
+  equivalencia algebraica al revisar (riesgo R-11 de la sección 11). La
+  calificación *Alto* se conserva sin cambios porque bajarla es una decisión del equipo sobre
+  el árbol de utilidad, no una consecuencia automática de ADR-0004; queda pendiente en la
+  sección 9.
 
 **Rendimiento** *(→ QG-2)*
 
@@ -443,21 +481,23 @@ de carga.
 
 <a id="ec-05"></a>
 
-### EC-05 · Validez de la clave de respuestas (unicidad matemática)
+### EC-05 · Validez de la clave de respuestas (habilitación explícita)
 
 | Atributo | Detalle |
 |---|---|
-| **Fuente** | Profesor, al generar o cargar un examen. |
-| **Estímulo** | Se define un banco de preguntas con una opción correcta y varios distractores, generados por LLM o ingresados manualmente. |
-| **Artefacto** | Módulo `autoria` (validador SymPy sobre la salida del LLM). |
+| **Fuente** | Profesor, al preparar un examen. |
+| **Estímulo** | El profesor registra su banco de preguntas y su clave de respuestas. Los distractores pueden ser suyos o haber sido propuestos por el modelo de lenguaje (RF-11). |
+| **Artefacto** | Módulo `autoria` (registro del banco y flujo de habilitación del examen). |
 | **Entorno** | **Fase de autoría**, antes de aplicar el examen. Fuera de la ruta crítica de calificación. |
-| **Respuesta** | El sistema verifica simbólicamente que solo una opción es equivalente a la respuesta esperada, y alerta si dos opciones resultan equivalentes entre sí. |
-| **Medida de respuesta** | **100% de los exámenes habilitados han pasado la validación de unicidad**; **tiempo de validación ≤5 segundos por pregunta**. |
-| **Relacionado** | QG-1 · RF-06, RF-07 · [ADR-0003](../adr/0003-usar-fastapi-y-flutter.md) · Aspecto [A-04](../aspectos.md#a-04) |
+| **Respuesta** | El sistema presenta el examen completo al profesor y no lo habilita para calificación hasta que él lo habilite explícitamente. |
+| **Medida de respuesta** | **100% de los exámenes habilitados tienen una habilitación registrada**, con la identidad de quien la hizo y la fecha. *(Medida de tiempo de revisión: pendiente de que el equipo decida si aplica — ver [ADR-0004](../adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md).)* |
+| **Relacionado** | QG-1 · RF-06, RF-07 · [ADR-0004](../adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md) · [ADR-0005](../adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md) · Aspecto [A-04](../aspectos.md#a-04) |
 
-> **Nota.** El límite de 5 segundos de EC-05 es *por pregunta y en fase de autoría*; no entra
-> en conflicto con los 5 segundos *por hoja completa* de EC-03, que corresponden a la fase de
-> calificación. Son dos fases distintas del ciclo de vida del examen (ver sección 1.1).
+> **Nota.** Esta versión del escenario reemplaza a la anterior, que medía una validación
+> simbólica automática con SymPy, incluido un tiempo objetivo de «≤5 segundos por pregunta»
+> pensado para una operación de cómputo. La retroalimentación del profesor confirmó que esa
+> automatización no es necesaria; el detalle de la decisión y sus alternativas están en
+> [ADR-0004](../adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md).
 
 ## 10.3 Escenarios complementarios
 
@@ -514,6 +554,8 @@ fallos. Se documentan aparte para no alterar la priorización original.
 | **R-08** | **Riesgo de erosión de los límites entre módulos** («big ball of mud»), inherente al monolito modular. | Medio | Importaciones directas entre módulos sin pasar por sus interfaces. | Revisión de código y análisis automático de dependencias en CI. |
 | **R-09** | **Deuda organizativa: la contribución al repositorio está concentrada en pocas cuentas**, lo que incumple RNF-10. | Alto | Que el reparto por módulos no se traduzca en commits de las cuatro personas. | Asignar módulos por integrante desde la semana 4 y trabajar con ramas y *pull requests* revisados, de modo que la contribución individual sea verificable en el historial. |
 | **R-10** | **Deuda legal: no está redactada la finalidad del tratamiento de datos ni la política de retención** que exigen RNF-12 y RNF-14. | Medio | Llegar al despliegue con datos reales de estudiantes sin política declarada. | Redactar ambas antes de procesar la primera hoja con datos reales, y consultar la referencia normativa vigente con la coordinación del programa. |
+| **R-11** | **La aprobación manual de la clave puede pasar por alto una equivalencia algebraica no evidente** entre un distractor y la respuesta correcta, ahora que no hay verificación simbólica automática ([ADR-0004](../adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md)). | Alto | Revisar el examen bajo presión de tiempo, sea la clave propia o con distractores propuestos por el modelo, sin apoyo visual para comparar expresiones. | Diseñar la pantalla de aprobación para mostrar las expresiones simplificadas o graficadas una junto a otra, facilitando la comparación visual sin exigir cómputo simbólico obligatorio. Si la tasa de error resulta alta en la práctica, reevaluar con un ADR nuevo. |
+| **R-12** | **RF-11 queda declarado pero nunca se construye**, y el LLM termina siendo una presencia nominal en el stack. | Medio | Que el equipo priorice OMR y calificación hasta el final del semestre y nadie tome RF-11 por ser opcional. | Asignar RF-11 a un integrante desde el reparto por aspectos, con semana de construcción, en lugar de dejarlo sin dueño. Ver [ADR-0005](../adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md). |
 
 ---
 
@@ -528,11 +570,12 @@ fallos. Se documentan aparte para no alterar la priorización original.
 | **Distractor** | Opción incorrecta de una pregunta de opción múltiple, diseñada para ser plausible. Un distractor equivalente a la respuesta correcta invalida la pregunta. |
 | **Escenario de calidad (EC)** | Especificación medible de un atributo de calidad en seis partes: fuente, estímulo, artefacto, entorno, respuesta y medida de respuesta. |
 | **Habeas data** | Derecho de toda persona a conocer, actualizar y rectificar los datos personales que sobre ella se hayan recogido. Base de RNF-12. |
-| **LLM** | *Large Language Model.* Modelo de lenguaje usado aquí para generar enunciados y distractores, cuya salida siempre se verifica con SymPy. |
+| **Distractor diagnóstico** | Distractor que corresponde a un error de procedimiento identificable: la respuesta que se obtiene al cometer esa equivocación concreta. Permite que la estadística por pregunta informe *qué* error cometió el curso, no solo cuántos fallaron. |
+| **LLM** | *Large Language Model.* Modelo de lenguaje disponible como apoyo **opcional** en la fase de autoría, para proponer distractores diagnósticos a solicitud del profesor (RF-11). No participa en la calificación (ver [ADR-0005](../adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md)). |
 | **OCR** | *Optical Character Recognition.* Reconocimiento de caracteres escritos. **No se usa en este sistema**; se aclara porque versiones anteriores de la documentación lo mencionaban por error. |
 | **OMR** | *Optical Mark Recognition.* Reconocimiento de marcas en posiciones conocidas de una hoja estructurada. Detecta *si una casilla está rellenada*, no *qué está escrito*. |
 | **Percentil 95 (p95)** | Valor por debajo del cual queda el 95% de las mediciones. Se usa en EC-03 para que un caso lento aislado no invalide el escenario. |
-| **SymPy** | Librería de Python para matemática simbólica. Aquí verifica equivalencia algebraica entre expresiones. |
+| **SymPy** | Librería de Python para matemática simbólica. **Ya no es obligatoria en este sistema**: se consideró para verificar automáticamente la equivalencia algebraica de la clave de respuestas, pero el profesor confirmó que no es necesaria y esa verificación pasó a ser una aprobación manual del profesor (ver [ADR-0004](../adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md)). |
 | **TA** | *Teaching Assistant.* Asistente de cátedra; usuario operativo del sistema. |
 | **Umbral de confianza** | Valor mínimo de certeza de la detección OMR por debajo del cual una respuesta se envía a revisión manual en lugar de calificarse. |
 | **Worker** | Proceso que consume trabajos de la cola y los ejecuta en segundo plano, independiente del proceso que atiende las peticiones web. |
