@@ -1,5 +1,5 @@
 """
-Responsabilidad: Bancos de preguntas, generación de enunciados con LLM y validación simbólica con SymPy.
-Requisitos: RF-06, RF-07
+Responsabilidad: Bancos de preguntas y clave de respuestas, generación opcional de distractores diagnósticos con apoyo de LLM, y habilitación del examen.
+Requisitos: RF-06, RF-07, RF-11
 Importa: infraestructura, identidad
 """
