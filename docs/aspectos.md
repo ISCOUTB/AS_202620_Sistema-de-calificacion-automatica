@@ -2,8 +2,9 @@
 
 Este documento registra los aspectos identificados para el **Sistema de Calificación OMR**
 (calificación automática de exámenes de opción múltiple de cálculo diferencial mediante
-reconocimiento óptico de marcas, con generación y validación del banco de preguntas apoyada
-en LLM y SymPy), siguiendo la metodología de Aspect Driven Development del curso.
+reconocimiento óptico de marcas, con generación del banco de preguntas apoyada en LLM y
+aprobación manual del profesor sobre la clave de respuestas), siguiendo la metodología de
+Aspect Driven Development del curso.
 
 Un aspecto es un corte vertical del sistema, con valor propio, que se puede recorrer completo:
 
@@ -28,7 +29,7 @@ alcanzables desde la fila del aspecto que los realiza.
 | **[A-01](#a-01)** | Carga de examen para calificación | Especificado | RF-01 | [EC-07](arc42/arc42-template-ES.md#ec-07) | C1: Sistema de Calificación OMR · C2 pendiente (S4) | [0002](adr/0002-procesar-calificacion-de-forma-asincrona.md) | Pendiente (S4) | Pendiente (S4) | Pendiente (S4) |
 | **[A-02](#a-02)** | Detección de marcas y nivel de confianza | Declarado | RF-02, RF-03 | [EC-01](arc42/arc42-template-ES.md#ec-01) · [EC-02](arc42/arc42-template-ES.md#ec-02) | Pendiente (S4) | ADR de umbral previsto (S4) | Pendiente | Pendiente | Pendiente |
 | **[A-03](#a-03)** | Calificación contra la clave y publicación | Declarado | RF-04, RF-05, RF-08 | [EC-03](arc42/arc42-template-ES.md#ec-03) · [EC-04](arc42/arc42-template-ES.md#ec-04) | Pendiente (S4) | [0002](adr/0002-procesar-calificacion-de-forma-asincrona.md) | Pendiente | Pendiente | Pendiente |
-| **[A-04](#a-04)** | Autoría y validación de la clave | Declarado | RF-06, RF-07 | [EC-05](arc42/arc42-template-ES.md#ec-05) | Pendiente (S4) | [0003](adr/0003-usar-fastapi-y-flutter.md) · ADR de validación previsto (S4) | Pendiente | Pendiente | Pendiente |
+| **[A-04](#a-04)** | Registro del banco y habilitación del examen | Declarado | RF-06, RF-07, RF-11 | [EC-05](arc42/arc42-template-ES.md#ec-05) | Pendiente (S4) | [0003](adr/0003-usar-fastapi-y-flutter.md) · [0004](adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md) · [0005](adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md) | Pendiente | Pendiente | Pendiente |
 | **[A-05](#a-05)** | Identidad y aislamiento por curso | Declarado | RF-09, RF-10 | [EC-06](arc42/arc42-template-ES.md#ec-06) | Pendiente (S4) | ADR de auditoría previsto (S6) | Pendiente | Pendiente | Pendiente |
 
 **Estados:** *Declarado* = pasos 1 y 3 parciales (nombre, para quién, qué resuelve, requisitos
@@ -178,20 +179,26 @@ Pendiente. No existe evidencia de calidad para este aspecto en esta entrega.
 
 <a id="a-04"></a>
 
-## Aspecto A-04: Autoría y validación matemática de la clave
+## Aspecto A-04: Registro del banco y habilitación del examen
 
 **Declarado.** Se especifica en la semana 6.
 
-- **Para quién es:** el profesor que construye el examen.
-- **Qué problema resuelve:** genera enunciados y distractores con apoyo de un LLM y garantiza,
-  antes de aplicar el examen, que exactamente una opción es correcta y que ningún distractor
-  es equivalente a otro.
-- **Requisitos:** RF-06, RF-07.
+- **Para quién es:** el profesor que prepara el examen.
+- **Qué problema resuelve:** recibe el banco de preguntas y la clave que el profesor trae
+  escritos, y garantiza que ningún examen se califique sin que él lo haya habilitado
+  explícitamente, dejando registro de quién lo hizo y cuándo. Opcionalmente le propone
+  distractores diagnósticos para ayudarlo a construir las preguntas (RF-11).
+- **Requisitos:** RF-06, RF-07, RF-11 *(opcional)*.
 - **Escenario:** [EC-05](arc42/arc42-template-ES.md#ec-05).
-- **Tensión que lo condiciona:** [T-2](#t-2).
-- **Decisión que ya lo condiciona:** [ADR-0003](adr/0003-usar-fastapi-y-flutter.md) — la
-  elección de FastAPI se apoya precisamente en que SymPy, del que depende EC-05, solo existe
-  en Python.
+- **Tensión que lo condicionaba:** [T-2](#t-2) — retirada; ver la nota en esa sección.
+- **Decisión que ya lo condiciona:**
+  [ADR-0004](adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md) — retira la
+  validación simbólica automática con SymPy que este aspecto tenía previsto y la reemplaza por
+  la aprobación manual del profesor. [ADR-0005](adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md) precisa además que el
+  profesor llega con sus preguntas escritas: la generación con LLM deja de ser el camino
+  principal y queda como apoyo opcional (RF-11). [ADR-0003](adr/0003-usar-fastapi-y-flutter.md) sigue
+  vigente sin cambios: la elección de FastAPI ya no depende de SymPy, pero se sostiene sobre
+  OpenCV.
 - **Restricción legal relevante:** RNF-13 — ningún dato personal de estudiantes se envía al
   proveedor de LLM. Este aspecto es el único que se comunica con un servicio externo, así que
   es donde esa restricción se hace efectiva.
@@ -248,23 +255,29 @@ elegirse por intuición.
 
 <a id="t-2"></a>
 
-### T-2 · Determinismo sintáctico frente a equivalencia matemática en SymPy
+### T-2 · [Retirada] Determinismo sintáctico frente a equivalencia matemática en SymPy
 
-*Corresponde al aspecto [A-04](#a-04) (RF-06, RF-07 · EC-05).*
+*Correspondía al aspecto [A-04](#a-04) (RF-06, RF-07 · EC-05). Retirada por
+[ADR-0004](adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md), 2026-08-24.*
 
 Una misma respuesta correcta puede escribirse de varias formas algebraicas no idénticas: por
-ejemplo, `1 − cos²(x)` y `sin²(x)` son la misma cosa escrita distinto. Esto importa en la
+ejemplo, `1 − cos²(x)` y `sin²(x)` son la misma cosa escrita distinto. Esto importaba en la
 **fase de autoría**, al validar que un examen es correcto: si la comparación entre la opción
 correcta y los distractores se hace por cadena de texto, dos distractores matemáticamente
 equivalentes pasan la validación y se habilita un examen con dos respuestas correctas.
-Verificar la equivalencia real exige simplificación simbólica o evaluación numérica, con mayor
-costo de cómputo y casos límite que manejar (expresiones que SymPy no logra simplificar,
-equivalencias que solo valen en un dominio restringido).
 
-Esta tensión gana peso porque el generador es un LLM: produce enunciados plausibles sin
-garantía de corrección matemática, así que la validación simbólica no es una comprobación
-opcional sino el único filtro determinista entre una salida probabilística y un examen que se
-aplica a estudiantes reales.
+Esta tensión existía porque el diseño original resolvía el problema con software: verificar la
+equivalencia real exige simplificación simbólica o evaluación numérica (SymPy), con mayor
+costo de cómputo y casos límite que manejar (expresiones que SymPy no logra simplificar,
+equivalencias que solo valen en un dominio restringido). El profesor confirmó que esa
+automatización no es necesaria, así que la tensión entre «comparar por texto» y «comparar por
+equivalencia matemática» deja de ser una decisión de software: la comparación pasa a hacerla
+el profesor al aprobar la clave.
+
+> **El riesgo que describía esta tensión no desaparece, se traslada.** Antes era «el software
+> puede no detectar una equivalencia no evidente»; ahora es «el profesor puede no detectarla»
+> bajo presión de tiempo. ADR-0004 documenta esa contrapartida explícitamente como una
+> consecuencia negativa aceptada, no como un riesgo resuelto.
 
 > **Nota sobre una corrección de alcance.** Una versión anterior de este documento describía
 > tensiones de **OCR de expresiones manuscritas** (ambigüedad caligráfica entre la variable
@@ -272,4 +285,6 @@ aplica a estudiantes reales.
 > del grupo. Ese alcance quedó descartado en la transición a OMR registrada en `ia.md`
 > (Entrada 2): el sistema lee **marcas en casillas de posición fija**, no escritura a mano,
 > tal como fijan RNF-02 y RNF-03. T-1 se reescribió para reflejar el sistema que efectivamente
-> se está construyendo; T-2 se conserva y se reubica en la fase donde realmente ocurre.
+> se está construyendo; T-2 se conservó entonces y se reubicó en la fase donde realmente
+> ocurría. Ahora, con ADR-0004, T-2 se retira a su vez porque esa fase dejó de resolverse por
+> software.
