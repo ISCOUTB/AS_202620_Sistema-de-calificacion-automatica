@@ -33,10 +33,9 @@ flowchart TB
     profesor["<b>Profesor / TA</b>
     [Persona]
 
-    Docente autorizado que registra exámenes,
-    sube escaneos y revisa resultados."]
+    Gestión."]
 
-    sistema["<b>Sistema de Calificación OMR</b>
+    sistema["<b>QuantIA</b>
     [Sistema de software]
 
     Procesa las hojas escaneadas,
