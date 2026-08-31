@@ -10,9 +10,14 @@ arc42, la plantilla para documentar arquitecturas de software y de sistemas.
 Versión de plantilla 9.0. Creada y mantenida por Dr. Peter Hruschka, Dr. Gernot Starke
 y colaboradores. Ver [https://arc42.org](https://arc42.org).
 
-**Estado de este documento:** semana 3 del curso. Las secciones 1 a 4, 9, 10, 11 y 12 están
-escritas; las secciones 5 a 8 se completan en las semanas 4 y 6, y cada una indica
-explícitamente cuándo se llena y por qué todavía no se puede.
+**Estado de este documento:** semana 4 del curso. Las secciones 1 a 6, 9, 10, 11 y 12 están
+escritas; las secciones 7 y 8 se completan más adelante, y cada una indica explícitamente
+cuándo se llena y por qué todavía no se puede.
+
+Las secciones 5 y 6 describen **el estado real del código**, no el diseño previsto. Eso las
+obliga a envejecer con cada avance: conviene revisarlas —y con ellas la sección 11— en el mismo
+*pull request* que añade código, igual que se actualiza el docstring de un módulo cuando cambia
+su frontera.
 
 **Convenciones de identificadores usadas en todo el repositorio:**
 
@@ -242,14 +247,24 @@ política global.
 
 ## 5.1 Whitebox Overall System
 
-QuantIA se despliega como los servicios de `docker-compose.yml`, que corresponden uno a uno con
-los contenedores del Nivel 2:
+La tabla recorre los elementos del Nivel 2 y su estado de implementación. La correspondencia
+con lo que `docker compose up` levanta **no es uno a uno**, y conviene tenerlo presente al leer
+los dos documentos juntos:
+
+- La **«Aplicación web»** del C4 se despliega hoy como **dos servicios**: `api`, que atiende la
+  API HTTP, y `frontend`, que sirve la interfaz Flutter ya compilada. El C4 los trata como una
+  unidad lógica; el `docker-compose.yml` los levanta y reinicia por separado.
+- El **«Almacén de imágenes»** no es un servicio sino un **volumen** de Docker, montado en `api`
+  y en `worker` para que ambos vean el mismo archivo.
+- El **proveedor de LLM** aparece en la tabla porque el Nivel 2 lo dibuja, pero es externo: no se
+  despliega con el sistema.
 
 | Contenedor | Responsabilidad (C4 Nivel 2) | Tecnología | Estado de implementación |
 |---|---|---|---|
-| **Aplicación web** | Autenticación, cursos, preguntas, exámenes, carga de escaneos y consulta de resultados; inicia los trabajos de procesamiento. | FastAPI (`backend/api/main.py`), Uvicorn. | Expone `GET /health` y `POST /examenes/{examen_id}/hojas` (RF-01, aspecto A-01). El resto de responsabilidades del contenedor (cursos, preguntas, resultados) siguen sin ruta. |
+| **Aplicación web** *(lado servidor)* | Autenticación, cursos, preguntas, exámenes, carga de escaneos y consulta de resultados; inicia los trabajos de procesamiento. | FastAPI (`backend/api/main.py`), Uvicorn (servicio `api`). | Expone `GET /health` y `POST /examenes/{examen_id}/hojas` (RF-01, aspecto A-01). El resto de responsabilidades del contenedor (cursos, preguntas, resultados) siguen sin ruta. |
+| **Interfaz web** *(parte de «Aplicación web» en el C4)* | Presenta al docente el dashboard, la carga de escaneos y la resolución de marcas ambiguas. | Flutter compilado a web, servido por nginx (servicio `frontend`). | Construida la pantalla de carga del aspecto A-01 (`pantalla_carga.dart`, `servicio_carga.dart`, `selector_archivos.dart`) y la de inicio con el estado de conexión. El dashboard de RNF-04 y la resolución de marcas ambiguas siguen sin construir. |
 | **Worker de procesamiento** | Ejecuta el OMR, calcula calificaciones y genera alertas de revisión. | Proceso Python (`backend/worker/main.py`), misma imagen que la aplicación web. | Consume la cola y confirma que la hoja encolada por `ingesta` le llegó, registrando en log su identificador, examen, archivo y referencia. **No ejecuta todavía** el pipeline `omr → calificacion`: ese es el aspecto A-02, aún declarado. |
-| **Cola de trabajos** | Desacopla la aplicación web del procesamiento OMR. | Redis 7, adaptador FIFO en `infraestructura/cola.py` (RPUSH/BLPOP). | Implementado y probado; sigue siendo, según su propio docstring, «el germen» de lo que EC-07 exige, no una cola de producción con reintentos o acuses de recibo. |
+| **Cola de trabajos** | Desacopla la aplicación web del procesamiento OMR. | Redis 7, adaptador FIFO en `infraestructura/cola.py` (RPUSH/BLPOP). | Implementado y probado contra un Redis real (`backend/tests/test_encolado.py`); sigue siendo, según su propio docstring, «el germen» de lo que EC-07 exige, no una cola de producción con reintentos o acuses de recibo. |
 | **Base de datos** | Almacena usuarios, cursos, preguntas, claves, exámenes y resultados. | PostgreSQL 16, volumen `datos_postgres`. | Declarada en `docker-compose.yml` y `.env.example`; **ningún módulo la usa todavía** — sin esquema ni migraciones. |
 | **Almacén de imágenes** | Conserva las hojas escaneadas y archivos asociados. | Volumen Docker `almacen_imagenes`, montado en `api` y `worker`. | **Implementado como puerto y adaptador provisional**: `infraestructura/almacen.py` define el puerto `AlmacenDeImagenes` y el adaptador `AlmacenEnDisco`, que escribe en el volumen con nombres saneados (`nombre_seguro`) para evitar escapes de directorio. Es deliberadamente provisional: el riesgo R-06 (decisión de persistencia) sigue abierto, y cuando se resuelva solo cambia el adaptador, no el puerto ni quien lo consume. La política de retención de RNF-14 aterrizará aquí y hoy no está implementada. |
 | **Proveedor de LLM** *(externo, opcional y pendiente)* | Propone distractores diagnósticos durante la autoría. | Por decidir (riesgo R-02). | Sin código; se conecta solo desde la aplicación web, nunca desde el worker (RNF-13). |
@@ -274,8 +289,9 @@ importación que declara el docstring de cada `__init__.py` y que hace cumplir
 `api/main.py` es la traducción entre HTTP y dominio: construye sus dependencias (almacén,
 cliente de cola) por petición vía `Depends`, precisamente para que arrancar la aplicación —y
 probarla— no exija que el volumen o Redis existan. `worker/main.py` comparte esa misma base de
-dominio y es, hoy, el único punto donde `infraestructura.cola` se consume desde fuera de
-`ingesta`.
+dominio. Los bordes de importación que existen hoy son tres, todos dentro de lo declarado:
+`api/main.py` importa `ingesta` e `infraestructura`, `ingesta/recepcion.py` importa
+`infraestructura`, y `worker/main.py` importa `infraestructura.cola`.
 
 ## 5.3 Level 3
 
@@ -381,9 +397,15 @@ una falla de red de un rechazo.
 
 # 7. Deployment View
 
-> **Pendiente — se completa en la semana 4.** No se documenta todavía porque el equipo no ha
-> decidido el entorno de despliegue, y esa decisión depende a su vez de si el LLM se consume
-> como API externa o se aloja localmente (R-02) y de la elección de stack de RNF-08.
+> **Pendiente.** No se documenta todavía porque el equipo no ha decidido el entorno de
+> despliegue. Esa decisión depende de si el LLM se consume como API externa o se aloja
+> localmente (R-02) y del mecanismo de persistencia, todavía abierto (R-06). La elección de
+> stack de RNF-08 ya no la condiciona: quedó resuelta en
+> [ADR-0003](../adr/0003-usar-fastapi-y-flutter.md).
+>
+> Lo que sí existe y servirá de base son el Nivel 2 del C4, que fija qué contenedores componen
+> el sistema, y el `docker-compose.yml`, que los levanta hoy en una sola máquina. Falta decidir
+> dónde corre eso y con qué topología, que es lo que ninguno de los dos dice.
 
 ---
 
@@ -659,13 +681,13 @@ fallos. Se documentan aparte para no alterar la priorización original.
 | ID | Riesgo / deuda | Impacto | Qué lo dispara | Mitigación prevista |
 |---|---|---|---|---|
 | **R-01** | **No existe todavía el dataset de 300 hojas escaneadas** que EC-01 usa como medida. Sin él, el objetivo de calidad más importante no es verificable. | Alto | Llegar a la semana de medición sin hojas etiquetadas. | Producir el dataset temprano: imprimir plantillas, llenarlas con marcas variadas (incluyendo casos borde deliberados) y etiquetarlas manualmente. Es trabajo de laboratorio, no de programación, y puede repartirse entre los cuatro integrantes (RNF-10). |
-| **R-02** | **Decisión pendiente sobre el stack (RNF-08) y sobre el proveedor de LLM.** Sin resolverla, el C4 de Nivel 1 no puede cerrarse (cambia si hay o no sistema externo) ni la vista de despliegue. | Medio | Que la decisión siga abierta al llegar a la semana 4. | Decidir antes del Nivel 2, en un ADR propio. Para el LLM, la opción de referencia es una API alojada con nivel gratuito, porque un modelo local añade requisitos de hardware que el proyecto no puede asumir. |
+| **R-02** | **Decisión pendiente sobre el proveedor de LLM y su modo de consumo.** Bloquea la vista de despliegue (sección 7), porque cambia si hay o no un sistema externo. *(La elección de stack de RNF-08 quedó resuelta en [ADR-0003](../adr/0003-usar-fastapi-y-flutter.md), y los niveles 1 y 2 del C4 están dibujados.)* | **Bajo**, desde [ADR-0005](../adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md) | Necesitar construir RF-11, que es opcional. | Decidir en un ADR propio cuando alguien tome RF-11 (ver R-12). Ya no urge: el LLM quedó fuera del camino de calificación, así que el sistema califica completo sin proveedor. La opción de referencia es una API alojada con nivel gratuito, porque un modelo local añade requisitos de hardware que el proyecto no puede asumir. |
 | **R-03** | **Dependencia de un servicio externo no controlado** si el LLM es una API alojada: cuotas, latencia variable, cambios de modelo, indisponibilidad. | Medio | Superar la cuota gratuita durante una sesión de generación intensiva. | La separación de fases ya mitiga lo esencial: el LLM solo participa en la autoría, así que una caída del proveedor no impide calificar. Añadir reintentos, aislar el consumo tras una interfaz propia de `autoria` y permitir el ingreso manual de preguntas. |
 | **R-04** | **El umbral de confianza del 70% es un valor supuesto, no medido.** Mal calibrado dispara falsos positivos (todo va a revisión manual y el sistema deja de ahorrar tiempo) o falsos negativos (errores silenciosos, se rompe QG-3). | Alto | Fijar el umbral sin evidencia y descubrirlo en producción. | Calibrar sobre el dataset de R-01 y documentar la curva de precisión frente a umbral en un ADR. |
 | **R-05** | **El equipo no tiene experiencia previa medible con OpenCV / OMR**, que es la parte de mayor riesgo técnico del sistema. | Alto | Dejar el módulo `omr` para el final del cronograma. | Construir un prototipo desechable de detección de marcas antes de la semana 4, aunque sea sobre una sola hoja, para convertir la incertidumbre en información. |
-| **R-06** | **Deuda: no hay decisión de persistencia ni de almacenamiento de imágenes**, ni política de retención (RNF-14). El módulo `infraestructura` está nombrado pero vacío. | Medio | Necesitar guardar el primer lote real. | ADR previsto para la semana 4, que debe incluir el ciclo de vida de los escaneos, no solo el guardado. |
+| **R-06** | **Deuda: no hay decisión de persistencia ni de almacenamiento de imágenes**, ni política de retención (RNF-14). **Dejó de bloquear la construcción**: A-01 se construyó con el almacenamiento detrás del puerto `AlmacenDeImagenes` y un adaptador en disco declarado provisional (ver 5.1 y 5.3), de modo que la decisión sigue abierta de verdad y no se tomó por omisión. Pero **subió de prioridad**, porque las dos cifras de [EC-07](#ec-07) no se pueden medir hasta que exista. | **Alto** | Necesitar medir EC-07, o llegar al despliegue sin política de retención. | ADR propio, que debe cubrir el ciclo de vida de los escaneos y no solo el guardado. Cuando exista, lo que cambia es el adaptador: `ingesta`, el modelo de datos y las pruebas del aspecto no se tocan. |
 | **R-07** | **Deuda: EC-04 supone paralelismo pero no está fijado el número de workers** ni medido el consumo de CPU por hoja. | Medio | Que el límite de 85% de CPU se incumpla con la concurrencia elegida. | Medir el costo de una hoja en el prototipo de R-05 y derivar el número de workers de ese dato. |
-| **R-08** | **Riesgo de erosión de los límites entre módulos** («big ball of mud»), inherente al monolito modular. | Medio | Importaciones directas entre módulos sin pasar por sus interfaces. | Revisión de código y análisis automático de dependencias en CI. |
+| **R-08** | **Riesgo de erosión de los límites entre módulos** («big ball of mud»), inherente al monolito modular. **Mitigado en lo esencial.** | Bajo | Cambiar la línea `Importa:` de un docstring para acomodar un import, en lugar de corregir el import. | Ya en marcha, no prevista: `backend/tests/test_fronteras.py` corre en cada push y compara los imports reales de cada módulo, leídos con `ast`, contra la línea `Importa:` de su docstring. **Queda un flanco:** verifica el módulo importado, no el símbolo. Cerrarlo exige un `__all__` por módulo —hoy solo lo declara `ingesta`— y extender la prueba para comprobarlo. |
 | **R-09** | **Deuda organizativa: la contribución al repositorio está concentrada en pocas cuentas**, lo que incumple RNF-10. | Alto | Que el reparto por módulos no se traduzca en commits de las cuatro personas. | Asignar módulos por integrante desde la semana 4 y trabajar con ramas y *pull requests* revisados, de modo que la contribución individual sea verificable en el historial. |
 | **R-10** | **Deuda legal: no está redactada la finalidad del tratamiento de datos ni la política de retención** que exigen RNF-12 y RNF-14. | Medio | Llegar al despliegue con datos reales de estudiantes sin política declarada. | Redactar ambas antes de procesar la primera hoja con datos reales, y consultar la referencia normativa vigente con la coordinación del programa. |
 | **R-11** | **La aprobación manual de la clave puede pasar por alto una equivalencia algebraica no evidente** entre un distractor y la respuesta correcta, ahora que no hay verificación simbólica automática ([ADR-0004](../adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md)). | Alto | Revisar el examen bajo presión de tiempo, sea la clave propia o con distractores propuestos por el modelo, sin apoyo visual para comparar expresiones. | Diseñar la pantalla de aprobación para mostrar las expresiones simplificadas o graficadas una junto a otra, facilitando la comparación visual sin exigir cómputo simbólico obligatorio. Si la tasa de error resulta alta en la práctica, reevaluar con un ADR nuevo. |
