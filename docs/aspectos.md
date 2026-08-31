@@ -217,7 +217,7 @@ Dos pruebas previstas que **no** se escribieron, y no por olvido:
 
 | Evidencia | Qué demuestra | Dónde |
 |---|---|---|
-| Ejecución de CI | Las 34 pruebas del backend y las 6 de widget pasando en una máquina limpia, con las dependencias instaladas desde cero y Redis levantado como servicio | `<<PENDIENTE: URL DEL RUN DE GITHUB ACTIONS>>` |
+| Ejecución de CI | Las 34 pruebas del backend y las 6 de widget pasando en una máquina limpia, con las dependencias instaladas desde cero y Redis levantado como servicio | [Run del commit `59e182e`](https://github.com/ISCOUTB/AS_202620_Sistema-de-calificacion-automatica/actions/runs/33347922678) — `backend-tests` y `frontend-tests` en verde |
 | Reporte de recepción en pantalla | Un lote mixto procesado: la hoja válida recibida con su identificador de trabajo, la falsa rechazada con el motivo | [Captura del reporte](#a-01-evidencia) |
 | Registro del worker | El mismo identificador de trabajo apareciendo en un proceso distinto, en otro contenedor: el recorrido se completó | Reproducible con `docker compose logs worker`; el procedimiento está en el [README](../README.md) |
 | Reporte de medición de EC-07 | Las dos cifras del escenario | **No existe.** Ver el paso 6 |
@@ -225,17 +225,9 @@ Dos pruebas previstas que **no** se escribieron, y no por olvido:
 ![Reporte de recepción de un lote mixto: una hoja recibida con su identificador de trabajo y un
 archivo rechazado con el motivo](evidencia/a-01-reporte-de-recepcion.png)
 
-<!-- PENDIENTE: reemplazar <<PENDIENTE: URL DEL RUN...>> de la
-     tabla de arriba por la URL de una ejecucion de GitHub Actions DE ESTE repositorio,
-     con la forma https://github.com/<org>/<repo>/actions/runs/<id>. Debe abrir para
-     cualquiera que evalue, sin credenciales. -->
-
 El identificador de trabajo `2eede6b8-dd9f-4db6-a3ab-6205644ea416` que se ve en la captura es el
 mismo que registró el worker en el contenedor aparte. Esa coincidencia es lo que convierte a la
 captura en evidencia del recorrido completo y no solo de que la pantalla dibuja bien.
-
-**Sobre el marcador de la primera fila.** El enlace debe apuntar a una ejecución de GitHub
-Actions de este repositorio, y tiene que abrir para quien evalúe sin pedirle credenciales.
 
 La distinción importa para no leer de más ni de menos esta fila: **que el aspecto funciona está
 demostrado** por las pruebas del paso 6 y por el recorrido de extremo a extremo. Lo que falta es
