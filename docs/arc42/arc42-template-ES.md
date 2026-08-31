@@ -228,41 +228,119 @@ política global.
 
 # 5. Building Block View
 
-> **Pendiente — se completa en la semana 4.** Requiere que el C4 de Nivel 2 esté cerrado y que
-> los contenedores correspondan a unidades desplegables reales, lo cual todavía no ocurre: hoy
-> solo existe el Nivel 1. Documentar aquí una descomposición ahora sería documentar lo que se
-> quisiera tener, no lo que hay.
->
-> La descomposición prevista, ya fijada en ADR-0002, es de siete módulos: `autoria`,
-> `ingesta`, `omr`, `calificacion`, `dashboard`, `identidad` e `infraestructura`.
+> **Estado.** El C4 de Nivel 1 está cerrado ([`../c4/doc-c4.md`](../c4/doc-c4.md)). El Nivel 2
+> sigue marcado *pendiente* en ese mismo documento, pero el esqueleto ejecutable de RNF-07 ya
+> define unidades desplegables reales en `docker-compose.yml` y una descomposición interna de
+> siete módulos con fronteras verificadas por CI (`backend/tests/test_fronteras.py`). Esta
+> sección documenta esas dos cosas tal como existen hoy — no el diagrama de contenedores
+> definitivo, que sigue siendo trabajo de la semana 4.
 
 ## 5.1 Whitebox Overall System
 
-> Pendiente — semana 4, junto con el C4 Nivel 2.
+El sistema se despliega como los servicios declarados en `docker-compose.yml`:
+
+| Contenedor | Responsabilidad | Tecnología | Estado |
+|---|---|---|---|
+| **frontend** | Interfaz web del docente (dashboard, carga de escaneos, resolución de marcas ambiguas). | Flutter, servido como build web tras Dockerfile propio. | Esqueleto: solo `pantalla_inicio.dart` y un `servicio_salud.dart` que consulta `/health` del backend. |
+| **api** | Aplicación web: expone la API HTTP que consume el frontend y encola el trabajo de procesamiento. | FastAPI (`backend/api/main.py`), Uvicorn. | Expone únicamente `GET /health`; no monta todavía ninguno de los siete módulos de dominio. |
+| **worker** | Consume la cola de trabajos en segundo plano, fuera del ciclo petición/respuesta. | Proceso Python (`backend/worker/main.py`), misma imagen que `api`. | Consume la cola y registra en log cada trabajo recibido; no ejecuta aún el pipeline `omr → calificacion`. |
+| **redis** | Cola de trabajos (`infraestructura.cola`): FIFO simple sobre Redis (RPUSH/BLPOP). | Redis 7. | Implementado y probado (`test_encolado.py`); es el «germen» de EC-07, según indica el propio docstring de `cola.py`, no una cola de producción con reintentos ni acuses de recibo. |
+| **postgres** | Persistencia declarada para bancos de preguntas, claves y calificaciones. | PostgreSQL 16, volumen `datos_postgres`. | Declarado en `docker-compose.yml` y `.env.example` para corresponder con el Nivel 2 previsto en ADR-0002; **ningún módulo la usa todavía** — sin esquema ni migraciones. |
+| **almacén de imágenes** | Guarda las hojas escaneadas para el ciclo de vida de RNF-14 y la trazabilidad de RNF-15. | Volumen Docker `almacen_imagenes`, montado en `api` y `worker`. | Declarado, sin lógica de escritura ni política de retención implementada. |
+
+Este conjunto corresponde uno a uno con los contenedores previstos en el Nivel 2 de
+[`../c4/doc-c4.md`](../c4/doc-c4.md): *aplicación web, worker de procesamiento, cola de
+trabajos, base de datos y almacén de imágenes*, más el frontend. La diferencia con ese
+documento es que aquí ya son unidades desplegables reales, no una previsión.
 
 ## 5.2 Level 2
 
-> Pendiente — semana 4.
+Dentro del contenedor **api** (y, por código compartido, también dentro de **worker**, que usa
+la misma imagen) viven los siete módulos fijados en
+[ADR-0002](../adr/0002-procesar-calificacion-de-forma-asincrona.md). Cada uno declara su
+responsabilidad, los requisitos que cubre y los módulos que tiene permitido importar en el
+docstring de su propio `__init__.py`, que es la fuente de verdad que hace cumplir
+`test_fronteras.py` en CI:
+
+| Módulo | Responsabilidad | Requisitos | Importa (declarado) | Estado de implementación |
+|---|---|---|---|---|
+| **autoria** | Bancos de preguntas y clave de respuestas, generación opcional de distractores diagnósticos con apoyo de LLM, y habilitación del examen. | RF-06, RF-07, RF-11 | `infraestructura`, `identidad` | Paquete vacío, sin código propio todavía. |
+| **ingesta** | Recepción y validación de archivos escaneados (individual o en lote) y encolado del procesamiento. | RF-01 | `infraestructura`, `identidad` | Paquete vacío. |
+| **omr** | Detección de marcas y cálculo del nivel de confianza; clasificación de ambigüedad. | RF-02, RF-03 | `infraestructura`, `identidad` | Paquete vacío. |
+| **calificacion** | Comparación contra la clave habilitada por el profesor y cálculo de notas; recálculo tras revisión manual. | RF-04, RF-08 | `infraestructura`, `identidad`, `omr` | Paquete vacío. |
+| **dashboard** | Presentación de resultados y agregaciones por curso, examen y pregunta. | RF-05 | `infraestructura`, `identidad`, `calificacion` | Paquete vacío. |
+| **identidad** | Autenticación, roles y aislamiento de datos por curso. | RF-09, RF-10 | `infraestructura` | Paquete vacío. |
+| **infraestructura** | Persistencia, almacenamiento de imágenes y adaptador de la cola de trabajos. | Transversal | ninguno | **Único módulo con código real**: `cola.py` implementa `encolar`/`desencolar` sobre Redis (RPUSH/BLPOP, sin reintentos ni acuses de recibo). |
+
+`api/main.py` y `worker/main.py` son los dos puntos de entrada del contenedor; hoy
+`worker/main.py` es el único que ya importa un módulo de dominio (`infraestructura.cola`), lo
+que traza el primer borde real de la matriz de importación que `test_fronteras.py` protege.
 
 ## 5.3 Level 3
 
-> Pendiente — semanas 4 y 6, junto con el C4 Nivel 3.
+> **Pendiente — semanas 4 y 6.** Bajar a Nivel 3 exige que un módulo tenga estructura interna
+> que descomponer. Hoy solo `infraestructura` tiene código (`cola.py`, un único componente); los
+> otros seis módulos son paquetes declarados sin contenido, así que documentar su interior sería
+> describir lo que se planea, no lo que existe. Se completa junto con el Nivel 3 del C4
+> ([`../c4/doc-c4.md`](../c4/doc-c4.md)), a medida que cada módulo reciba su primera
+> implementación.
 
 ---
 
 # 6. Runtime View
 
-> **Pendiente — se completa en la semana 4.** Los escenarios de ejecución previstos, en orden
-> de prioridad:
->
-> 1. **Calificación de un lote de exámenes** — recorre RF-01 → RF-02 → RF-03 → RF-04 → RF-05 y
->    es donde se manifiestan EC-03, EC-04 y EC-07.
-> 2. **Resolución manual de una marca ambigua** — RF-08 y RF-10, verifica EC-02.
-> 3. **Generación y aprobación de un examen** — RF-06 → RF-07, verifica EC-05.
->
-> No se describen todavía porque la interacción entre bloques depende de la descomposición de
-> la sección 5, que aún no está cerrada.
+> **Estado.** De los tres escenarios de ejecución previstos, ninguno recorre todavía el pipeline
+> completo `omr → calificacion`, porque esos módulos siguen vacíos (ver 5.2). Lo que sí existe
+> y está cubierto por pruebas automatizadas son los dos flujos de infraestructura sobre los que
+> se construirá el resto en la semana 4. Se documentan ambos como los escenarios de ejecución
+> reales del sistema en su estado actual.
 
+## 6.1 Arranque y verificación de salud
+
+Verifica RNF-07 (arranque reproducible con un solo comando) y es la base de EC-07.
+
+1. `docker compose up` levanta `redis`, `postgres`, `api`, `worker` y `frontend`.
+2. `api` instancia la aplicación FastAPI (`backend/api/main.py`), configurando CORS con el
+   origen leído de `ALLOWED_ORIGIN` (`backend/api/settings.py`).
+3. Un cliente (o el `TestClient` de `test_arranque.py`) hace `GET /health`.
+4. La aplicación responde `200 {"status": "ok"}` sin tocar Redis, Postgres ni ningún módulo de
+   dominio.
+
+**Prueba que lo verifica:** `backend/tests/test_arranque.py`.
+
+## 6.2 Encolado y consumo de un trabajo
+
+Es el flujo germinal de RF-01 (recepción de escaneos) y del que EC-07 y EC-04 dependerán una vez
+que `ingesta` y `omr` tengan código: hoy demuestra que el canal cola → worker funciona, no que
+un examen se califique.
+
+1. Un cliente llama a `infraestructura.cola.encolar(cliente, cola, payload)`, que genera un
+   `Trabajo` con `id` propio (UUID) y hace `RPUSH` del payload serializado en JSON sobre la lista
+   Redis que identifica esa cola.
+2. `worker/main.py`, en un ciclo infinito, llama a
+   `infraestructura.cola.desencolar(cliente, "procesamiento", timeout=5)`, que hace `BLPOP`
+   bloqueante hasta 5 segundos.
+3. Si llega un trabajo, el worker lo deserializa a `Trabajo` y por ahora solo lo registra en el
+   log (`logger.info("Trabajo recibido: %s", trabajo)`) — no invoca todavía `omr` ni
+   `calificacion`.
+4. Si Redis falla de forma transitoria (`redis.exceptions.RedisError`), el worker lo captura,
+   espera `ESPERA_TRAS_ERROR_SEGUNDOS` (5 s) y reintenta el ciclo, sin caerse.
+5. Si `BLPOP` no recibe nada dentro del timeout (cola vacía o timeout de socket), `desencolar`
+   devuelve `None` y el ciclo continúa sin registrar nada.
+
+**Prueba que lo verifica:** `backend/tests/test_encolado.py` (encola y recupera un trabajo
+contra un Redis real de `docker compose up -d redis`).
+
+## 6.3 Escenarios pendientes
+
+Los tres flujos de negocio siguen sin código y se documentan cuando los módulos correspondientes
+dejen de estar vacíos:
+
+| Escenario | Recorre | Verifica | Bloqueado por |
+|---|---|---|---|
+| Calificación de un lote de exámenes | RF-01 → RF-02 → RF-03 → RF-04 → RF-05 | EC-03, EC-04, EC-07 | `ingesta`, `omr`, `calificacion`, `dashboard` vacíos |
+| Resolución manual de una marca ambigua | RF-08, RF-10 | EC-02 | `calificacion`, `identidad` vacíos |
+| Generación y aprobación de un examen | RF-06 → RF-07 | EC-05 | `autoria` vacío; proveedor de LLM sin decidir (R-02) |
 ---
 
 # 7. Deployment View
