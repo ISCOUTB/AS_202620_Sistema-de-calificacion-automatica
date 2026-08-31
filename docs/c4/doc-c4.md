@@ -43,10 +43,7 @@ flowchart TB
     los resultados."]
 
     llm["<b>Proveedor de LLM</b>
-    [Sistema externo]
-
-    Propone distractores cuando
-    el profesor lo pide."]
+    "]
 
     profesor -->|"Registra exámenes y sube escaneos
     <b>[HTTPS · Web UI]</b>"| sistema
