@@ -7,7 +7,7 @@ cambios y no se desincronicen en silencio.
 | | |
 |---|---|
 | **Sistema** | QuantIA |
-| **Última actualización** | 2026-08-29 |
+| **Última actualización** | 2026-08-30 |
 | **Niveles completos** | Nivel 1 (Contexto) |
 | **Notación** | C4 model — [c4model.com](https://c4model.com) · Renderizado con Mermaid `flowchart` |
 | **Documentos relacionados** | [`../arc42/arc42-template-ES.md`](../arc42/arc42-template-ES.md) · [`../adr/`](../adr/) · [`../aspectos.md`](../aspectos.md) |
