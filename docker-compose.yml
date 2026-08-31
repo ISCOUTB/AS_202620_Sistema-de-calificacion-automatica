@@ -27,6 +27,7 @@ services:
     environment:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/omr}
+      RUTA_ALMACEN: ${RUTA_ALMACEN:-/app/almacen_imagenes}
       ALLOWED_ORIGIN: ${ALLOWED_ORIGIN:-http://localhost:8080}
     volumes:
       - almacen_imagenes:/app/almacen_imagenes
@@ -43,6 +44,7 @@ services:
     environment:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/omr}
+      RUTA_ALMACEN: ${RUTA_ALMACEN:-/app/almacen_imagenes}
     volumes:
       - almacen_imagenes:/app/almacen_imagenes
     depends_on:

@@ -26,7 +26,7 @@ alcanzables desde la fila del aspecto que los realiza.
 
 | ID | Aspecto | Estado | Requisito | Escenario de calidad | C4 | ADR | Código | Pruebas | Evidencia |
 |---|---|---|---|---|---|---|---|---|---|
-| **[A-01](#a-01)** | Carga de examen para calificación | Especificado | RF-01 | [EC-07](arc42/arc42-template-ES.md#ec-07) | C1: Sistema de Calificación OMR · C2 pendiente (S4) | [0002](adr/0002-procesar-calificacion-de-forma-asincrona.md) | Pendiente (S4) | Pendiente (S4) | Pendiente (S4) |
+| **[A-01](#a-01)** | Carga de examen para calificación | **Construido** | RF-01 | [EC-07](arc42/arc42-template-ES.md#ec-07) | C1: Sistema de Calificación OMR · C2 pendiente (S4) | [0002](adr/0002-procesar-calificacion-de-forma-asincrona.md) | [`ingesta/recepcion.py`](../backend/ingesta/recepcion.py) · [`infraestructura/almacen.py`](../backend/infraestructura/almacen.py) · [`infraestructura/modelo.py`](../backend/infraestructura/modelo.py) · [`api/main.py`](../backend/api/main.py) · [`frontend/lib/pantalla_carga.dart`](../frontend/lib/pantalla_carga.dart) | [`test_recepcion.py`](../backend/tests/test_recepcion.py) · [`test_carga_hojas.py`](../backend/tests/test_carga_hojas.py) · [`widget_test.dart`](../frontend/test/widget_test.dart) | [Captura del reporte](#a-01-evidencia) · CI y medición pendientes |
 | **[A-02](#a-02)** | Detección de marcas y nivel de confianza | Declarado | RF-02, RF-03 | [EC-01](arc42/arc42-template-ES.md#ec-01) · [EC-02](arc42/arc42-template-ES.md#ec-02) | Pendiente (S4) | ADR de umbral previsto (S4) | Pendiente | Pendiente | Pendiente |
 | **[A-03](#a-03)** | Calificación contra la clave y publicación | Declarado | RF-04, RF-05, RF-08 | [EC-03](arc42/arc42-template-ES.md#ec-03) · [EC-04](arc42/arc42-template-ES.md#ec-04) | Pendiente (S4) | [0002](adr/0002-procesar-calificacion-de-forma-asincrona.md) | Pendiente | Pendiente | Pendiente |
 | **[A-04](#a-04)** | Registro del banco y habilitación del examen | Declarado | RF-06, RF-07, RF-11 | [EC-05](arc42/arc42-template-ES.md#ec-05) | Pendiente (S4) | [0003](adr/0003-usar-fastapi-y-flutter.md) · [0004](adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md) · [0005](adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md) | Pendiente | Pendiente | Pendiente |
@@ -38,6 +38,12 @@ y escenario asignados). *Especificado* = pasos 1 a 4 completos. *Construido* = p
 A-01 es el único aspecto que se trabaja completo en esta entrega. Los demás se declaran para
 fijar el orden de trabajo y para que cada escenario de calidad tenga un aspecto responsable
 desde ya; se especificarán en las semanas 4 y 6.
+
+**Por qué A-01 llega a «Construido» con la evidencia pendiente.** Los pasos 5 y 6 (construir y
+verificar) están hechos y son comprobables. El paso 7, evidenciar, exige medir las dos cifras de
+EC-07: la confirmación en ≤10 segundos y el 0 % de pérdida silenciosa bajo reinicio. La primera
+no se ha medido; la segunda depende de una decisión de almacenamiento todavía abierta (R-06).
+Declararlas cumplidas sin medirlas sería peor que dejarlas pendientes.
 
 ---
 
@@ -107,23 +113,134 @@ almacenan las imágenes cargadas**, incluyendo la política de retención que ex
 escaneos no pueden conservarse indefinidamente). Se pospone a la semana 4 porque depende de la
 decisión de persistencia, todavía abierta (riesgo R-06 del arc42).
 
+**Cómo se construyó el aspecto sin cerrar esa decisión.** El corte necesitaba guardar archivos
+hoy, y elegir un almacenamiento al paso habría cerrado R-06 sin ADR. La salida es la que el
+arc42 §4 ya justifica: el aislamiento hexagonal no se aplica en los siete módulos sino
+**selectivamente en los dos puntos donde la matriz de estilos muestra que compensa**, y el
+almacén de imágenes es uno de esos dos. Así que `infraestructura` expone el puerto
+`AlmacenDeImagenes` —lo único que `ingesta` conoce— y `AlmacenEnDisco` es un adaptador
+**provisional** sobre el volumen del `docker-compose.yml`. Cuando llegue el ADR de persistencia,
+lo que cambia es ese adaptador; el módulo, el modelo de datos y las pruebas del aspecto no se
+tocan. La política de retención de RNF-14 aterrizará también ahí, y hoy no está implementada:
+nada borra lo que se guarda.
+
 ### 5. Construir
 
-Pendiente. No existe código para este aspecto en esta entrega.
+| Pieza | Dónde |
+|---|---|
+| Modelo de datos compartido | [`backend/infraestructura/modelo.py`](../backend/infraestructura/modelo.py) |
+| Puerto de almacenamiento y adaptador provisional | [`backend/infraestructura/almacen.py`](../backend/infraestructura/almacen.py) |
+| Validación, almacenamiento y encolado | [`backend/ingesta/recepcion.py`](../backend/ingesta/recepcion.py) |
+| Interfaz pública del módulo (`__all__`) | [`backend/ingesta/__init__.py`](../backend/ingesta/__init__.py) |
+| Endpoint `POST /examenes/{examen_id}/hojas` | [`backend/api/main.py`](../backend/api/main.py) |
+| Consumo del trabajo encolado | [`backend/worker/main.py`](../backend/worker/main.py) |
+| Pantalla de carga y reporte | [`frontend/lib/pantalla_carga.dart`](../frontend/lib/pantalla_carga.dart) |
+| Llamada al endpoint | [`frontend/lib/servicio_carga.dart`](../frontend/lib/servicio_carga.dart) |
+| Diálogo de archivos del navegador | [`frontend/lib/selector_archivos.dart`](../frontend/lib/selector_archivos.dart) |
+
+Tres decisiones de construcción que conviene poder defender:
+
+1. **La validación revisa los primeros bytes, no solo la extensión.** Renombrar un archivo es
+   trivial; si el engaño pasa aquí, el error reaparece dentro del worker, cuando ya no hay a
+   quién avisarle.
+2. **Un archivo inválido no aborta el lote.** Doscientas hojas y una corrupta no pueden costarle
+   al docente volver a subir las otras ciento noventa y nueve, que es justo lo que EC-07 quiere
+   evitar. Por eso la respuesta es 200 aunque haya rechazos: la petición se atendió completa y
+   el cuerpo dice archivo por archivo qué pasó.
+3. **Primero se almacena, después se encola.** Al revés, el worker podría recibir un trabajo que
+   apunta a una imagen que todavía no existe.
+
+Queda un hueco conocido y nombrado en el código: entre el guardado y el encolado no hay
+transacción, así que si el proceso muere justo en medio el archivo queda huérfano en el almacén.
+Cerrarlo exige acuse de recibo en la cola o una bitácora de recepción, y eso es parte de lo que
+el ADR de persistencia (R-06) tiene que resolver.
+
+El `examen_id` tampoco se verifica contra nada, porque el módulo `autoria` (aspecto A-04) es el
+que registrará los exámenes y aún no existe. La ruta ya tiene su forma definitiva para que
+cuando A-04 llegue solo haya que sumar la comprobación.
 
 ### 6. Verificar
 
-Pendiente. Pruebas previstas:
+**22 pruebas automatizadas de este aspecto**: 18 en el backend y 4 de widget en el frontend.
+(La suite de widget tiene 6; las otras dos son las de conexión que ya traía el esqueleto.)
 
-- Validación de formato: acepta JPG, PNG y PDF; rechaza el resto indicando el motivo.
-- Carga en lote: el número de trabajos encolados coincide con el de archivos aceptados.
-- Durabilidad: un archivo aceptado y su trabajo sobreviven al reinicio del proceso. Es la que
-  realmente cubre el «0% de pérdida silenciosa» de EC-07.
-- Autorización: un docente no puede cargar hojas en un curso que no tiene asignado (RNF-05).
+| Prueba | Qué sostiene | Archivo |
+|---|---|---|
+| Acepta los formatos declarados | RF-01: JPG, PNG y PDF | [`test_recepcion.py`](../backend/tests/test_recepcion.py) |
+| Rechaza con motivo legible | Un rechazo sin motivo es indistinguible de una pérdida | [`test_recepcion.py`](../backend/tests/test_recepcion.py) |
+| Ningún archivo del lote desaparece | La medida verificable de EC-07 | [`test_recepcion.py`](../backend/tests/test_recepcion.py) |
+| Un archivo inválido no tumba el lote | Degradación controlada de la carga | [`test_recepcion.py`](../backend/tests/test_recepcion.py) |
+| Un trabajo por hoja aceptada, ninguno por rechazada | Que no se califique de más ni de menos | [`test_recepcion.py`](../backend/tests/test_recepcion.py) |
+| La hoja queda almacenada con su contenido intacto | El orden almacenar → encolar | [`test_recepcion.py`](../backend/tests/test_recepcion.py) |
+| Un nombre con rutas no escapa del directorio | El nombre lo controla quien sube | [`test_recepcion.py`](../backend/tests/test_recepcion.py) |
+| El endpoint confirma la recepción, individual y en lote | El contrato con el frontend | [`test_carga_hojas.py`](../backend/tests/test_carga_hojas.py) |
+| La pantalla no ofrece cargar si el backend no responde | No llevar al docente a una pantalla que va a fallar | [`widget_test.dart`](../frontend/test/widget_test.dart) |
+| El reporte lista aceptadas y rechazadas con su motivo | EC-07 visible para el usuario | [`widget_test.dart`](../frontend/test/widget_test.dart) |
+| Una falla de red se muestra como aviso, no como rechazo | Son cosas distintas y el docente debe distinguirlas | [`widget_test.dart`](../frontend/test/widget_test.dart) |
+
+**Las pruebas nuevas se validaron provocando la falla**, según la convención del equipo: se
+rompió a propósito la verificación de bytes, el reporte de rechazados, el conteo de encolados y
+la frontera del módulo, y en cada caso se comprobó que la prueba correspondiente fallaba antes
+de revertir. Una prueba que nunca falló no prueba nada.
+
+De ahí salió un hallazgo que quedó anotado en el propio código: la prueba de rutas solo se pone
+en rojo si se quitan **las dos** defensas de `nombre_seguro`, porque cada una basta por separado.
+Verifica la propiedad y no el mecanismo, que es lo correcto, pero nadie debería borrar una de
+las dos líneas creyendo que esta prueba lo detectaría.
+
+**Verificación manual de extremo a extremo.** Las pruebas automatizadas no cruzan la frontera:
+las del backend usan una cola sustituta y las del frontend un backend sustituto. El recorrido
+completo se comprobó a mano sobre `docker compose up`, subiendo una imagen válida y un archivo
+de texto con extensión `.jpg`. El sistema aceptó la primera, rechazó el segundo por contenido, y
+**el identificador de trabajo que mostró la pantalla apareció idéntico en el log del worker**,
+que corre en otro contenedor. El procedimiento está en el README para que sea reproducible.
+
+**La medición del escenario de calidad está pendiente, y es la parte incompleta de este paso.**
+EC-07 pide dos cifras: confirmación del lote en ≤10 segundos y 0 % de pérdida silenciosa
+sobreviviendo a un reinicio. Ninguna se ha medido, y son objetivos del escenario, no resultados.
+La medición de ambas depende del almacenamiento definitivo, que es lo que determina tanto el
+tiempo de confirmación como el comportamiento ante una caída, y esa decisión sigue abierta como
+riesgo R-06. Lo que sí está verificado de EC-07 es su parte cualitativa: todo archivo cargado
+sale como *aceptado* o como *rechazado con motivo*, comprobado sobre el conteo completo del lote.
+
+Dos pruebas previstas que **no** se escribieron, y no por olvido:
+
+- **Durabilidad tras reinicio**, que es la que realmente cubriría el «0 % de pérdida silenciosa»
+  de EC-07. Depende de la decisión de almacenamiento todavía abierta (R-06): escribirla ahora
+  sería fijar por la puerta de atrás lo que el ADR debe decidir.
+- **Autorización**: un docente no puede cargar en un curso ajeno (RNF-05). Depende de
+  `identidad`, el aspecto A-05, que está vacío.
+
+<a id="a-01-evidencia"></a>
 
 ### 7. Evidenciar
 
-Pendiente. No existe evidencia de calidad para este aspecto en esta entrega.
+| Evidencia | Qué demuestra | Dónde |
+|---|---|---|
+| Ejecución de CI | Las 34 pruebas del backend y las 6 de widget pasando en una máquina limpia, con las dependencias instaladas desde cero y Redis levantado como servicio | `<<PENDIENTE: URL DEL RUN DE GITHUB ACTIONS>>` |
+| Reporte de recepción en pantalla | Un lote mixto procesado: la hoja válida recibida con su identificador de trabajo, la falsa rechazada con el motivo | [Captura del reporte](#a-01-evidencia) |
+| Registro del worker | El mismo identificador de trabajo apareciendo en un proceso distinto, en otro contenedor: el recorrido se completó | Reproducible con `docker compose logs worker`; el procedimiento está en el [README](../README.md) |
+| Reporte de medición de EC-07 | Las dos cifras del escenario | **No existe.** Ver el paso 6 |
+
+![Reporte de recepción de un lote mixto: una hoja recibida con su identificador de trabajo y un
+archivo rechazado con el motivo](evidencia/a-01-reporte-de-recepcion.png)
+
+<!-- PENDIENTE: reemplazar <<PENDIENTE: URL DEL RUN...>> de la
+     tabla de arriba por la URL de una ejecucion de GitHub Actions DE ESTE repositorio,
+     con la forma https://github.com/<org>/<repo>/actions/runs/<id>. Debe abrir para
+     cualquiera que evalue, sin credenciales. -->
+
+El identificador de trabajo `2eede6b8-dd9f-4db6-a3ab-6205644ea416` que se ve en la captura es el
+mismo que registró el worker en el contenedor aparte. Esa coincidencia es lo que convierte a la
+captura en evidencia del recorrido completo y no solo de que la pantalla dibuja bien.
+
+**Sobre el marcador de la primera fila.** El enlace debe apuntar a una ejecución de GitHub
+Actions de este repositorio, y tiene que abrir para quien evalúe sin pedirle credenciales.
+
+La distinción importa para no leer de más ni de menos esta fila: **que el aspecto funciona está
+demostrado** por las pruebas del paso 6 y por el recorrido de extremo a extremo. Lo que falta es
+la medición de las dos cifras de EC-07, que es otra pregunta —cuán rápido y cuán a prueba de
+caídas— y que no se puede responder hasta cerrar R-06.
 
 ### Por qué se eligió este aspecto primero
 
@@ -278,13 +395,3 @@ el profesor al aprobar la clave.
 > puede no detectar una equivalencia no evidente»; ahora es «el profesor puede no detectarla»
 > bajo presión de tiempo. ADR-0004 documenta esa contrapartida explícitamente como una
 > consecuencia negativa aceptada, no como un riesgo resuelto.
-
-> **Nota sobre una corrección de alcance.** Una versión anterior de este documento describía
-> tensiones de **OCR de expresiones manuscritas** (ambigüedad caligráfica entre la variable
-> *x* y el operador de producto, entre exponentes y constantes), heredadas del informe inicial
-> del grupo. Ese alcance quedó descartado en la transición a OMR registrada en `ia.md`
-> (Entrada 2): el sistema lee **marcas en casillas de posición fija**, no escritura a mano,
-> tal como fijan RNF-02 y RNF-03. T-1 se reescribió para reflejar el sistema que efectivamente
-> se está construyendo; T-2 se conservó entonces y se reubicó en la fase donde realmente
-> ocurría. Ahora, con ADR-0004, T-2 se retira a su vez porque esa fase dejó de resolverse por
-> software.

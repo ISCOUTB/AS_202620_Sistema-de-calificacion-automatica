@@ -11,9 +11,9 @@ class App extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return const MaterialApp(
       title: nombreSistema,
-      home: const PantallaInicio(),
+      home: PantallaInicio(),
     );
   }
 }

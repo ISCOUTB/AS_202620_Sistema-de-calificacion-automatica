@@ -11,9 +11,19 @@
 .venv/
 venv/
 
+# Hojas escaneadas guardadas al correr el backend fuera de Docker (RUTA_ALMACEN cae en
+# una ruta relativa). Son datos personales de estudiantes (RNF-12) y el repositorio es
+# público (RNF-11): no pueden versionarse nunca.
+backend/almacen_imagenes/
+almacen_imagenes/
+
 # Flutter/Dart (frontend)
 frontend/.dart_tool/
-frontend/.flutter-plugin-dependencies
+# Archivos generados por `flutter pub get`. Traen rutas absolutas del pub cache de cada
+# máquina, así que versionarlos produce conflictos en cada `pub get` de cada integrante.
+# La regla anterior decía `.flutter-plugin-dependencies` y no coincidía con el nombre real.
+frontend/.flutter-plugins-dependencies
+frontend/.flutter-plugins
 frontend/build/
 frontend/.packages
 

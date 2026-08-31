@@ -1,3 +1,12 @@
 build/
 .dart_tool/
 .idea/
+
+# Archivos que `flutter pub get` genera en la máquina de quien desarrolla, con rutas absolutas
+# de su pub cache. El Dockerfile hace `flutter pub get` antes del `COPY . .`, así que si estos
+# viajan al contexto pisan los que el contenedor acaba de generar y el registro de plugins
+# queda apuntando a rutas que ahí no existen. Empezó a importar con file_picker, el primer
+# plugin del proyecto.
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages

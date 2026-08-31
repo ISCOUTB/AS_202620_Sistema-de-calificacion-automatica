@@ -18,7 +18,7 @@ def cliente() -> redis.Redis:
     except redis.ConnectionError:
         pytest.skip(
             f"No se pudo conectar a Redis en {url}. "
-            "Levantá 'docker compose up -d redis' antes de correr esta prueba."
+            "Levanta 'docker compose up -d redis' antes de correr esta prueba."
         )
     yield cliente
     cliente.close()

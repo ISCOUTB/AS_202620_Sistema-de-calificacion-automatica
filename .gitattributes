@@ -1,0 +1,21 @@
+# Finales de línea uniformes para todo el equipo.
+#
+# Sin esto, cada integrante hereda el `core.autocrlf` de su instalación de Git: en Windows
+# suele venir en `true`, y entonces los archivos quedan en CRLF en su copia mientras el
+# repositorio los guarda en LF. El síntoma es que git reporta como modificado un archivo que
+# nadie tocó, y el daño real aparece al fusionar: un archivo con los finales cambiados se ve
+# modificado entero, así que dos personas que editaron secciones distintas del mismo documento
+# obtienen un conflicto de todas las líneas en vez de uno de las que de verdad chocan.
+#
+# Importa especialmente en `docs/`: el arc42 es un solo archivo largo que varias personas
+# editan en paralelo por secciones disjuntas.
+* text=auto eol=lf
+
+# Las hojas de respuesta escaneadas son binarios (RNF-02: JPG, PNG o PDF). Marcarlos evita que
+# git intente convertirles los finales de línea y los corrompa si alguna vez se versionan
+# imágenes de prueba. Ojo: las hojas con datos de estudiantes no se versionan nunca (RNF-12).
+*.jpg  binary
+*.jpeg binary
+*.png  binary
+*.pdf  binary
+*.ico  binary

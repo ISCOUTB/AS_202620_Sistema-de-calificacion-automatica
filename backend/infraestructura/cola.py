@@ -8,6 +8,9 @@ import uuid
 from dataclasses import asdict, dataclass
 
 import redis
+# Se importa el submódulo explícitamente: `redis.exceptions` solo queda disponible como
+# efecto secundario de los imports internos de redis-py, y depender de eso es frágil.
+import redis.exceptions
 
 
 @dataclass
