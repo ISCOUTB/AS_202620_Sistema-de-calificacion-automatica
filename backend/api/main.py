@@ -7,8 +7,15 @@ from pathlib import Path
 from fastapi import Depends, FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.settings import ALLOWED_ORIGIN, NOMBRE_COLA, REDIS_URL, RUTA_ALMACEN
+from api.settings import (
+    ALLOWED_ORIGIN,
+    NOMBRE_COLA,
+    REDIS_URL,
+    RUTA_ALMACEN,
+    RUTA_BITACORA,
+)
 from infraestructura.almacen import AlmacenDeImagenes, AlmacenEnDisco
+from infraestructura.bitacora import BitacoraDeRecepcion, BitacoraEnDisco
 from infraestructura.cola import cliente_redis
 from infraestructura.modelo import ArchivoCargado
 from ingesta import recibir_lote
@@ -30,6 +37,12 @@ def obtener_almacen() -> AlmacenDeImagenes:
     return AlmacenEnDisco(Path(RUTA_ALMACEN))
 
 
+def obtener_bitacora() -> BitacoraDeRecepcion:
+    """Dependencia de la bitácora de recepción (ADR-0006). Por petición y sustituible, por las
+    mismas dos razones que el almacén."""
+    return BitacoraEnDisco(Path(RUTA_BITACORA))
+
+
 def obtener_cliente_cola():
     """Dependencia de la cola. Misma razón que arriba: si el cliente se creara al importar,
     ninguna prueba de la API podría correr sin un Redis levantado."""
@@ -47,6 +60,7 @@ async def cargar_hojas(
     archivos: list[UploadFile] = File(...),
     almacen: AlmacenDeImagenes = Depends(obtener_almacen),
     cliente_cola=Depends(obtener_cliente_cola),
+    bitacora: BitacoraDeRecepcion = Depends(obtener_bitacora),
 ) -> dict:
     """Recibe una o varias hojas escaneadas de un examen y confirma qué entró y qué no (RF-01).
 
@@ -54,6 +68,12 @@ async def cargar_hojas(
     atendió por completo: el 200 confirma que el sistema procesó el lote entero, y el cuerpo
     dice archivo por archivo qué pasó. Devolver un error por un rechazo obligaría al cliente a
     reenviar el lote completo, que es justo lo que EC-07 quiere evitar.
+
+    **Una hoja puede volver como aceptada y todavía pendiente de encolar.** Desde ADR-0006 el
+    campo `estado` de cada aceptada vale `encolada` o `pendiente_de_encolar`: la segunda es una
+    hoja almacenada y registrada en la bitácora cuyo trabajo no llegó a la cola. Se reporta en
+    vez de omitirse porque EC-07 exige que ningún archivo cargado desaparezca sin traza, y
+    reintentarla es asunto del sistema, no del docente: el archivo ya está adentro.
 
     **El `examen_id` todavía no se verifica contra nada, y es un hueco conocido, no un olvido.**
     El módulo `autoria` (aspecto A-04) es el que registrará los exámenes, y aún no existe;
@@ -72,6 +92,7 @@ async def cargar_hojas(
         almacen=almacen,
         cliente_cola=cliente_cola,
         nombre_cola=NOMBRE_COLA,
+        bitacora=bitacora,
     )
 
     return {
@@ -83,6 +104,7 @@ async def cargar_hojas(
                 "referencia": hoja.referencia,
                 "trabajo_id": hoja.trabajo_id,
                 "recibida_en": hoja.recibida_en.isoformat(),
+                "estado": hoja.estado,
             }
             for hoja in resultado.aceptadas
         ],

@@ -17,10 +17,14 @@ from datetime import datetime, timezone
 from pathlib import PurePosixPath
 
 from infraestructura.almacen import AlmacenDeImagenes
-from infraestructura.cola import encolar
+from infraestructura.bitacora import BitacoraDeRecepcion
+from infraestructura.cola import ColaNoDisponible, preparar_trabajo, publicar
 from infraestructura.modelo import (
+    ENCOLADA,
+    PENDIENTE_DE_ENCOLAR,
     ArchivoCargado,
     ArchivoRechazado,
+    EntradaDeBitacora,
     HojaAceptada,
     ResultadoRecepcion,
 )
@@ -72,21 +76,48 @@ def recibir_lote(
     almacen: AlmacenDeImagenes,
     cliente_cola,
     nombre_cola: str,
+    bitacora: BitacoraDeRecepcion,
 ) -> ResultadoRecepcion:
     """Procesa un lote completo y devuelve el reporte de recepción.
 
-    El orden importa y es el que sostiene la promesa de EC-07: primero se almacena y solo
-    después se encola. Al revés, un trabajo podría llegarle al worker apuntando a una imagen
-    que todavía no existe.
+    El orden importa y es el que sostiene la promesa de EC-07. Son cuatro pasos por hoja y
+    ninguno se puede adelantar: se almacena, se acuña el trabajo, se registra en la bitácora y
+    solo entonces se publica en la cola. Almacenar primero evita que al worker le llegue un
+    trabajo apuntando a una imagen que todavía no existe; registrar antes de publicar evita lo
+    contrario, que la imagen exista y nadie sepa que está ahí.
 
-    Queda un hueco conocido, y es honesto nombrarlo: entre el guardado y el encolado no hay
-    transacción. Si el proceso muere justo en medio, el archivo queda huérfano en el almacén.
-    Cerrarlo exige acuse de recibo en la cola o una bitácora de recepción, que es parte de lo
-    que el ADR de persistencia (R-06) tiene que resolver; hoy no está resuelto y por eso la
-    durabilidad tras reinicio no se declara verificada en `docs/aspectos.md`.
+    **El fallo de la cola ya no tumba el lote.** Antes de
+    [ADR-0006](../../docs/adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md)
+    una excepción al encolar la hoja número cien abortaba la función entera: el docente recibía
+    un 500, ninguna de las doscientas hojas quedaba reportada y las noventa y nueve ya
+    encoladas se duplicaban al reintentar. Medido, eran 100 % de pérdida silenciosa contra un
+    umbral de 0 % (`docs/evidencia/medicion-ec07.md`). Hoy la hoja se reporta como aceptada con
+    estado `pendiente_de_encolar`: está almacenada, está en la bitácora y se puede reintentar
+    desde ahí sin pedirle el archivo otra vez al docente.
+
+    **El lote deja de insistir con una cola caída.** El primer `ColaNoDisponible` marca la cola
+    como no disponible para lo que resta del lote, y las hojas siguientes se almacenan, se
+    registran y se reportan como pendientes sin volver a intentar publicarlas. Esto es lo que
+    mantiene alcanzable el techo de 10 s del escenario: reintentar 200 veces contra un servidor
+    ausente cuesta el timeout de conexión en cada intento y lleva el lote a más de veinte
+    minutos, para terminar exactamente en el mismo estado.
+
+    Lo que sigue sin resolverse, y conviene no vendérselo a nadie: la bitácora es de un solo
+    proceso y el reintento todavía no está automatizado. `bitacora.pendientes()` deja el dato
+    listo para el proceso que lo consuma, y ese proceso es trabajo del aspecto A-02. Tampoco se
+    reintenta dentro del propio lote si la cola se recupera a mitad de camino: se prefiere un
+    lote rápido y honesto sobre uno lento que adivina.
     """
     aceptadas: list[HojaAceptada] = []
     rechazados: list[ArchivoRechazado] = []
+
+    # Una vez que la cola dejó de responder, no se vuelve a intentar en lo que queda del lote.
+    # No es una optimización: es lo que hace alcanzable el techo de 10 s de EC-07. Un cliente de
+    # Redis que no encuentra servidor tarda segundos en rendirse (7,1 s medidos contra un
+    # contenedor detenido), así que reintentar hoja por hoja convierte un lote de 200 en más de
+    # veinte minutos de espera para llegar al mismo sitio: las mismas 200 hojas almacenadas,
+    # registradas y pendientes. El primer fallo ya contestó la pregunta.
+    cola_disponible = True
 
     for archivo in archivos:
         motivo = motivo_de_rechazo(archivo)
@@ -95,15 +126,34 @@ def recibir_lote(
             continue
 
         referencia = almacen.guardar(examen_id, archivo.nombre, archivo.contenido)
-        trabajo = encolar(
-            cliente_cola,
-            nombre_cola,
+
+        trabajo = preparar_trabajo(
             {
                 "examen_id": examen_id,
                 "referencia": referencia,
                 "nombre_archivo": archivo.nombre,
-            },
+            }
         )
+        bitacora.registrar(
+            EntradaDeBitacora(
+                trabajo_id=trabajo.id,
+                examen_id=examen_id,
+                referencia=referencia,
+                nombre_archivo=archivo.nombre,
+            )
+        )
+
+        if not cola_disponible:
+            estado = PENDIENTE_DE_ENCOLAR
+        else:
+            try:
+                publicar(cliente_cola, nombre_cola, trabajo)
+            except ColaNoDisponible:
+                cola_disponible = False
+                estado = PENDIENTE_DE_ENCOLAR
+            else:
+                bitacora.confirmar_encolada(trabajo.id)
+                estado = ENCOLADA
 
         aceptadas.append(
             HojaAceptada(
@@ -112,6 +162,7 @@ def recibir_lote(
                 referencia=referencia,
                 trabajo_id=trabajo.id,
                 recibida_en=datetime.now(timezone.utc),
+                estado=estado,
             )
         )
 

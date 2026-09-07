@@ -103,11 +103,14 @@ El worker registra la hoja y ahí termina, porque el paso siguiente es el aspect
 de marcas), que todavía no existe. La política de retención de imágenes que exige RNF-14 tampoco
 está implementada: hoy nada borra lo que se guarda.
 
-El almacenamiento está **detrás de un puerto** en `infraestructura`, con un adaptador en disco
-declarado provisional. Es deliberado: el corte necesitaba guardar archivos sin cerrar de paso la
-decisión de persistencia, que sigue abierta como riesgo R-06 del arc42. Cuando se escriba ese
-ADR, lo que cambia es el adaptador; `ingesta`, el modelo de datos y las pruebas del aspecto no
-se tocan.
+El almacenamiento y la bitácora de recepción están **detrás de sendos puertos** en
+`infraestructura`, con adaptadores en disco declarados provisionales. Es deliberado: el corte
+necesitaba guardar archivos sin cerrar de paso la decisión de persistencia, que sigue abierta
+como riesgo R-06 del arc42. Cuando se escriba ese ADR, lo que cambia son los adaptadores;
+`ingesta`, el modelo de datos y las pruebas del aspecto no se tocan.
+
+El reintento de las hojas que quedaron `pendiente_de_encolar` **no está automatizado**:
+`bitacora.pendientes()` deja el dato listo y consumirlo es trabajo del aspecto A-02.
 
 ## Cómo se prueba
 
@@ -117,13 +120,20 @@ Backend (dentro de `backend/`, con Redis disponible vía `docker compose up -d r
 pytest
 ```
 
-Son 34 pruebas. Verifican: que la aplicación FastAPI arranca y su endpoint de salud responde
+Son 47 pruebas. Verifican: que la aplicación FastAPI arranca y su endpoint de salud responde
 200; que los siete módulos del dominio se importan sin error ni ciclos; que ningún módulo
 importa por fuera de lo declarado en el docstring de su `__init__.py` (la prueba de fronteras
 entre módulos); que un trabajo encolado en Redis se recupera igual al desencolarlo; y, para el
 aspecto A-01, que se aceptan los formatos declarados, que cada rechazo lleva motivo legible, que
 ningún archivo del lote desaparece del reporte, que se encola un trabajo por hoja aceptada y
 ninguno por rechazada, y que un nombre de archivo con rutas no escapa del directorio del examen.
+
+Trece de ellas llegaron con [ADR-0006](docs/adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md)
+y cubren el caso que rompía EC-07: la cola que se cae con el lote a medio procesar. Verifican que
+ninguna hoja queda sin reportar, que la que no se encoló queda pendiente en la bitácora con su
+imagen recuperable, que el estado se relee desde el archivo y no de la memoria, que una línea
+truncada no inutiliza el registro, y que el lote deja de insistir contra una cola caída en vez de
+pagar el tiempo de espera de conexión doscientas veces.
 
 Sin Redis levantado, la prueba de encolado se salta con un mensaje que dice qué levantar, en vez
 de fallar con un error de conexión confuso. Las demás corren igual.
@@ -144,6 +154,19 @@ Ninguna toca la red ni el diálogo de archivos del navegador: la pantalla recibe
 operaciones inyectadas y las pruebas les pasan sustitutos.
 
 Estas mismas pruebas corren en cada push y pull request vía `.github/workflows/ci.yml`.
+
+### Cómo se mide el escenario EC-07
+
+Las dos cifras del escenario (confirmación del lote en ≤10 s y 0 % de pérdida silenciosa) se
+miden con una herramienta versionada, sin Docker ni Redis:
+
+```
+cd backend
+python -m herramientas.medir_ec07 --hojas 200 --kb 200 --repeticiones 3 --fallar-en 100
+```
+
+El resultado, el procedimiento y sus límites están en
+[`docs/evidencia/medicion-ec07.md`](docs/evidencia/medicion-ec07.md).
 
 ## Restricciones y decisiones clave
 

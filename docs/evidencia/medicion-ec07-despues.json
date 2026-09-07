@@ -1,0 +1,49 @@
+{
+  "escenario": "EC-07 - Confirmacion fiable de recepcion del lote",
+  "aspecto": "A-01",
+  "entorno": {
+    "medido_en": "2026-09-07T03:48:24+00:00",
+    "python": "3.10.12",
+    "sistema": "Linux 6.8.0-136-generic",
+    "procesador": "x86_64",
+    "almacen": "AlmacenEnDisco sobre directorio temporal (escrituras reales)",
+    "sistema_de_archivos_del_almacen": "ext4",
+    "cola": "sustituta en memoria; la latencia no incluye la ida y vuelta hacia Redis",
+    "bitacora_de_recepcion": "presente (ADR-0006)"
+  },
+  "medicion_1_latencia_de_confirmacion": {
+    "hojas_del_lote": 200,
+    "kb_por_hoja": 200,
+    "mb_del_lote": 39.1,
+    "repeticiones": 3,
+    "tiempos_segundos": [
+      1.491,
+      1.231,
+      1.371
+    ],
+    "mediana_segundos": 1.371,
+    "peor_segundos": 1.491,
+    "hojas_confirmadas": 200,
+    "umbral_segundos": 10.0,
+    "cumple": true
+  },
+  "medicion_2_perdida_silenciosa": {
+    "hojas_del_lote": 200,
+    "falla_de_la_cola_en_la_hoja": 101,
+    "codigo_http": 200,
+    "hojas_reportadas": 200,
+    "de_ellas_aceptadas": 200,
+    "de_ellas_rechazadas_con_motivo": 0,
+    "hojas_sin_reportar": 0,
+    "porcentaje_de_perdida_silenciosa": 0.0,
+    "trabajos_encolados": 100,
+    "intentos_contra_la_cola": 101,
+    "demora_simulada_del_fallo_segundos": 7.1,
+    "segundos_hasta_la_confirmacion": 8.034,
+    "cumple_el_umbral_de_tiempo": true,
+    "hojas_recuperables_desde_la_bitacora": 100,
+    "archivos_escritos_en_el_almacen": 201,
+    "umbral_porcentaje": 0.0,
+    "cumple": true
+  }
+}

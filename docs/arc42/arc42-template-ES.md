@@ -266,7 +266,7 @@ los dos documentos juntos:
 | **Worker de procesamiento** | Ejecuta el OMR, calcula calificaciones y genera alertas de revisión. | Proceso Python (`backend/worker/main.py`), misma imagen que la aplicación web. | Consume la cola y confirma que la hoja encolada por `ingesta` le llegó, registrando en log su identificador, examen, archivo y referencia. **No ejecuta todavía** el pipeline `omr → calificacion`: ese es el aspecto A-02, aún declarado. |
 | **Cola de trabajos** | Desacopla la aplicación web del procesamiento OMR. | Redis 7, adaptador FIFO en `infraestructura/cola.py` (RPUSH/BLPOP). | Implementado y probado contra un Redis real (`backend/tests/test_encolado.py`); sigue siendo, según su propio docstring, «el germen» de lo que EC-07 exige, no una cola de producción con reintentos o acuses de recibo. |
 | **Base de datos** | Almacena usuarios, cursos, preguntas, claves, exámenes y resultados. | PostgreSQL 16, volumen `datos_postgres`. | Declarada en `docker-compose.yml` y `.env.example`; **ningún módulo la usa todavía** — sin esquema ni migraciones. |
-| **Almacén de imágenes** | Conserva las hojas escaneadas y archivos asociados. | Volumen Docker `almacen_imagenes`, montado en `api` y `worker`. | **Implementado como puerto y adaptador provisional**: `infraestructura/almacen.py` define el puerto `AlmacenDeImagenes` y el adaptador `AlmacenEnDisco`, que escribe en el volumen con nombres saneados (`nombre_seguro`) para evitar escapes de directorio. Es deliberadamente provisional: el riesgo R-06 (decisión de persistencia) sigue abierto, y cuando se resuelva solo cambia el adaptador, no el puerto ni quien lo consume. La política de retención de RNF-14 aterrizará aquí y hoy no está implementada. |
+| **Almacén de imágenes** | Conserva las hojas escaneadas, la bitácora de recepción y archivos asociados. | Volumen Docker `almacen_imagenes`, montado en `api` y `worker`. | **Implementado como dos puertos con adaptadores provisionales**: `infraestructura/almacen.py` define el puerto `AlmacenDeImagenes` y el adaptador `AlmacenEnDisco`, que escribe en el volumen con nombres saneados (`nombre_seguro`) para evitar escapes de directorio; `infraestructura/bitacora.py` define `BitacoraDeRecepcion` y `BitacoraEnDisco`, de solo agregado y con `fsync` por línea ([ADR-0006](../adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md)). Los dos son deliberadamente provisionales: el riesgo R-06 (decisión de persistencia) sigue abierto, y cuando se resuelva solo cambian los adaptadores, no los puertos ni quien los consume. La política de retención de RNF-14 aterrizará aquí y hoy no está implementada. |
 | **Proveedor de LLM** *(externo, opcional y pendiente)* | Propone distractores diagnósticos durante la autoría. | Por decidir (riesgo R-02). | Sin código; se conecta solo desde la aplicación web, nunca desde el worker (RNF-13). |
 
 ## 5.2 Level 2
@@ -278,8 +278,8 @@ importación que declara el docstring de cada `__init__.py` y que hace cumplir
 
 | Módulo | Responsabilidad | Requisitos | Importa (declarado) | Estado de implementación |
 |---|---|---|---|---|
-| **ingesta** | Recepción y validación de archivos escaneados (individual o en lote) y encolado del procesamiento. | RF-01 | `infraestructura`, `identidad` | **Implementado** (`recepcion.py`): valida extensión *y* firma de bytes por archivo, no aborta el lote ante un archivo inválido, almacena antes de encolar. Expone `recibir_lote`, `motivo_de_rechazo` y `EXTENSIONES_ACEPTADAS` como interfaz pública vía `__all__`. Aún no verifica el `examen_id` contra nada (hueco conocido: depende de `autoria`, A-04) ni la autorización del docente (depende de `identidad`, A-05). |
-| **infraestructura** | Persistencia, almacenamiento de imágenes y adaptador de la cola de trabajos. | Transversal | ninguno | **Parcialmente implementado.** `cola.py` (encolar/desencolar sobre Redis), `almacen.py` (puerto `AlmacenDeImagenes` + adaptador `AlmacenEnDisco`) y `modelo.py` (el modelo de datos compartido: `ArchivoCargado`, `HojaAceptada`, `ArchivoRechazado`, `ResultadoRecepcion`) ya tienen código. Sigue sin persistencia estructurada (Postgres sin esquema) y sin política de retención (R-06, RNF-14 abiertos). |
+| **ingesta** | Recepción y validación de archivos escaneados (individual o en lote) y encolado del procesamiento. | RF-01 | `infraestructura`, `identidad` | **Implementado** (`recepcion.py`): valida extensión *y* firma de bytes por archivo, no aborta el lote ante un archivo inválido ni ante un fallo de la cola (ADR-0006), y por cada hoja almacena, acuña el trabajo, registra en la bitácora y solo entonces publica. Expone `recibir_lote`, `motivo_de_rechazo` y `EXTENSIONES_ACEPTADAS` como interfaz pública vía `__all__`. Aún no verifica el `examen_id` contra nada (hueco conocido: depende de `autoria`, A-04) ni la autorización del docente (depende de `identidad`, A-05). |
+| **infraestructura** | Persistencia, almacenamiento de imágenes, bitácora de recepción y adaptador de la cola de trabajos. | Transversal | ninguno | **Parcialmente implementado.** `cola.py` (acuñar, publicar y desencolar sobre Redis, con `ColaNoDisponible` como traducción de los errores de redis-py al dominio), `almacen.py` (puerto `AlmacenDeImagenes` + adaptador `AlmacenEnDisco`), `bitacora.py` (puerto `BitacoraDeRecepcion` + adaptadores `BitacoraEnDisco` y `BitacoraEnMemoria`, ADR-0006) y `modelo.py` (el modelo de datos compartido: `ArchivoCargado`, `HojaAceptada`, `ArchivoRechazado`, `ResultadoRecepcion`, `EntradaDeBitacora`) ya tienen código. Sigue sin persistencia estructurada (Postgres sin esquema) y sin política de retención (R-06, RNF-14 abiertos). |
 | **autoria** | Bancos de preguntas y clave de respuestas, generación opcional de distractores diagnósticos con LLM, y habilitación del examen. | RF-06, RF-07, RF-11 | `infraestructura`, `identidad` | Paquete vacío (aspecto A-04, declarado). |
 | **omr** | Detección de marcas y cálculo del nivel de confianza; clasificación de ambigüedad. | RF-02, RF-03 | `infraestructura`, `identidad` | Paquete vacío (aspecto A-02, declarado). |
 | **calificacion** | Comparación contra la clave habilitada por el profesor y cálculo de notas; recálculo tras revisión manual. | RF-04, RF-08 | `infraestructura`, `identidad`, `omr` | Paquete vacío (aspecto A-03, declarado). |
@@ -349,35 +349,49 @@ llega, ya registrada, hasta el log del worker en otro contenedor.
 2. `api/main.py` lee cada archivo (`UploadFile`) y arma la lista de `ArchivoCargado`
    (nombre + bytes); construye por dependencia el almacén (`AlmacenEnDisco`) y el cliente de
    cola, sin tocarlos al importar el módulo.
-3. Llama a `ingesta.recibir_lote(examen_id, archivos, almacen, cliente_cola, nombre_cola)`, que
-   procesa el lote **archivo por archivo, sin abortar ante uno inválido**:
+3. Llama a `ingesta.recibir_lote(examen_id, archivos, almacen, cliente_cola, nombre_cola,
+   bitacora)`, que procesa el lote **archivo por archivo, sin abortar ante uno inválido ni ante
+   un fallo de la cola**:
    - `motivo_de_rechazo()` revisa la extensión declarada y la firma de los primeros bytes. Si
      falla cualquiera de las dos, el archivo se reporta como *rechazado con motivo* y el lote
      sigue con el siguiente.
-   - Si el archivo es válido, `almacen.guardar()` lo escribe en el volumen bajo un directorio
-     por examen, con nombre saneado y único (UUID); después `infraestructura.cola.encolar()`
-     hace `RPUSH` de un trabajo con `{examen_id, referencia, nombre_archivo}` y devuelve su
-     `id`. El orden es deliberado: **primero se almacena, después se encola**, para que ningún
-     trabajo apunte a una imagen que todavía no existe.
+   - Si el archivo es válido son cuatro pasos y el orden es deliberado ([ADR-0006](../adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md)):
+     `almacen.guardar()` lo escribe en el volumen bajo un directorio por examen, con nombre
+     saneado y único (UUID); `cola.preparar_trabajo()` acuña el trabajo y su identificador **sin
+     tocar la cola**; `bitacora.registrar()` deja constancia en disco de que esa hoja está
+     adentro; y solo entonces `cola.publicar()` hace `RPUSH`, seguido de
+     `bitacora.confirmar_encolada()`. Almacenar antes de encolar evita que un trabajo apunte a
+     una imagen que todavía no existe; registrar antes de publicar evita lo contrario, que la
+     imagen exista y nadie sepa que está ahí.
+   - **Si la cola no responde**, `publicar()` levanta `ColaNoDisponible` y la hoja se reporta
+     como *aceptada* con estado `pendiente_de_encolar`, no como rechazada: está almacenada y
+     registrada, y su reintento no debería costarle al docente volver a subir el archivo.
 4. El endpoint responde **siempre 200** (una petición sin archivos es la excepción: 422),
    con el reporte completo: cuántos archivos se procesaron, cuáles quedaron aceptados (con su
    `referencia` y `trabajo_id`) y cuáles rechazados (con el motivo). Un lote mixto no es un
    error — devolver un error obligaría al docente a reenviar el lote entero, justo lo que
    EC-07 quiere evitar.
-5. En paralelo, `worker/main.py` sigue en su ciclo `desencolar()` sobre la cola
-   `"procesamiento"` (`BLPOP`, timeout 5 s). Al recibir el trabajo, registra en log su `id`,
+5. En paralelo, `worker/main.py` sigue en su ciclo `desencolar()` sobre la cola que nombra
+   `NOMBRE_COLA` (`BLPOP`, timeout 5 s), la misma variable de entorno que lee `api/settings.py`. Al recibir el trabajo, registra en log su `id`,
    el `examen_id`, el `nombre_archivo` y la `referencia` — y ahí se detiene: el siguiente paso
    (detección de marcas, aspecto A-02) todavía no existe.
 6. Si Redis falla de forma transitoria, el worker captura `redis.exceptions.RedisError`,
    espera 5 segundos y reintenta el ciclo sin caerse.
 
 **Lo que este recorrido demuestra y lo que no.** Está verificado que ningún archivo del lote
-desaparece sin dejar traza (la parte cualitativa de EC-07) y que el identificador de trabajo
-que ve el docente en pantalla es el mismo que aparece en el log del worker, en otro contenedor
-— evidencia de que el recorrido cruza de verdad la cola. **No** está medido el tiempo de
-confirmación (≤10 s) ni la durabilidad ante un reinicio a mitad de proceso: ambas dependen del
-ADR de persistencia todavía abierto (riesgo R-06), según deja explícito
-[`../aspectos.md`](../aspectos.md#a-01).
+desaparece sin dejar traza y que el identificador de trabajo que ve el docente en pantalla es el
+mismo que aparece en el log del worker, en otro contenedor — evidencia de que el recorrido cruza
+de verdad la cola. **Las dos cifras de EC-07 ya están medidas**, con el procedimiento y sus
+límites en [`../evidencia/medicion-ec07.md`](../evidencia/medicion-ec07.md): 1,744 s de
+confirmación para un lote de 200 hojas contra un umbral de 10 s, y 0 % de pérdida silenciosa
+contra un umbral de 0 %. La segunda cifra valía 100 % antes de ADR-0006, y esa medición es la
+que motivó la decisión.
+
+**Lo que sigue sin demostrarse, y conviene no confundirlo con lo anterior:** la durabilidad ante
+la caída del sistema operativo, que `fsync` defiende pero que solo se comprobaría cortándole la
+corriente a la máquina; el reintento automático de las hojas pendientes, que es trabajo del
+aspecto A-02; y el tiempo con un Redis real, ya que la medición usa una cola sustituta y por eso
+su cifra de latencia es una cota inferior.
 
 **Pruebas que lo verifican:** `backend/tests/test_recepcion.py` (la regla de negocio, sin
 Redis ni servidor) y `backend/tests/test_carga_hojas.py` (el endpoint visto desde fuera, con
@@ -411,7 +425,18 @@ una falla de red de un rechazo.
 
 # 8. Cross-cutting Concepts
 
-> **Pendiente — se completa en la semana 4.** Conceptos transversales ya identificados:
+> **Pendiente.** La semana 4 se dedicó a construir el corte vertical del aspecto A-01 y la
+> semana 5 al reto del primer corte, así que esta sección no se escribió y decirlo es más útil
+> que fecharla otra vez. La razón de fondo es de criterio y conviene dejarla escrita: un concepto
+> transversal se documenta cuando ya atraviesa más de un módulo del código, y hoy seis de los
+> siete están vacíos. Escribirla ahora produciría intenciones, no conceptos, que es lo que el
+> equipo ya pagó caro en las secciones 5 y 6 antes de reescribirlas contra el código.
+>
+> El primero que dejó de ser una intención es el **registro de recepción**, que ADR-0006
+> introdujo y que hoy vive en `infraestructura`; cuando A-02 lo consuma, será el primer concepto
+> de esta sección con dos módulos que lo atraviesen.
+>
+> Conceptos transversales ya identificados:
 >
 > - **Manejo de la incertidumbre del OMR:** el nivel de confianza como dato de primera clase
 >   que acompaña a toda respuesta detectada a lo largo del pipeline.
@@ -440,6 +465,7 @@ decisión cambia, se escribe uno nuevo y el anterior pasa a estado *reemplazado 
 | [0003](../adr/0003-usar-fastapi-y-flutter.md) | Usar FastAPI en el backend y Flutter en el frontend | **aceptado** | 2026-08-23 | [EC-01](#ec-01), [EC-05](#ec-05) |
 | [0004](../adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md) | Quitar la validación simbólica obligatoria de la clave de respuestas | **aceptado** | 2026-08-24 | [EC-05](#ec-05) |
 | [0005](../adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md) | Acotar el LLM a la generación de distractores diagnósticos | **aceptado** | 2026-08-29 | [EC-05](#ec-05) |
+| [0006](../adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md) | Registrar la recepción en una bitácora antes de encolar | **aceptado** | 2026-09-06 | [EC-07](#ec-07) |
 
 **Por qué 0002 reemplaza a 0001.** La revisión de coherencia previa al corte 1 encontró que
 EC-03 y EC-04 no se pueden cumplir a la vez con procesamiento síncrono —200 hojas × 5 s son
@@ -473,12 +499,27 @@ reintroduce SymPy ni contradice nada de 0004; precisa dónde queda el LLM. Se re
 separado porque tuvieron disparadores distintos y en momentos distintos, y esa secuencia es
 parte de lo que el historial de decisiones debe conservar.
 
+**Por qué 0006 no reemplaza a 0002.** 0002 estableció el procesamiento asíncrono y la cola de
+trabajos, y esa decisión sigue intacta: 0006 no la contradice en ningún punto. Lo que hace es
+responder una pregunta que 0002 no se planteó, y que solo apareció cuando el aspecto A-01 se
+construyó y se midió: qué ocurre con una hoja ya almacenada cuando la cola no responde. La
+respuesta —registrarla antes de encolar, para que sea recuperable— precisa a 0002 sin anularlo,
+y por eso conviven. Es el mismo criterio con el que 0005 convive con 0004: la pregunta es si la
+decisión nueva *contradice* a la anterior o la *precisa*.
+
+**Qué distingue a 0006 de los cinco anteriores.** Es el primero que nace de una **medición** y
+no de una revisión de coherencia o de la retroalimentación del docente. Su contexto abre con la
+cifra que lo motiva —100 % de pérdida silenciosa contra un umbral de 0 %— obtenida sobre el
+commit anterior con la herramienta que queda versionada en el repositorio, de modo que cualquiera
+puede repetirla. Ver [`../evidencia/medicion-ec07.md`](../evidencia/medicion-ec07.md).
+
 **Decisiones previstas (aún no tomadas):**
 
 - Proveedor de LLM y su modo de consumo, externo o local — ver R-02. (La elección de stack de
   RNF-08 quedó resuelta en ADR-0003.)
 - Mecanismo de persistencia y almacenamiento de las imágenes, con su política de retención
-  (RNF-14).
+  (RNF-14). **Sigue abierta después de ADR-0006**, que cubrió solo el registro de la recepción y
+  dejó el medio definitivo sin elegir, detrás del mismo puerto que ya aislaba el almacén.
 - Estrategia de calibración del umbral de confianza del OMR.
 - Si EC-05 necesita una medida de tiempo de revisión, y con qué valor — ver ADR-0004.
 - Si la calificación de riesgo técnico de EC-05 en el árbol de utilidad (hoy *Alto*) debe
@@ -685,7 +726,7 @@ fallos. Se documentan aparte para no alterar la priorización original.
 | **R-03** | **Dependencia de un servicio externo no controlado** si el LLM es una API alojada: cuotas, latencia variable, cambios de modelo, indisponibilidad. | Medio | Superar la cuota gratuita durante una sesión de generación intensiva. | La separación de fases ya mitiga lo esencial: el LLM solo participa en la autoría, así que una caída del proveedor no impide calificar. Añadir reintentos, aislar el consumo tras una interfaz propia de `autoria` y permitir el ingreso manual de preguntas. |
 | **R-04** | **El umbral de confianza del 70% es un valor supuesto, no medido.** Mal calibrado dispara falsos positivos (todo va a revisión manual y el sistema deja de ahorrar tiempo) o falsos negativos (errores silenciosos, se rompe QG-3). | Alto | Fijar el umbral sin evidencia y descubrirlo en producción. | Calibrar sobre el dataset de R-01 y documentar la curva de precisión frente a umbral en un ADR. |
 | **R-05** | **El equipo no tiene experiencia previa medible con OpenCV / OMR**, que es la parte de mayor riesgo técnico del sistema. | Alto | Dejar el módulo `omr` para el final del cronograma. | Construir un prototipo desechable de detección de marcas antes de la semana 4, aunque sea sobre una sola hoja, para convertir la incertidumbre en información. |
-| **R-06** | **Deuda: no hay decisión de persistencia ni de almacenamiento de imágenes**, ni política de retención (RNF-14). **Dejó de bloquear la construcción**: A-01 se construyó con el almacenamiento detrás del puerto `AlmacenDeImagenes` y un adaptador en disco declarado provisional (ver 5.1 y 5.3), de modo que la decisión sigue abierta de verdad y no se tomó por omisión. Pero **subió de prioridad**, porque las dos cifras de [EC-07](#ec-07) no se pueden medir hasta que exista. | **Alto** | Necesitar medir EC-07, o llegar al despliegue sin política de retención. | ADR propio, que debe cubrir el ciclo de vida de los escaneos y no solo el guardado. Cuando exista, lo que cambia es el adaptador: `ingesta`, el modelo de datos y las pruebas del aspecto no se tocan. |
+| **R-06** | **Deuda: no hay decisión de persistencia ni de almacenamiento de imágenes**, ni política de retención (RNF-14). **Dejó de bloquear la construcción** y **dejó de bloquear la medición**: A-01 se construyó con el almacenamiento detrás del puerto `AlmacenDeImagenes` y un adaptador en disco declarado provisional (ver 5.1 y 5.3), y [ADR-0006](../adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md) cubrió la parte de recepción que impedía medir [EC-07](#ec-07), con el mismo mecanismo de puerto y adaptador provisional. Las dos cifras del escenario ya están medidas ([evidencia](../evidencia/medicion-ec07.md)). Lo que sigue abierto es el medio definitivo, la persistencia estructurada y la retención, y ninguno de los tres se tomó por omisión. | **Medio** (bajó de *Alto*: ya no bloquea ni la construcción ni la medición) | Llegar al despliegue sin política de retención, o escalar la API a más de una instancia, que es el día en que `BitacoraEnDisco` deja de ser correcto. | ADR propio, que debe cubrir el ciclo de vida de los escaneos y de la bitácora, no solo el guardado. Cuando exista, lo que cambia son los adaptadores: `ingesta`, el modelo de datos y las pruebas del aspecto no se tocan. |
 | **R-07** | **Deuda: EC-04 supone paralelismo pero no está fijado el número de workers** ni medido el consumo de CPU por hoja. | Medio | Que el límite de 85% de CPU se incumpla con la concurrencia elegida. | Medir el costo de una hoja en el prototipo de R-05 y derivar el número de workers de ese dato. |
 | **R-08** | **Riesgo de erosión de los límites entre módulos** («big ball of mud»), inherente al monolito modular. **Mitigado en lo esencial.** | Bajo | Cambiar la línea `Importa:` de un docstring para acomodar un import, en lugar de corregir el import. | Ya en marcha, no prevista: `backend/tests/test_fronteras.py` corre en cada push y compara los imports reales de cada módulo, leídos con `ast`, contra la línea `Importa:` de su docstring. **Queda un flanco:** verifica el módulo importado, no el símbolo. Cerrarlo exige un `__all__` por módulo —hoy solo lo declara `ingesta`— y extender la prueba para comprobarlo. |
 | **R-09** | **Deuda organizativa: la contribución al repositorio está concentrada en pocas cuentas**, lo que incumple RNF-10. | Alto | Que el reparto por módulos no se traduzca en commits de las cuatro personas. | Asignar módulos por integrante desde la semana 4 y trabajar con ramas y *pull requests* revisados, de modo que la contribución individual sea verificable en el historial. |

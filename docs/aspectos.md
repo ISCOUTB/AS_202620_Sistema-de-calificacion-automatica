@@ -2,9 +2,13 @@
 
 Este documento registra los aspectos identificados para el **Sistema de Calificación OMR**
 (calificación automática de exámenes de opción múltiple de cálculo diferencial mediante
-reconocimiento óptico de marcas, con generación del banco de preguntas apoyada en LLM y
-aprobación manual del profesor sobre la clave de respuestas), siguiendo la metodología de
-Aspect Driven Development del curso.
+reconocimiento óptico de marcas, contra la clave que el profesor registra y habilita de forma
+explícita), siguiendo la metodología de Aspect Driven Development del curso.
+
+Desde [ADR-0005](adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md) el
+modelo de lenguaje **no participa en la calificación**: es una capacidad opcional de la fase de
+autoría que propone distractores diagnósticos cuando el profesor se los pide (RF-11), y el
+sistema opera completo sin invocarla nunca.
 
 Un aspecto es un corte vertical del sistema, con valor propio, que se puede recorrer completo:
 
@@ -26,7 +30,7 @@ alcanzables desde la fila del aspecto que los realiza.
 
 | ID | Aspecto | Estado | Requisito | Escenario de calidad | C4 | ADR | Código | Pruebas | Evidencia |
 |---|---|---|---|---|---|---|---|---|---|
-| **[A-01](#a-01)** | Carga de examen para calificación | **Construido** | RF-01 | [EC-07](arc42/arc42-template-ES.md#ec-07) | C1: Sistema de Calificación OMR · C2 pendiente (S4) | [0002](adr/0002-procesar-calificacion-de-forma-asincrona.md) | [`ingesta/recepcion.py`](../backend/ingesta/recepcion.py) · [`infraestructura/almacen.py`](../backend/infraestructura/almacen.py) · [`infraestructura/modelo.py`](../backend/infraestructura/modelo.py) · [`api/main.py`](../backend/api/main.py) · [`frontend/lib/pantalla_carga.dart`](../frontend/lib/pantalla_carga.dart) | [`test_recepcion.py`](../backend/tests/test_recepcion.py) · [`test_carga_hojas.py`](../backend/tests/test_carga_hojas.py) · [`widget_test.dart`](../frontend/test/widget_test.dart) | [Captura del reporte](#a-01-evidencia) · CI y medición pendientes |
+| **[A-01](#a-01)** | Carga de examen para calificación | **Construido** | RF-01 | [EC-07](arc42/arc42-template-ES.md#ec-07) | C1: [Sistema de Calificación OMR](c4/doc-c4.md#nivel-1--diagrama-de-contexto-del-sistema) · C2: [Aplicación web](c4/doc-c4.md#nivel-2--diagrama-de-contenedores), [Almacén de imágenes](c4/doc-c4.md#nivel-2--diagrama-de-contenedores), [Cola de trabajos](c4/doc-c4.md#nivel-2--diagrama-de-contenedores) | [0002](adr/0002-procesar-calificacion-de-forma-asincrona.md) · [0006](adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md) | [`ingesta/recepcion.py`](../backend/ingesta/recepcion.py) · [`infraestructura/almacen.py`](../backend/infraestructura/almacen.py) · [`infraestructura/bitacora.py`](../backend/infraestructura/bitacora.py) · [`infraestructura/modelo.py`](../backend/infraestructura/modelo.py) · [`api/main.py`](../backend/api/main.py) · [`frontend/lib/pantalla_carga.dart`](../frontend/lib/pantalla_carga.dart) | [`test_recepcion.py`](../backend/tests/test_recepcion.py) · [`test_durabilidad_recepcion.py`](../backend/tests/test_durabilidad_recepcion.py) · [`test_carga_hojas.py`](../backend/tests/test_carga_hojas.py) · [`widget_test.dart`](../frontend/test/widget_test.dart) | [Medición de EC-07](evidencia/medicion-ec07.md): 1,744 s contra ≤10 s · 0 % de pérdida silenciosa · [captura](#a-01-evidencia) |
 | **[A-02](#a-02)** | Detección de marcas y nivel de confianza | Declarado | RF-02, RF-03 | [EC-01](arc42/arc42-template-ES.md#ec-01) · [EC-02](arc42/arc42-template-ES.md#ec-02) | Pendiente (S4) | ADR de umbral previsto (S4) | Pendiente | Pendiente | Pendiente |
 | **[A-03](#a-03)** | Calificación contra la clave y publicación | Declarado | RF-04, RF-05, RF-08 | [EC-03](arc42/arc42-template-ES.md#ec-03) · [EC-04](arc42/arc42-template-ES.md#ec-04) | Pendiente (S4) | [0002](adr/0002-procesar-calificacion-de-forma-asincrona.md) | Pendiente | Pendiente | Pendiente |
 | **[A-04](#a-04)** | Registro del banco y habilitación del examen | Declarado | RF-06, RF-07, RF-11 | [EC-05](arc42/arc42-template-ES.md#ec-05) | Pendiente (S4) | [0003](adr/0003-usar-fastapi-y-flutter.md) · [0004](adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md) · [0005](adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md) | Pendiente | Pendiente | Pendiente |
@@ -161,8 +165,10 @@ cuando A-04 llegue solo haya que sumar la comprobación.
 
 ### 6. Verificar
 
-**22 pruebas automatizadas de este aspecto**: 18 en el backend y 4 de widget en el frontend.
-(La suite de widget tiene 6; las otras dos son las de conexión que ya traía el esqueleto.)
+**35 pruebas automatizadas de este aspecto**: 31 en el backend y 4 de widget en el frontend.
+(La suite de widget tiene 6; las otras dos son las de conexión que ya traía el esqueleto.) Trece
+de las del backend llegaron con [ADR-0006](adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md)
+y cubren el caso que antes rompía EC-07: la cola que se cae con el lote a medio procesar.
 
 | Prueba | Qué sostiene | Archivo |
 |---|---|---|
@@ -177,6 +183,13 @@ cuando A-04 llegue solo haya que sumar la comprobación.
 | La pantalla no ofrece cargar si el backend no responde | No llevar al docente a una pantalla que va a fallar | [`widget_test.dart`](../frontend/test/widget_test.dart) |
 | El reporte lista aceptadas y rechazadas con su motivo | EC-07 visible para el usuario | [`widget_test.dart`](../frontend/test/widget_test.dart) |
 | Una falla de red se muestra como aviso, no como rechazo | Son cosas distintas y el docente debe distinguirlas | [`widget_test.dart`](../frontend/test/widget_test.dart) |
+| Ninguna hoja queda sin reportar si la cola se cae a mitad del lote | La cifra de EC-07 que antes daba 100 % de pérdida | [`test_durabilidad_recepcion.py`](../backend/tests/test_durabilidad_recepcion.py) |
+| La hoja no encolada queda pendiente en la bitácora, con su imagen recuperable | Reportarla no basta: el reintento no puede depender del docente | [`test_durabilidad_recepcion.py`](../backend/tests/test_durabilidad_recepcion.py) |
+| El estado pendiente se relee desde otro objeto sobre el mismo archivo | Que la bitácora viva en el disco y no en la memoria de quien la escribió | [`test_durabilidad_recepcion.py`](../backend/tests/test_durabilidad_recepcion.py) |
+| Una línea truncada no inutiliza la bitácora | El proceso puede morir escribiendo, y las líneas anteriores siguen valiendo | [`test_durabilidad_recepcion.py`](../backend/tests/test_durabilidad_recepcion.py) |
+| El endpoint confirma el lote en vez de devolver 500 | Lo que ve el docente, de punta a punta por HTTP | [`test_durabilidad_recepcion.py`](../backend/tests/test_durabilidad_recepcion.py) |
+| El lote no insiste contra una cola caída | El techo de 10 s de EC-07 en el camino de fallo | [`test_durabilidad_recepcion.py`](../backend/tests/test_durabilidad_recepcion.py) |
+| El corte no se adelanta mientras la cola responde | Que no se dejen de encolar hojas por prudencia mal entendida | [`test_durabilidad_recepcion.py`](../backend/tests/test_durabilidad_recepcion.py) |
 
 **Las pruebas nuevas se validaron provocando la falla**, según la convención del equipo: se
 rompió a propósito la verificación de bytes, el reporte de rechazados, el conteo de encolados y
@@ -195,21 +208,30 @@ de texto con extensión `.jpg`. El sistema aceptó la primera, rechazó el segun
 **el identificador de trabajo que mostró la pantalla apareció idéntico en el log del worker**,
 que corre en otro contenedor. El procedimiento está en el README para que sea reproducible.
 
-**La medición del escenario de calidad está pendiente, y es la parte incompleta de este paso.**
-EC-07 pide dos cifras: confirmación del lote en ≤10 segundos y 0 % de pérdida silenciosa
-sobreviviendo a un reinicio. Ninguna se ha medido, y son objetivos del escenario, no resultados.
-La medición de ambas depende del almacenamiento definitivo, que es lo que determina tanto el
-tiempo de confirmación como el comportamiento ante una caída, y esa decisión sigue abierta como
-riesgo R-06. Lo que sí está verificado de EC-07 es su parte cualitativa: todo archivo cargado
-sale como *aceptado* o como *rechazado con motivo*, comprobado sobre el conteo completo del lote.
+**La medición del escenario de calidad ya está hecha, y encontró un incumplimiento.** EC-07
+pide dos cifras. La primera —confirmación del lote en ≤10 segundos— se cumplía con margen. La
+segunda —0 % de pérdida silenciosa— **daba 100 %**: con la cola cayéndose a mitad de un lote de
+200 hojas, el sistema devolvía 500 y no reportaba ninguna de las 200, mientras 100 trabajos ya
+estaban encolados. Eso motivó
+[ADR-0006](adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md) y el cambio que
+lo corrige. El procedimiento, las dos corridas y sus límites están en
+[`evidencia/medicion-ec07.md`](evidencia/medicion-ec07.md).
 
-Dos pruebas previstas que **no** se escribieron, y no por olvido:
+| Medida de EC-07 | Umbral | Antes (`cede35e`) | Después |
+|---|---|---|---|
+| Confirmación del lote de 200 hojas, operación normal | ≤ 10 s | 0,126 s | 1,744 s |
+| Confirmación del lote de 200 hojas, con la cola caída | ≤ 10 s | devolvía 500 | 7,842 s |
+| Pérdida silenciosa | 0 % | 100 % | 0 % |
 
-- **Durabilidad tras reinicio**, que es la que realmente cubriría el «0 % de pérdida silenciosa»
-  de EC-07. Depende de la decisión de almacenamiento todavía abierta (R-06): escribirla ahora
-  sería fijar por la puerta de atrás lo que el ADR debe decidir.
-- **Autorización**: un docente no puede cargar en un curso ajeno (RNF-05). Depende de
-  `identidad`, el aspecto A-05, que está vacío.
+Una prueba prevista que **no** se escribió, y no por olvido: **autorización**, es decir que un
+docente no pueda cargar en un curso ajeno (RNF-05). Depende de `identidad`, el aspecto A-05, que
+está vacío.
+
+Y una que se escribió con un alcance menor del que su nombre sugiere: la durabilidad se verifica
+releyendo la bitácora desde otro objeto sobre el mismo archivo, lo que demuestra que el estado
+vive en el disco y no en memoria. Que el archivo esté en el plato y no en la caché del sistema
+operativo lo sostiene el `fsync` de `BitacoraEnDisco`, y comprobarlo exigiría cortarle la
+corriente a la máquina. Está dicho así en el docstring de esa prueba.
 
 <a id="a-01-evidencia"></a>
 
@@ -220,7 +242,7 @@ Dos pruebas previstas que **no** se escribieron, y no por olvido:
 | Ejecución de CI | Las 34 pruebas del backend y las 6 de widget pasando en una máquina limpia, con las dependencias instaladas desde cero y Redis levantado como servicio | [Run del commit `59e182e`](https://github.com/ISCOUTB/AS_202620_Sistema-de-calificacion-automatica/actions/runs/33347922678) — `backend-tests` y `frontend-tests` en verde |
 | Reporte de recepción en pantalla | Un lote mixto procesado: la hoja válida recibida con su identificador de trabajo, la falsa rechazada con el motivo | [Captura del reporte](#a-01-evidencia) |
 | Registro del worker | El mismo identificador de trabajo apareciendo en un proceso distinto, en otro contenedor: el recorrido se completó | Reproducible con `docker compose logs worker`; el procedimiento está en el [README](../README.md) |
-| Reporte de medición de EC-07 | Las dos cifras del escenario | **No existe.** Ver el paso 6 |
+| Reporte de medición de EC-07 | Las dos cifras del escenario, medidas antes y después del cambio de [ADR-0006](adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md), con el procedimiento para repetirlas | [`evidencia/medicion-ec07.md`](evidencia/medicion-ec07.md) — 1,744 s contra un umbral de 10 s y 0 % de pérdida silenciosa contra un umbral de 0 % |
 
 ![Reporte de recepción de un lote mixto: una hoja recibida con su identificador de trabajo y un
 archivo rechazado con el motivo](evidencia/a-01-reporte-de-recepcion.png)
@@ -273,7 +295,7 @@ caídas— y que no se puede responder hasta cerrar R-06.
 
 - **Para quién es:** el profesor y el TA, que necesitan la nota y las estadísticas por
   pregunta.
-- **Qué problema resuelve:** compara las respuestas detectadas contra la clave validada,
+- **Qué problema resuelve:** compara las respuestas detectadas contra la clave habilitada,
   calcula la nota y la publica en el dashboard, permitiendo resolver manualmente lo ambiguo y
   recalcular.
 - **Requisitos:** RF-04, RF-05, RF-08.

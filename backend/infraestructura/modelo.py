@@ -20,7 +20,17 @@ __all__ = [
     "HojaAceptada",
     "ArchivoRechazado",
     "ResultadoRecepcion",
+    "EntradaDeBitacora",
+    "ENCOLADA",
+    "PENDIENTE_DE_ENCOLAR",
 ]
+
+# Estados en los que puede quedar una hoja aceptada. Son dos y no uno desde
+# [ADR-0006](../../docs/adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md):
+# una hoja puede estar almacenada y registrada sin que su trabajo haya llegado a la cola, y
+# EC-07 exige que el docente vea esa diferencia en lugar de no ver la hoja.
+ENCOLADA = "encolada"
+PENDIENTE_DE_ENCOLAR = "pendiente_de_encolar"
 
 
 @dataclass(frozen=True)
@@ -40,13 +50,19 @@ class HojaAceptada:
 
     `referencia` es la ubicación que devolvió el almacén, opaca a propósito: quien la recibe no
     debe suponer que es una ruta de disco, porque el ADR de persistencia (R-06) puede
-    convertirla en una clave de objeto sin que este modelo cambie."""
+    convertirla en una clave de objeto sin que este modelo cambie.
+
+    `estado` distingue la hoja cuyo trabajo llegó a la cola de la que quedó almacenada y
+    registrada en la bitácora esperando un reintento. El `trabajo_id` existe en ambos casos:
+    se acuña antes de tocar la cola, precisamente para que la entrada de bitácora y el trabajo
+    que llegue después se refieran al mismo identificador."""
 
     examen_id: str
     nombre_archivo: str
     referencia: str
     trabajo_id: str
     recibida_en: datetime
+    estado: str = ENCOLADA
 
 
 @dataclass(frozen=True)
@@ -74,3 +90,16 @@ class ResultadoRecepcion:
     @property
     def total_procesados(self) -> int:
         return len(self.aceptadas) + len(self.rechazados)
+
+
+@dataclass(frozen=True)
+class EntradaDeBitacora:
+    """Una hoja almacenada cuyo procesamiento se va a encolar, o quedó pendiente de encolarse.
+
+    Es lo mínimo que hace falta para reintentar sin volver a pedirle el archivo al docente: el
+    identificador del trabajo, dónde quedó la imagen y de qué examen es."""
+
+    trabajo_id: str
+    examen_id: str
+    referencia: str
+    nombre_archivo: str

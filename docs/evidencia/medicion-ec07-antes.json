@@ -1,0 +1,45 @@
+{
+  "escenario": "EC-07 - Confirmacion fiable de recepcion del lote",
+  "aspecto": "A-01",
+  "entorno": {
+    "medido_en": "2026-09-07T02:00:26+00:00",
+    "python": "3.10.12",
+    "sistema": "Linux 6.8.0-136-generic",
+    "procesador": "x86_64",
+    "almacen": "AlmacenEnDisco sobre directorio temporal (escrituras reales)",
+    "sistema_de_archivos_del_almacen": "ext4",
+    "cola": "sustituta en memoria; la latencia no incluye la ida y vuelta hacia Redis",
+    "bitacora_de_recepcion": "ausente (estado anterior a ADR-0006)"
+  },
+  "medicion_1_latencia_de_confirmacion": {
+    "hojas_del_lote": 200,
+    "kb_por_hoja": 200,
+    "mb_del_lote": 39.1,
+    "repeticiones": 3,
+    "tiempos_segundos": [
+      0.126,
+      0.094,
+      0.094
+    ],
+    "mediana_segundos": 0.094,
+    "peor_segundos": 0.126,
+    "hojas_confirmadas": 200,
+    "umbral_segundos": 10.0,
+    "cumple": true
+  },
+  "medicion_2_perdida_silenciosa": {
+    "hojas_del_lote": 200,
+    "falla_de_la_cola_en_la_hoja": 101,
+    "codigo_http": 500,
+    "hojas_reportadas": 0,
+    "de_ellas_aceptadas": 0,
+    "de_ellas_rechazadas_con_motivo": 0,
+    "hojas_sin_reportar": 200,
+    "porcentaje_de_perdida_silenciosa": 100.0,
+    "trabajos_encolados": 100,
+    "hojas_recuperables_desde_la_bitacora": "no existe",
+    "archivos_escritos_en_el_almacen": 101,
+    "umbral_porcentaje": 0.0,
+    "cumple": false
+  }
+}

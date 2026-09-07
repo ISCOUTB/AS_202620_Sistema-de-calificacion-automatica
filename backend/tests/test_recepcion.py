@@ -13,6 +13,7 @@ ha hecho. Ambas quedan como «Evidencia» pendiente, no como pruebas ausentes po
 import pytest
 
 from infraestructura.almacen import AlmacenEnDisco
+from infraestructura.bitacora import BitacoraEnMemoria
 from infraestructura.modelo import ArchivoCargado
 from ingesta import recibir_lote
 
@@ -47,8 +48,17 @@ def cola():
     return ColaFalsa()
 
 
-def _recibir(archivos, almacen, cola):
-    return recibir_lote(EXAMEN, archivos, almacen, cola, COLA)
+@pytest.fixture
+def bitacora():
+    """Bitácora en memoria: estas pruebas verifican el reporte, no la durabilidad. La que sí
+    mide durabilidad es `test_durabilidad_recepcion.py`, y usa el adaptador en disco."""
+    return BitacoraEnMemoria()
+
+
+def _recibir(archivos, almacen, cola, bitacora=None):
+    return recibir_lote(
+        EXAMEN, archivos, almacen, cola, COLA, bitacora or BitacoraEnMemoria()
+    )
 
 
 @pytest.mark.parametrize(

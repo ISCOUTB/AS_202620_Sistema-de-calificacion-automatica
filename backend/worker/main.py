@@ -4,6 +4,7 @@ pipeline de calificación (omr -> calificacion), solo confirma que la hoja que `
 le llegó y que puede ubicarla en el almacén."""
 
 import logging
+import os
 import time
 
 import redis
@@ -16,7 +17,12 @@ from infraestructura.cola import cliente_redis, desencolar
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("worker")
 
-NOMBRE_COLA = "procesamiento"
+# Se lee del entorno, con el mismo valor por omisión que `api/settings.py`. Estuvo escrito
+# aquí como literal mientras la API ya lo leía de `NOMBRE_COLA`: cambiar esa variable dejaba a
+# la API encolando en una lista y al worker escuchando otra, con el docente viendo el lote
+# confirmado y ninguna hoja procesada. Es el mismo modo de fallo que ADR-0006 ataca desde el
+# otro lado, y por eso se corrige aquí.
+NOMBRE_COLA = os.environ.get("NOMBRE_COLA", "procesamiento")
 ESPERA_TRAS_ERROR_SEGUNDOS = 5
 
 
