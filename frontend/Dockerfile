@@ -2,7 +2,7 @@ FROM ghcr.io/cirruslabs/flutter:stable AS build
 ARG BACKEND_URL=http://localhost:8000
 WORKDIR /app
 COPY pubspec.* ./
-RUN flutter pub get
+RUN flutter pub get --enforce-lockfile
 COPY . .
 RUN flutter build web --release --dart-define=BACKEND_URL="${BACKEND_URL}"
 
