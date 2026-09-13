@@ -6,6 +6,7 @@ RUN flutter pub get
 COPY . .
 RUN flutter build web --release --dart-define=BACKEND_URL="${BACKEND_URL}"
 
-FROM nginx:alpine
+FROM nginxinc/nginx-unprivileged:alpine
 COPY --from=build /app/build/web /usr/share/nginx/html
-EXPOSE 80
+USER nginx
+EXPOSE 8080
