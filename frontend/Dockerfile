@@ -4,7 +4,7 @@ WORKDIR /app
 COPY pubspec.* ./
 RUN flutter pub get
 COPY . .
-RUN flutter build web --release --dart-define=BACKEND_URL=${BACKEND_URL}
+RUN flutter build web --release --dart-define=BACKEND_URL="${BACKEND_URL}"
 
 FROM nginx:alpine
 COPY --from=build /app/build/web /usr/share/nginx/html
