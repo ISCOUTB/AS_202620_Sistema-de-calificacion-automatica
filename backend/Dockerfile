@@ -14,4 +14,8 @@ COPY omr/ ./omr/
 COPY worker/ ./worker/
 COPY tests/ ./tests/
 COPY pytest.ini ./
+RUN useradd --system --uid 10001 --create-home appuser \
+ && mkdir -p /app/almacen_imagenes \
+ && chown -R appuser:appuser /app
+USER appuser
 CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
