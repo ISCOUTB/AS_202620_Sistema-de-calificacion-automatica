@@ -323,14 +323,249 @@ Estas notas explican **por qué** se han separado los diferentes contenedores y 
 9. El profesor consulta las notas, estadísticas y alertas mediante la aplicación web.
 10. Cuando corresponde, el profesor resuelve manualmente las marcas ambiguas desde la aplicación web.
 ## Nivel 3 · Diagrama de Componentes
-
-> **Pendiente — semanas 4 y 6.**
->
-> Se dibujará el interior de la **aplicación web** y del **worker de procesamiento**. Los
-> componentes serán los siete módulos definidos en ADR-0002: `autoria`, `ingesta`, `omr`,
-> `calificacion`, `dashboard`, `identidad` e `infraestructura`. Cada componente de este nivel
-> debe existir ya como contenedor o dentro de un contenedor del Nivel 2: no se inventan piezas
-> al bajar de nivel.
+ 
+**Tipo de diagrama:** C4 Nivel 3 — Componentes
+**Ámbito:** interior de los contenedores Aplicación web y Worker de procesamiento
+**Audiencia:** equipo de desarrollo
+ 
+Los componentes son los siete módulos definidos en [ADR-0002](../adr/0002-procesar-calificacion-de-forma-asincrona.md):
+`autoria`, `ingesta`, `omr`, `calificacion`, `dashboard`, `identidad` e `infraestructura`. Cada
+uno ya existía como parte de alguno de los dos contenedores del Nivel 2; aquí se muestra cómo se
+reparten entre ellos y cómo se llaman entre sí.
+ 
+> **Aviso de alcance.** Este nivel describe la arquitectura **planeada**: hoy el repositorio
+> todavía no tiene código (`backend/` existe con las carpetas de los siete módulos más
+> `herramientas`, pero sin implementación). El reparto entre contenedores y las relaciones de
+> abajo salen del brief de Evidencia S6 y de los ADR, no de un `git grep` sobre código real.
+> Cuando el código exista, hay que confirmar cada flecha contra los `__init__.py` (líneas
+> `Importa:`) y corregir lo que no coincida. El módulo `herramientas` no aparece aquí porque
+> todavía no se sabe qué responsabilidad tiene.
+ 
+### Reparto de módulos por contenedor
+ 
+| Contenedor | Módulos | Por qué |
+|---|---|---|
+| Aplicación web | `identidad`, `ingesta`, `autoria`, `dashboard`, `infraestructura` | Sus requisitos (RF-01, RF-05, RF-06, RF-07, RF-09) son interacciones síncronas del profesor. |
+| Worker de procesamiento | `identidad`, `omr`, `calificacion`, `infraestructura` | Sus requisitos (RF-02, RF-03, RF-04, RF-08) son el procesamiento asíncrono definido en ADR-0002. |
+ 
+`identidad` e `infraestructura` aparecen en los dos contenedores: no están duplicados, es el
+mismo código compartido, según ya quedó establecido como núcleo compartido en el mapa de
+contextos (`08-conceptos-transversales.md`). `identidad` aparece en el worker porque, según el
+recorrido del código citado en Evidencia S6, los cinco módulos de dominio —incluidos `omr` y
+`calificacion`— son clientes de `identidad`, probablemente para no filtrar datos entre cursos al
+persistir resultados (RNF de seguridad).
+ 
+**Supuesto a confirmar:** el recálculo tras revisión manual (RF-08) se modela aquí como un nuevo
+trabajo que la Aplicación web encola, y que el Worker vuelve a procesar — no como una llamada
+síncrona de `dashboard` a `calificacion`. Esto mantiene una sola vía de procesamiento (la
+asíncrona de ADR-0002) en vez de abrir una segunda. Si el equipo decidió otra cosa, esta parte
+cambia.
+ 
+```mermaid
+---
+title: "C4 Nivel 3 · Componentes — Aplicación web"
+---
+flowchart TB
+    profesor["<b>Profesor / TA</b>
+    [Persona]"]
+ 
+    subgraph web["<b>Aplicación web</b>"]
+        identidad["<b>identidad</b>
+        [Componente]
+ 
+        Autenticación, roles y
+        aislamiento por curso."]
+ 
+        ingesta["<b>ingesta</b>
+        [Componente]
+ 
+        Recepción y validación de
+        escaneos; encolado."]
+ 
+        autoria["<b>autoria</b>
+        [Componente]
+ 
+        Bancos de preguntas, LLM
+        y validación con SymPy."]
+ 
+        dashboard["<b>dashboard</b>
+        [Componente]
+ 
+        Presentación, agregaciones
+        y alertas."]
+ 
+        infraestructura["<b>infraestructura</b>
+        [Componente]
+ 
+        Puertos de persistencia,
+        imágenes y cola."]
+    end
+ 
+    db[("Base de datos
+    [Contenedor]")]
+    imagenes[("Almacén de imágenes
+    [Contenedor]")]
+    cola[("Cola de trabajos
+    [Contenedor]")]
+    llm["Proveedor de LLM
+    [Sistema externo]"]
+ 
+    profesor -->|"Inicia sesión
+    <b>[HTTPS]</b>"| identidad
+    profesor -->|"Registra banco y sube escaneos
+    <b>[HTTPS]</b>"| ingesta
+    profesor -->|"Pide distractores
+    <b>[HTTPS]</b>"| autoria
+    profesor -->|"Consulta resultados y resuelve ambiguas
+    <b>[HTTPS]</b>"| dashboard
+ 
+    ingesta -->|"<b>Cliente/Proveedor</b>"| identidad
+    autoria -->|"<b>Cliente/Proveedor</b>"| identidad
+    dashboard -->|"<b>Cliente/Proveedor</b>"| identidad
+ 
+    ingesta -->|"Guarda escaneos, banco y encola trabajo"| infraestructura
+    autoria -->|"Persiste preguntas aceptadas"| infraestructura
+    dashboard -->|"Lee resultados"| infraestructura
+    identidad -.->|"<b>Núcleo compartido</b>
+    modelo.py"| infraestructura
+ 
+    infraestructura -->|"<b>[SQL]</b>"| db
+    infraestructura -->|"<b>[Object Storage API]</b>"| imagenes
+    infraestructura -->|"<b>[Message Queue]</b>"| cola
+ 
+    autoria -.->|"<b>Capa anticorrupción</b>
+    adaptador propio, pendiente"| llm
+ 
+    classDef person fill:#08427B,stroke:#073B6F,color:#ffffff
+    classDef component fill:#1168BD,stroke:#3379B7,color:#ffffff
+    classDef soporte fill:#5B3A8E,stroke:#42295F,color:#ffffff
+    classDef external fill:#999999,stroke:#6B6B6B,color:#ffffff,stroke-dasharray: 5 5
+ 
+    class profesor person
+    class identidad,ingesta,autoria,dashboard component
+    class infraestructura soporte
+    class db,imagenes,cola,llm external
+```
+ 
+```mermaid
+---
+title: "C4 Nivel 3 · Componentes — Worker de procesamiento"
+---
+flowchart TB
+    subgraph worker["<b>Worker de procesamiento</b>"]
+        identidad2["<b>identidad</b>
+        [Componente]
+ 
+        Autenticación, roles y
+        aislamiento por curso."]
+ 
+        omr["<b>omr</b>
+        [Componente]
+ 
+        Detección de marcas y
+        nivel de confianza."]
+ 
+        calificacion["<b>calificacion</b>
+        [Componente]
+ 
+        Compara contra la clave
+        y calcula notas."]
+ 
+        infraestructura2["<b>infraestructura</b>
+        [Componente]
+ 
+        Puertos de persistencia
+        e imágenes."]
+    end
+ 
+    cola2[("Cola de trabajos
+    [Contenedor]")]
+    db2[("Base de datos
+    [Contenedor]")]
+    imagenes2[("Almacén de imágenes
+    [Contenedor]")]
+ 
+    cola2 -->|"Entrega trabajo pendiente
+    <b>[Message Queue]</b>"| omr
+ 
+    omr -->|"<b>Cliente/Proveedor</b>"| identidad2
+    calificacion -->|"<b>Cliente/Proveedor</b>"| identidad2
+    omr -->|"<b>Cliente/Proveedor</b>"| calificacion
+ 
+    omr -->|"Lee hoja escaneada, guarda confianza"| infraestructura2
+    calificacion -->|"Lee clave validada, persiste notas"| infraestructura2
+    identidad2 -.->|"<b>Núcleo compartido</b>
+    modelo.py"| infraestructura2
+ 
+    infraestructura2 -->|"<b>[SQL]</b>"| db2
+    infraestructura2 -->|"<b>[Object Storage API]</b>"| imagenes2
+ 
+    classDef component fill:#1168BD,stroke:#3379B7,color:#ffffff
+    classDef soporte fill:#5B3A8E,stroke:#42295F,color:#ffffff
+    classDef external fill:#999999,stroke:#6B6B6B,color:#ffffff,stroke-dasharray: 5 5
+ 
+    class omr,calificacion component
+    class identidad2,infraestructura2 soporte
+    class cola2,db2,imagenes2 external
+```
+ 
+### Leyenda
+ 
+| Símbolo | Significado |
+|---|---|
+| Caja azul oscuro | **Persona.** Usuario humano. |
+| Caja azul | **Componente de dominio.** Uno de los siete módulos de ADR-0002. |
+| Caja morada | **Componente de soporte.** `identidad` e `infraestructura`, compartidos por ambos contenedores. |
+| Cilindro / caja gris punteada | **Elemento del Nivel 2** (contenedor o sistema externo), mostrado aquí solo como destino de una llamada. |
+| Flecha continua | Llamada directa (import / invocación de función dentro del mismo proceso), salvo donde se indica tecnología de red. |
+| Flecha punteada | Núcleo compartido o capa anticorrupción, según la etiqueta. |
+ 
+### Elementos del Nivel 3
+ 
+| Componente | Contenedor | Responsabilidad | Requisitos |
+|---|---|---|---|
+| `identidad` | Web y Worker | Autenticación, roles y aislamiento de datos por curso. | RF-09 |
+| `ingesta` | Web | Recepción y validación de archivos escaneados, individuales o en lote; encolado. | RF-01 |
+| `autoria` | Web | Bancos de preguntas, generación con LLM y validación simbólica con SymPy. | RF-06, RF-07 |
+| `dashboard` | Web | Presentación, agregaciones por curso/examen/pregunta y alertas. | RF-05 |
+| `omr` | Worker | Detección de marcas y cálculo del nivel de confianza; clasificación de ambigüedad. | RF-02, RF-03 |
+| `calificacion` | Worker | Comparación contra la clave validada y cálculo de notas; recálculo tras revisión manual. | RF-04, RF-08 |
+| `infraestructura` | Web y Worker | Persistencia, almacenamiento de imágenes y adaptador de cola. | Transversal |
+ 
+### Relaciones
+ 
+| # | Origen → Destino | Tipo | Tecnología |
+|---|---|---|---|
+| 1 | `ingesta` / `autoria` / `dashboard` → `identidad` | Cliente/Proveedor | Llamada directa (mismo proceso) |
+| 2 | `omr` / `calificacion` → `identidad` | Cliente/Proveedor | Llamada directa (mismo proceso) |
+| 3 | `omr` → `calificacion` | Cliente/Proveedor | Llamada directa (mismo proceso) |
+| 4 | `identidad` ↔ `infraestructura` | Núcleo compartido | `modelo.py` |
+| 5 | `ingesta`, `autoria`, `dashboard`, `omr`, `calificacion` → `infraestructura` | Uso de puertos | Llamada directa (mismo proceso) |
+| 6 | `infraestructura` → Base de datos | — | SQL |
+| 7 | `infraestructura` → Almacén de imágenes | — | Object Storage API |
+| 8 | `infraestructura` → Cola de trabajos | — | Message Queue |
+| 9 | `autoria` → Proveedor de LLM | Capa anticorrupción | HTTPS/JSON, por confirmar |
+ 
+### Notas de modelado
+ 
+**Por qué todo el acceso técnico pasa por `infraestructura`.** La tabla de módulos ya lo dice:
+`infraestructura` es dueña de "persistencia, almacenamiento de imágenes y adaptador de cola". Si
+`ingesta` escribiera directo en la base de datos o en la cola, el diagrama de Nivel 2 (que solo
+muestra `Aplicación web → Base de datos`) estaría mintiendo sobre por dónde pasa el dato en
+realidad. Aquí se hace explícito que ningún componente de dominio toca el disco, Redis o la
+cola directamente — todos pasan por los puertos de `infraestructura`, que es la misma capa
+anticorrupción interna mencionada en el mapa de contextos.
+ 
+**Por qué `identidad` no está solo en la Aplicación web.** Es tentador pensar que la
+autenticación es puramente cosa del front, pero el recorrido de código citado en Evidencia S6
+dice que los cinco módulos de dominio (incluidos los dos que corren en el worker) son clientes
+de `identidad`. La lectura más consistente es que el worker también necesita resolver a qué
+curso pertenece un trabajo antes de persistir su resultado, para no mezclar datos entre cursos.
+ 
+**Qué no se puede confirmar todavía.** El reparto de `ingesta`/`autoria`/`dashboard` en la web y
+`omr`/`calificacion` en el worker sale de leer los requisitos que cada módulo resuelve, no de
+inspeccionar `api/` o `worker/` (no compartiste su contenido). Si alguno de los dos tiene lógica
+que contradiga este reparto, esta sección se corrige antes de comitear — no después.
 
 ## Nivel 4 · Código
 
