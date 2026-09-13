@@ -36,6 +36,10 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
+          # Fijada a la misma version con la que se genero pubspec.lock. Con `channel: stable`
+          # a secas, cada release de Flutter cambia los paquetes que el SDK fija (matcher, meta,
+          # test_api, vector_math) y --enforce-lockfile falla aunque nadie toque el pubspec.
+          flutter-version: "3.44.3"
           channel: stable
       - run: flutter pub get --enforce-lockfile
       - run: flutter test
