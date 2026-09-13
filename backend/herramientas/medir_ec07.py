@@ -81,7 +81,7 @@ class ColaEnMemoria:
         self.demora_del_fallo = demora_del_fallo
         self.intentos = 0
 
-    def rpush(self, cola: str, valor: str) -> int:
+    def rpush(self, valor: str) -> int:
         self.intentos += 1
         if self.fallar_en is not None and len(self.encolados) >= self.fallar_en:
             # Un cliente de Redis que no encuentra servidor no falla al instante: agota el
