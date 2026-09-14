@@ -718,6 +718,7 @@ decisión cambia, se escribe uno nuevo y el anterior pasa a estado *reemplazado 
 | [0004](../adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md) | Quitar la validación simbólica obligatoria de la clave de respuestas | **aceptado** | 2026-08-24 | [EC-05](#ec-05) |
 | [0005](../adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md) | Acotar el LLM a la generación de distractores diagnósticos | **aceptado** | 2026-08-29 | [EC-05](#ec-05) |
 | [0006](../adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md) | Registrar la recepción en una bitácora antes de encolar | **aceptado** | 2026-09-06 | [EC-07](#ec-07) |
+| [0007](../adr/0007-declarar-los-contextos-delimitados-y-la-regla-de-dueno-unico.md) | Declarar los contextos delimitados y la regla de dueño único de los datos | **aceptado** | 2026-09-13 | ninguno declarado |
 
 **Por qué 0002 reemplaza a 0001.** La revisión de coherencia previa al corte 1 encontró que
 EC-03 y EC-04 no se pueden cumplir a la vez con procesamiento síncrono(200 hojas × 5 s son
@@ -764,6 +765,20 @@ no de una revisión de coherencia o de la retroalimentación del docente. Su con
 cifra que lo motiva (100 % de pérdida silenciosa contra un umbral de 0 %) obtenida sobre el
 commit anterior con la herramienta que queda versionada en el repositorio, de modo que cualquiera
 puede repetirla. Ver [`../evidencia/medicion-ec07.md`](../evidencia/medicion-ec07.md).
+
+**Por qué 0007 no reemplaza a 0002.** 0002 dividió el sistema en siete módulos y fijó qué puede
+importar cada uno, y esa decisión sigue intacta: 0007 no mueve ninguna frontera de importación ni
+cambia la responsabilidad de ningún módulo. Lo que hace es responder una pregunta que 0002 no se
+planteó y que solo apareció al construir A-01: quién es dueño de cada dato. Una frontera de
+*imports* sin una frontera equivalente de *datos* previene un tipo de acoplamiento y deja pasar el
+otro, porque dos módulos que no se importan entre sí pueden escribir la misma entidad. 0007
+precisa a 0002 en ese punto, con el mismo criterio con el que 0006 convive con él y 0005 con 0004.
+
+**Qué distingue a 0007 de los seis anteriores.** Es el primero que no cambia ni una línea de
+código. Su objeto es una regla, y por eso su punto más débil está declarado dentro de la propia
+decisión: nada la verifica todavía. La corrección que la haría automática (una línea `Posee:` en
+cada docstring y una prueba análoga a la de fronteras) queda registrada como la violación V-5 de
+[`08-propiedad-de-datos.md`](08-propiedad-de-datos.md), no como una intención en el texto del ADR.
 
 **Decisiones previstas (aún no tomadas):**
 
