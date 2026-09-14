@@ -450,7 +450,7 @@ ser módulos distintos. La aplicación de esta regla, entidad por entidad, está
 El sistema se organiza en siete contextos. Seis son contextos de dominio (Identidad, Ingesta,
 OMR, Calificación, Autoría, Dashboard); el séptimo, Infraestructura, no modela un subdominio de
 negocio propio sino que provee persistencia y servicios técnicos que los otros seis comparten.
-Se incluye igual en el mapa porque la relación que tiene con el resto (úcleo compartid) es
+Se incluye igual en el mapa porque la relación que tiene con el resto (núcleo compartido) es
 justamente uno de los tres tipos que este criterio pide nombrar.
 
 ```mermaid
@@ -671,8 +671,8 @@ El tercer concepto transversal, la **propiedad de datos**, se desarrolla en
 [`08-propiedad-de-datos.md`](08-propiedad-de-datos.md), en esta misma carpeta. Contiene la
 aplicación de la regla de dueño único enunciada arriba: la tabla módulo a dato con la ruta y la
 línea de cada entidad existente, las entidades previstas para los aspectos que faltan, el
-recorrido con el que se auditó el código, las no conformidades detectadas y el plan de corrección
-de cada una.
+recorrido con el que se auditó el código, las violaciones de propiedad de datos detectadas y el plan de corrección
+de cada una. Los hallazgos que SonarQube Cloud reporta sobre el mismo código son de otra clase y están en [`docs/evidencia/hallazgos-y-correcciones.md`](../evidencia/hallazgos-y-correcciones.md).
 
 Se separó en un archivo propio porque es el único de los tres que se audita contra el código y
 crece con cada aspecto que se construya, mientras que el mapa y el lenguaje ubicuo describen
