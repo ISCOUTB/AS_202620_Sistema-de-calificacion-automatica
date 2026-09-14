@@ -15,7 +15,7 @@ escritas; las secciones 7 y 8 se completan más adelante, y cada una indica expl
 cuándo se llena y por qué todavía no se puede.
 
 Las secciones 5 y 6 describen **el estado real del código**, no el diseño previsto. Eso las
-obliga a envejecer con cada avance: conviene revisarlas —y con ellas la sección 11— en el mismo
+obliga a envejecer con cada avance: conviene revisarlas (y con ellas la sección 11) en el mismo
 *pull request* que añade código, igual que se actualiza el docstring de un módulo cuando cambia
 su frontera.
 
@@ -66,7 +66,7 @@ arquitectura:
 | **RF-04** | El sistema debe comparar las respuestas detectadas contra la clave validada del examen y calcular la calificación resultante. | Calificación |
 | **RF-05** | El sistema debe presentar los resultados en un dashboard interactivo con notas por curso, estadísticas por examen y por pregunta, y alertas de revisión manual. Las estadísticas por pregunta informan la distribución de respuestas por opción; cuando una opción tiene registrada la etiqueta del error que representa (ver RF-11), la muestra junto a la distribución. | Calificación |
 | **RF-06** | El sistema debe permitir a un docente registrar su banco de preguntas de cálculo diferencial (límites, derivadas y simplificaciones algebraicas) junto con la clave de respuestas del examen. | Autoría |
-| **RF-07** | El sistema debe presentar al profesor el examen completo —enunciados, opción correcta y distractores— y no debe habilitarlo para calificación hasta que el profesor lo habilite explícitamente, registrando quién lo hizo y cuándo. | Autoría |
+| **RF-07** | El sistema debe presentar al profesor el examen completo (enunciados, opción correcta y distractores) y no debe habilitarlo para calificación hasta que el profesor lo habilite explícitamente, registrando quién lo hizo y cuándo. | Autoría |
 | **RF-08** | El sistema debe permitir a un docente resolver manualmente las preguntas marcadas como ambiguas y recalcular la nota afectada. | Calificación |
 | **RF-09** | El sistema debe restringir el acceso a usuarios registrados y limitar cada docente a los cursos que tiene autorizados. | Transversal |
 | **RF-10** | El sistema debe registrar quién modificó una calificación y cuándo, de forma consultable. | Transversal |
@@ -106,8 +106,8 @@ no funcionalidades, y cada uno se hace verificable a través de los escenarios d
 # 2. Architecture Constraints
 
 Las restricciones fijan los límites del diseño: son condiciones dadas, no decisiones del
-equipo. Se clasifican en las tres categorías del curso —**técnicas**, **organizativas** y
-**legales**— y cada una indica **de dónde viene**.
+equipo. Se clasifican en las tres categorías del curso (**técnicas**, **organizativas** y
+**legales**) y cada una indica **de dónde viene**.
 
 Ninguna de estas restricciones es un requisito funcional disfrazado: los requisitos
 funcionales están en la sección 1.1 y describen lo que el sistema *hace*; las restricciones
@@ -207,7 +207,7 @@ alcanzable o menos alcanzable este escenario concreto?*
 
 **Lectura de la matriz.** Capas es el más barato de montar pero empeora cinco de los siete
 escenarios, incluidos los dos de mayor impacto. Hexagonal mejora casi todo, pero su coste se
-paga por igual en los siete módulos, y en los más delgados —`dashboard`, `identidad`— produce
+paga por igual en los siete módulos, y en los más delgados (`dashboard`, `identidad`) produce
 indirección sin contenido; además no resuelve EC-04, que es el escenario que más aprieta. El
 monolito modular con procesamiento asíncrono mejora seis de siete y es el único que hace
 alcanzable EC-04, a un coste de montaje intermedio.
@@ -215,7 +215,7 @@ alcanzable EC-04, a un coste de montaje intermedio.
 De ahí sale la decisión registrada en
 [ADR-0002](../adr/0002-procesar-calificacion-de-forma-asincrona.md), incluido el matiz de
 adoptar el aislamiento hexagonal **de forma selectiva** en los dos puntos donde la matriz
-muestra que compensa —el proveedor de LLM y el almacenamiento de imágenes— en lugar de como
+muestra que compensa (el proveedor de LLM y el almacenamiento de imágenes) en lugar de como
 política global.
 
 ## 4.2 Tácticas frente a los escenarios priorizados
@@ -287,8 +287,8 @@ importación que declara el docstring de cada `__init__.py` y que hace cumplir
 | **identidad** | Autenticación, roles y aislamiento de datos por curso. | RF-09, RF-10 | `infraestructura` | Paquete vacío (aspecto A-05, declarado). |
 
 `api/main.py` es la traducción entre HTTP y dominio: construye sus dependencias (almacén,
-cliente de cola) por petición vía `Depends`, precisamente para que arrancar la aplicación —y
-probarla— no exija que el volumen o Redis existan. `worker/main.py` comparte esa misma base de
+cliente de cola) por petición vía `Depends`, precisamente para que arrancar la aplicación (y
+probarla) no exija que el volumen o Redis existan. `worker/main.py` comparte esa misma base de
 dominio. Los bordes de importación que existen hoy son tres, todos dentro de lo declarado:
 `api/main.py` importa `ingesta` e `infraestructura`, `ingesta/recepcion.py` importa
 `infraestructura`, y `worker/main.py` importa `infraestructura.cola`.
@@ -322,8 +322,8 @@ según [`../aspectos.md`](../aspectos.md).
 # 6. Runtime View
 
 > **Estado.** El único escenario de negocio con código real es la carga de un examen (RF-01,
-> aspecto A-01, [EC-07](#ec-07)). Los otros dos escenarios previstos —calificación de un lote y
-> resolución manual de una marca ambigua— siguen bloqueados porque dependen de módulos vacíos
+> aspecto A-01, [EC-07](#ec-07)). Los otros dos escenarios previstos (calificación de un lote y
+> resolución manual de una marca ambigua) siguen bloqueados porque dependen de módulos vacíos
 > (`omr`, `calificacion`, `identidad`); se documentan en 6.3 con lo que falta para
 > desbloquearlos.
 
@@ -425,30 +425,282 @@ una falla de red de un rechazo.
 
 # 8. Cross-cutting Concepts
 
-> **Pendiente.** La semana 4 se dedicó a construir el corte vertical del aspecto A-01 y la
-> semana 5 al reto del primer corte, así que esta sección no se escribió y decirlo es más útil
-> que fecharla otra vez. La razón de fondo es de criterio y conviene dejarla escrita: un concepto
-> transversal se documenta cuando ya atraviesa más de un módulo del código, y hoy seis de los
-> siete están vacíos. Escribirla ahora produciría intenciones, no conceptos, que es lo que el
-> equipo ya pagó caro en las secciones 5 y 6 antes de reescribirlas contra el código.
->
-> El primero que dejó de ser una intención es el **registro de recepción**, que ADR-0006
-> introdujo y que hoy vive en `infraestructura`; cuando A-02 lo consuma, será el primer concepto
-> de esta sección con dos módulos que lo atraviesen.
->
-> Conceptos transversales ya identificados:
->
-> - **Manejo de la incertidumbre del OMR:** el nivel de confianza como dato de primera clase
->   que acompaña a toda respuesta detectada a lo largo del pipeline.
-> - **Seguridad y autorización por curso:** cómo se aplica el aislamiento de RNF-05 y QG-4 de
->   forma uniforme en todos los módulos.
-> - **Auditoría de calificaciones y de aprobaciones de clave:** registro de quién modificó una
->   nota y cuándo (RF-10, RNF-15), extendido a quién aprobó una clave de respuestas y cuándo
->   (RF-07, ADR-0004).
-> - **Ciclo de vida de los datos personales:** retención y eliminación de escaneos conforme a
->   RNF-14.
-> - **Manejo de errores del proveedor de LLM:** política de reintento y degradación cuando la
->   generación falla, sin bloquear la fase de calificación.
+Esta sección fija los conceptos que atraviesan más de un módulo. Dos están desarrollados aquí
+(el mapa de contextos y el lenguaje ubicuo) y un tercero, la propiedad de datos, vive en
+[`08-propiedad-de-datos.md`](08-propiedad-de-datos.md) por su extensión.
+
+Antes de los tres, dos acuerdos que el resto de la sección da por sentados. Una vez fijados, no se
+cambian sin avisar al equipo: renombrar un contexto a mitad de camino descoordina los documentos
+que se apoyan en él.
+
+**Contextos del dominio (lista cerrada):** Identidad, Ingesta, OMR, Calificación, Autoría,
+Dashboard, Infraestructura.
+
+**Definición de «dueño»:** el dueño de una entidad es el módulo que **decide el contenido de sus
+campos de negocio**, es decir, el único autorizado a construir una instancia con valores nuevos o
+a modificar los que ya tiene. Los demás pueden importar el tipo, recibirlo como parámetro o (si
+son adaptadores de persistencia) reconstituirlo fielmente a partir de lo que el dueño ya escribió,
+pero no pueden decidir por su cuenta qué significa un campo ni qué valor le corresponde. Propiedad
+no es lo mismo que ubicación: dónde está declarada una clase y quién decide su contenido pueden
+ser módulos distintos. La aplicación de esta regla, entidad por entidad, está en
+[`08-propiedad-de-datos.md`](08-propiedad-de-datos.md).
+
+## 8.1 Mapa de contextos
+
+El sistema se organiza en siete contextos. Seis son contextos de dominio (Identidad, Ingesta,
+OMR, Calificación, Autoría, Dashboard); el séptimo, Infraestructura, no modela un subdominio de
+negocio propio sino que provee persistencia y servicios técnicos que los otros seis comparten.
+Se incluye igual en el mapa porque la relación que tiene con el resto (úcleo compartid) es
+justamente uno de los tres tipos que este criterio pide nombrar.
+
+```mermaid
+---
+title: "Mapa de contextos — Sistema de Calificación OMR"
+---
+flowchart TB
+    identidad["<b>Identidad</b>
+    [Contexto]
+
+    Autentica al profesor/TA y
+    autoriza el acceso por curso."]
+
+    ingesta["<b>Ingesta</b>
+    [Contexto]
+
+    Recibe y valida las hojas
+    escaneadas, y encola su proceso."]
+
+    omr["<b>OMR</b>
+    [Contexto]
+
+    Reconocimiento óptico
+    de marcas."]
+
+    calificacion["<b>Calificación</b>
+    [Contexto]
+
+    Compara contra la clave habilitada
+    y calcula las notas."]
+
+    autoria["<b>Autoría</b>
+    [Contexto]
+
+    Registra el banco y la clave,
+    y habilita el examen."]
+
+    dashboard["<b>Dashboard</b>
+    [Contexto]
+
+    Presenta resultados y alertas
+    de revisión al profesor."]
+
+    infraestructura["<b>Infraestructura</b>
+    [Contexto de soporte]
+
+    Persistencia y servicios técnicos
+    compartidos por los otros seis."]
+
+    llm["<b>Proveedor de LLM</b>
+    [Sistema externo]"]
+
+    infraestructura <-.->|"<b>Núcleo compartido</b>
+    modelo.py"| identidad
+    infraestructura <-.->|"<b>Núcleo compartido</b>
+    modelo.py"| ingesta
+    infraestructura <-.->|"<b>Núcleo compartido</b>
+    modelo.py"| omr
+    infraestructura <-.->|"<b>Núcleo compartido</b>
+    modelo.py"| calificacion
+    infraestructura <-.->|"<b>Núcleo compartido</b>
+    modelo.py"| autoria
+    infraestructura <-.->|"<b>Núcleo compartido</b>
+    modelo.py"| dashboard
+
+    identidad -->|"<b>Cliente/Proveedor</b>"| ingesta
+    identidad -->|"<b>Cliente/Proveedor</b>"| omr
+    identidad -->|"<b>Cliente/Proveedor</b>"| calificacion
+    identidad -->|"<b>Cliente/Proveedor</b>"| autoria
+    identidad -->|"<b>Cliente/Proveedor</b>"| dashboard
+
+    omr -->|"<b>Cliente/Proveedor</b>"| calificacion
+    calificacion -->|"<b>Cliente/Proveedor</b>"| dashboard
+
+    autoria -.->|"<b>Capa anticorrupción</b>
+    adaptador propio, pendiente"| llm
+
+    classDef contexto fill:#1168BD,stroke:#3379B7,color:#ffffff
+    classDef soporte fill:#5B3A8E,stroke:#42295F,color:#ffffff
+    classDef external fill:#999999,stroke:#6B6B6B,color:#ffffff,stroke-dasharray: 5 5
+
+    class identidad,ingesta,omr,calificacion,autoria,dashboard contexto
+    class infraestructura soporte
+    class llm external
+```
+
+### Leyenda
+
+| Símbolo | Significado |
+|---|---|
+| Caja azul | **Contexto de dominio.** Subdominio propio del sistema. |
+| Caja morada | **Contexto de soporte.** No modela negocio; provee servicios técnicos a los demás. |
+| Caja gris con borde punteado | **Sistema externo.** Fuera de nuestro control. |
+| Flecha punteada bidireccional | **Núcleo compartido.** Ambos lados dependen del mismo modelo de datos. |
+| Flecha continua | **Cliente/Proveedor.** Va del proveedor (upstream) al cliente (downstream). |
+| Flecha punteada dirigida | **Capa anticorrupción.** El contexto de origen traduce/aísla lo que recibe del externo. |
+
+### Elementos del mapa
+
+| Contexto | Tipo | Responsabilidad |
+|---|---|---|
+| Identidad | Dominio | Autenticación y autorización de profesores/TAs por curso (RF-09). |
+| Ingesta | Dominio | Recepción y validación de las hojas escaneadas, individuales o en lote, y encolado de su procesamiento (RF-01). |
+| OMR | Dominio | Reconocimiento óptico de marcas sobre las hojas recibidas. |
+| Calificación | Dominio | Comparación de las respuestas detectadas contra la clave habilitada y cálculo de la nota; recálculo tras revisión manual (RF-04, RF-08). |
+| Autoría | Dominio | Registro del banco de preguntas y de la clave, y habilitación explícita del examen (RF-06, RF-07). Opcionalmente propone distractores diagnósticos con apoyo de un LLM (RF-11). |
+| Dashboard | Dominio | Presentación de notas, estadísticas y alertas de revisión manual. |
+| Infraestructura | Soporte | Persistencia y servicios técnicos compartidos por los seis contextos de dominio. |
+| Proveedor de LLM | Externo | Modelo de lenguaje de terceros usado solo desde Autoría, opcional (ADR-0005). |
+
+### Relaciones y su tipo
+
+| # | Contextos | Tipo | Evidencia |
+|---|---|---|---|
+| 1 | Infraestructura ↔ {Identidad, Ingesta, OMR, Calificación, Autoría, Dashboard} | Núcleo compartido | [`backend/infraestructura/modelo.py`](../../backend/infraestructura/modelo.py), cuyo docstring de la línea 1 dice «Modelo de datos compartido por los siete módulos del dominio» |
+| 2 | Identidad → {Ingesta, OMR, Calificación, Autoría, Dashboard} | Cliente/Proveedor | Línea 4 de los cinco `__init__.py`, todas con `identidad` en su `Importa:`: [`ingesta`](../../backend/ingesta/__init__.py), [`omr`](../../backend/omr/__init__.py), [`calificacion`](../../backend/calificacion/__init__.py), [`autoria`](../../backend/autoria/__init__.py), [`dashboard`](../../backend/dashboard/__init__.py) |
+| 3 | OMR → Calificación | Cliente/Proveedor | [`backend/calificacion/__init__.py`](../../backend/calificacion/__init__.py) línea 4: `Importa: infraestructura, identidad, omr` |
+| 4 | Calificación → Dashboard | Cliente/Proveedor | [`backend/dashboard/__init__.py`](../../backend/dashboard/__init__.py) línea 4: `Importa: infraestructura, identidad, calificacion` |
+| 5 | Autoría → Proveedor de LLM | Capa anticorrupción | Adaptador propio, todavía sin construir (RF-11), que aislará al dominio del modelo externo. El nodo sigue punteado en el C4 por dos razones: el proveedor no está decidido (R-02) y su uso es opcional ([ADR-0005](../adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md)) |
+| 6 | {Ingesta} → Infraestructura, vía puertos | Capa anticorrupción interna | `AlmacenDeImagenes` en [`almacen.py`](../../backend/infraestructura/almacen.py) línea 47 y `BitacoraDeRecepcion` en [`bitacora.py`](../../backend/infraestructura/bitacora.py) línea 39, los dos declarados como `Protocol`: `ingesta` conoce el contrato, no el disco ni Redis |
+
+La fila 6 es una capa anticorrupción **interna**: no aísla al dominio de un sistema externo sino
+de una decisión de infraestructura todavía abierta (R-06). El arc42 §4.1 la justifica como
+aislamiento hexagonal selectivo, aplicado en dos puntos y no en los siete módulos.
+
+### Notas de modelado
+
+**Por qué Infraestructura es núcleo compartido y no solo un proveedor más.** A diferencia de
+Identidad (que los demás *consumen* como servicio), Infraestructura expone directamente
+`modelo.py`, y los siete módulos (incluida ella misma) importan las mismas clases de datos. Eso
+es la definición de núcleo compartido: cambiar el modelo obliga a los siete a recompilar/ajustar
+a la vez, no solo al que lo consume.
+
+**Por qué Identidad es cliente/proveedor y no núcleo compartido.** Los cinco módulos de dominio
+dependen de lo que Identidad *decide* (si el profesor está autenticado y autorizado sobre el
+curso), no de una estructura de datos que compartan literalmente con ella. Es una dependencia de
+servicio, no de modelo: por eso es cliente/proveedor.
+
+**Por qué la relación con el LLM es capa anticorrupción y no cliente/proveedor simple.** El
+proveedor de LLM es un sistema externo que el equipo no controla y cuyo contrato puede cambiar
+sin aviso. Autoría necesita su propio adaptador que traduzca la respuesta del modelo externo a
+los tipos internos del dominio, para que un cambio en el proveedor no se propague directo al
+resto del sistema. Es el caso canónico de ACL: aislar al dominio de un modelo externo (ver
+ADR-0005, que ya lo trata como capacidad opcional y no como dependencia obligatoria).
+
+**Por qué los puertos hacia Infraestructura son una capa anticorrupción y no solo un núcleo
+compartido más.** La relación entre los contextos de dominio e Infraestructura es de dos clases a
+la vez, y conviene no confundirlas. Por el lado del **modelo de datos** es núcleo compartido: los
+siete importan las mismas dataclasses de `modelo.py`. Por el lado de la **persistencia** es capa
+anticorrupción: `ingesta` no conoce el disco ni Redis, solo los `Protocol` `AlmacenDeImagenes` y
+`BitacoraDeRecepcion`, y el día que el ADR de persistencia (R-06) cambie el medio, lo que se
+reemplaza es el adaptador. Las dos relaciones aparecen por separado en la tabla, como filas 1 y 6.
+
+---
+
+## 8.2 Lenguaje ubicuo
+
+El mapa de arriba nombra los contextos; esta sección fija **cómo se llaman las cosas dentro de
+ellos**. La regla es que el mismo término signifique lo mismo en la conversación con el profesor,
+en los documentos y en el código, y que cuando no coincidan quede dicho por qué.
+
+El [glosario de la sección 12](arc42-template-ES.md#12-glossary) define los dieciséis términos del
+dominio. Lo que esta sección agrega es dónde vive cada uno en el código y qué contexto es el dueño
+de su significado, que es lo que convierte un glosario en lenguaje ubicuo.
+
+| Término del dominio | Contexto dueño | Cómo aparece en el código |
+|---|---|---|
+| **Hoja de respuestas** | Ingesta | `ArchivoCargado` mientras es solo nombre y bytes; `HojaAceptada` una vez validada y almacenada |
+| **Lote** | Ingesta | El parámetro `archivos` de `recibir_lote`, y `ResultadoRecepcion` como su respuesta |
+| **Rechazo con motivo** | Ingesta | `ArchivoRechazado`, cuyo campo `motivo` es obligatorio |
+| **Trabajo** | Infraestructura | `Trabajo` en `cola.py`, acuñado por `preparar_trabajo` antes de tocar la cola |
+| **Registro de recepción** | Infraestructura | `EntradaDeBitacora`, y el puerto `BitacoraDeRecepcion` que lo persiste |
+| **Marca** | OMR | Sin código todavía (A-02) |
+| **Nivel de confianza** | OMR | Sin código todavía (A-02) |
+| **Umbral de confianza** | OMR | Sin código todavía; su valor se fija con evidencia (R-04) |
+| **Clave de respuestas** | Autoría | Sin código todavía (A-04) |
+| **Distractor diagnóstico** | Autoría | Sin código todavía (RF-11, opcional) |
+| **Habilitación del examen** | Autoría | Sin código todavía; su invariante es que ningún examen se califica sin ella (RF-07) |
+| **Nota** | Calificación | Sin código todavía (A-03) |
+| **Curso** | Identidad | Sin código todavía (A-05) |
+| **Docente / TA** | Identidad | Hoy implícito: el `examen_id` de la ruta HTTP no se verifica contra nadie |
+
+### Tres decisiones de vocabulario que conviene poder defender
+
+**«Distractores», no «distracciones».** Un distractor es una opción incorrecta plausible de una
+pregunta de opción múltiple. El término apareció mal escrito en versiones anteriores de la
+documentación y se corrigió; se deja anotado para que no vuelva.
+
+**«Reconocimiento de marcas», no «OCR».** El sistema detecta si una casilla está rellenada, no
+qué está escrito. El glosario incluye OCR precisamente para decir que **no** se usa, porque
+documentación anterior lo mencionaba por error. La diferencia no es de matiz: OCR implicaría
+poder leer respuestas manuscritas, que RNF-02 y RNF-03 dejan fuera de alcance.
+
+**«Confirmación de recepción», no «calificación».** Lo que el sistema promete al docente cuando
+sube un lote es que todo archivo quedó *aceptado* o *rechazado con motivo*, no que ya esté
+calificado. La calificación ocurre después y de forma asíncrona
+([ADR-0002](../adr/0002-procesar-calificacion-de-forma-asincrona.md)). EC-07 mide lo primero, y
+EC-03 y EC-04 lo segundo. Confundirlos fue lo que llevó a medir el escenario equivocado en su
+momento.
+
+### Dónde el código todavía no habla el lenguaje
+
+Dos desajustes conocidos, que se anotan en vez de esconderse:
+
+- **El estudiante no tiene nombre en el código.** Es el titular de los datos (RNF-12) y el
+  afectado por un error de lectura, pero no es usuario del sistema (RNF-05), así que no aparece
+  como entidad. Cuando A-05 llegue habrá que decidir si merece una, o si sigue siendo solo el
+  contenido de una hoja.
+- **«Examen» se usa hoy como un identificador opaco.** `examen_id` viaja en la ruta HTTP y en el
+  almacén, pero no existe ninguna entidad Examen: la creará `autoria` en A-04. Hasta entonces el
+  término está en el lenguaje pero no en el modelo, y `recepcion.py` lo dice explícitamente.
+
+---
+
+## 8.3 Propiedad de datos
+
+El tercer concepto transversal, la **propiedad de datos**, se desarrolla en
+[`08-propiedad-de-datos.md`](08-propiedad-de-datos.md), en esta misma carpeta. Contiene la
+aplicación de la regla de dueño único enunciada arriba: la tabla módulo a dato con la ruta y la
+línea de cada entidad existente, las entidades previstas para los aspectos que faltan, el
+recorrido con el que se auditó el código, las no conformidades detectadas y el plan de corrección
+de cada una.
+
+Se separó en un archivo propio porque es el único de los tres que se audita contra el código y
+crece con cada aspecto que se construya, mientras que el mapa y el lenguaje ubicuo describen
+fronteras y vocabulario que cambian mucho menos.
+
+## Conceptos transversales todavía sin desarrollar
+
+Un concepto transversal se documenta cuando ya atraviesa más de un módulo del código, y hoy seis
+de los siete módulos están vacíos. Escribir los demás ahora produciría intenciones, no conceptos,
+que es exactamente lo que el equipo pagó caro en las secciones 5 y 6 antes de tener que
+reescribirlas contra el código. Cada uno queda con la condición que debe cumplirse para redactarlo:
+
+- **Manejo de la incertidumbre del OMR:** el nivel de confianza como dato de primera clase que
+  acompaña a toda respuesta detectada a lo largo del pipeline. Se escribe cuando A-02 exista y el
+  umbral esté medido contra el dataset de R-01.
+- **Seguridad y autorización por curso:** cómo se aplica el aislamiento de RNF-05 y QG-4 de forma
+  uniforme en todos los módulos. Depende de A-05, que hoy es un paquete vacío.
+- **Auditoría de calificaciones y de aprobaciones de clave:** registro de quién modificó una nota
+  y cuándo (RF-10, RNF-15), extendido a quién aprobó una clave de respuestas y cuándo (RF-07,
+  [ADR-0004](../adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md)).
+- **Ciclo de vida de los datos personales:** retención y eliminación de escaneos conforme a
+  RNF-14. Hoy nada borra lo que se guarda; lo cierra el ADR de persistencia que resuelve R-06.
+- **Manejo de errores del proveedor de LLM:** política de reintento y degradación cuando la
+  generación falla, sin bloquear la fase de calificación. Depende de decidir el proveedor (R-02).
+
+**El registro de recepción** que [ADR-0006](../adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md)
+introdujo, y que hoy vive en `infraestructura`, es el siguiente candidato a subir a esta lista:
+cuando A-02 lo consuma para reintentar las hojas pendientes, pasará a atravesar dos módulos.
 
 ---
 
@@ -468,23 +720,23 @@ decisión cambia, se escribe uno nuevo y el anterior pasa a estado *reemplazado 
 | [0006](../adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md) | Registrar la recepción en una bitácora antes de encolar | **aceptado** | 2026-09-06 | [EC-07](#ec-07) |
 
 **Por qué 0002 reemplaza a 0001.** La revisión de coherencia previa al corte 1 encontró que
-EC-03 y EC-04 no se pueden cumplir a la vez con procesamiento síncrono —200 hojas × 5 s son
-16,6 minutos frente a un techo de 10—, lo que obliga a una decisión estructural que 0001 no
+EC-03 y EC-04 no se pueden cumplir a la vez con procesamiento síncrono(200 hojas × 5 s son
+16,6 minutos frente a un techo de 10), lo que obliga a una decisión estructural que 0001 no
 tomó: trataba las colas como una optimización futura. La revisión encontró además que el
 contexto de 0001 se apoyaba en tres premisas que el proyecto contradice (sistema monousuario,
 ausencia de LLM y de equivalencia matemática) y que su descomposición en cuatro módulos dejaba
-sin ubicación los requisitos RF-06, RF-07 y RF-09. La elección de fondo —monolito modular
-frente a capas o microservicios— se confirma sin cambios en 0002.
+sin ubicación los requisitos RF-06, RF-07 y RF-09. La elección de fondo (monolito modular
+frente a capas o microservicios) se confirma sin cambios en 0002.
 
 **Por qué 0004 no reemplaza a 0002 ni a 0003.** 0004 retira la obligatoriedad de SymPy
 (RNF-01), lo que toca a los dos ADR anteriores sin invalidar la decisión de ninguno:
 
 - **0003** apoyaba la elección de FastAPI en dos argumentos duros, SymPy y OpenCV. Se retira el
-  primero, pero la decisión no cambia porque el segundo —OpenCV solo existe con madurez en
-  Python— ya bastaba por sí mismo.
+  primero, pero la decisión no cambia porque el segundo (OpenCV solo existe con madurez en
+  Python) ya bastaba por sí mismo.
 - **0002** describe en su tabla de módulos la responsabilidad de `autoria` incluyendo la
   «validación simbólica con SymPy». Esa descripción queda superada por 0004, pero su decisión
-  de fondo —siete módulos y procesamiento asíncrono— se mantiene intacta, y `autoria` conserva
+  de fondo (siete módulos y procesamiento asíncrono) se mantiene intacta, y `autoria` conserva
   los mismos requisitos y las mismas fronteras de importación.
 
 En ambos casos el texto original se conserva sin editar, como exige la convención del curso: es
@@ -503,13 +755,13 @@ parte de lo que el historial de decisiones debe conservar.
 trabajos, y esa decisión sigue intacta: 0006 no la contradice en ningún punto. Lo que hace es
 responder una pregunta que 0002 no se planteó, y que solo apareció cuando el aspecto A-01 se
 construyó y se midió: qué ocurre con una hoja ya almacenada cuando la cola no responde. La
-respuesta —registrarla antes de encolar, para que sea recuperable— precisa a 0002 sin anularlo,
+respuesta (registrarla antes de encolar, para que sea recuperable) precisa a 0002 sin anularlo,
 y por eso conviven. Es el mismo criterio con el que 0005 convive con 0004: la pregunta es si la
 decisión nueva *contradice* a la anterior o la *precisa*.
 
 **Qué distingue a 0006 de los cinco anteriores.** Es el primero que nace de una **medición** y
 no de una revisión de coherencia o de la retroalimentación del docente. Su contexto abre con la
-cifra que lo motiva —100 % de pérdida silenciosa contra un umbral de 0 %— obtenida sobre el
+cifra que lo motiva (100 % de pérdida silenciosa contra un umbral de 0 %) obtenida sobre el
 commit anterior con la herramienta que queda versionada en el repositorio, de modo que cualquiera
 puede repetirla. Ver [`../evidencia/medicion-ec07.md`](../evidencia/medicion-ec07.md).
 
@@ -728,7 +980,7 @@ fallos. Se documentan aparte para no alterar la priorización original.
 | **R-05** | **El equipo no tiene experiencia previa medible con OpenCV / OMR**, que es la parte de mayor riesgo técnico del sistema. | Alto | Dejar el módulo `omr` para el final del cronograma. | Construir un prototipo desechable de detección de marcas antes de la semana 4, aunque sea sobre una sola hoja, para convertir la incertidumbre en información. |
 | **R-06** | **Deuda: no hay decisión de persistencia ni de almacenamiento de imágenes**, ni política de retención (RNF-14). **Dejó de bloquear la construcción** y **dejó de bloquear la medición**: A-01 se construyó con el almacenamiento detrás del puerto `AlmacenDeImagenes` y un adaptador en disco declarado provisional (ver 5.1 y 5.3), y [ADR-0006](../adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md) cubrió la parte de recepción que impedía medir [EC-07](#ec-07), con el mismo mecanismo de puerto y adaptador provisional. Las dos cifras del escenario ya están medidas ([evidencia](../evidencia/medicion-ec07.md)). Lo que sigue abierto es el medio definitivo, la persistencia estructurada y la retención, y ninguno de los tres se tomó por omisión. | **Medio** (bajó de *Alto*: ya no bloquea ni la construcción ni la medición) | Llegar al despliegue sin política de retención, o escalar la API a más de una instancia, que es el día en que `BitacoraEnDisco` deja de ser correcto. | ADR propio, que debe cubrir el ciclo de vida de los escaneos y de la bitácora, no solo el guardado. Cuando exista, lo que cambia son los adaptadores: `ingesta`, el modelo de datos y las pruebas del aspecto no se tocan. |
 | **R-07** | **Deuda: EC-04 supone paralelismo pero no está fijado el número de workers** ni medido el consumo de CPU por hoja. | Medio | Que el límite de 85% de CPU se incumpla con la concurrencia elegida. | Medir el costo de una hoja en el prototipo de R-05 y derivar el número de workers de ese dato. |
-| **R-08** | **Riesgo de erosión de los límites entre módulos** («big ball of mud»), inherente al monolito modular. **Mitigado en lo esencial.** | Bajo | Cambiar la línea `Importa:` de un docstring para acomodar un import, en lugar de corregir el import. | Ya en marcha, no prevista: `backend/tests/test_fronteras.py` corre en cada push y compara los imports reales de cada módulo, leídos con `ast`, contra la línea `Importa:` de su docstring. **Queda un flanco:** verifica el módulo importado, no el símbolo. Cerrarlo exige un `__all__` por módulo —hoy solo lo declara `ingesta`— y extender la prueba para comprobarlo. |
+| **R-08** | **Riesgo de erosión de los límites entre módulos** («big ball of mud»), inherente al monolito modular. **Mitigado en lo esencial.** | Bajo | Cambiar la línea `Importa:` de un docstring para acomodar un import, en lugar de corregir el import. | Ya en marcha, no prevista: `backend/tests/test_fronteras.py` corre en cada push y compara los imports reales de cada módulo, leídos con `ast`, contra la línea `Importa:` de su docstring. **Queda un flanco:** verifica el módulo importado, no el símbolo. Cerrarlo exige un `__all__` por módulo (hoy solo lo declara `ingesta`) y extender la prueba para comprobarlo. |
 | **R-09** | **Deuda organizativa: la contribución al repositorio está concentrada en pocas cuentas**, lo que incumple RNF-10. | Alto | Que el reparto por módulos no se traduzca en commits de las cuatro personas. | Asignar módulos por integrante desde la semana 4 y trabajar con ramas y *pull requests* revisados, de modo que la contribución individual sea verificable en el historial. |
 | **R-10** | **Deuda legal: no está redactada la finalidad del tratamiento de datos ni la política de retención** que exigen RNF-12 y RNF-14. | Medio | Llegar al despliegue con datos reales de estudiantes sin política declarada. | Redactar ambas antes de procesar la primera hoja con datos reales, y consultar la referencia normativa vigente con la coordinación del programa. |
 | **R-11** | **La aprobación manual de la clave puede pasar por alto una equivalencia algebraica no evidente** entre un distractor y la respuesta correcta, ahora que no hay verificación simbólica automática ([ADR-0004](../adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md)). | Alto | Revisar el examen bajo presión de tiempo, sea la clave propia o con distractores propuestos por el modelo, sin apoyo visual para comparar expresiones. | Diseñar la pantalla de aprobación para mostrar las expresiones simplificadas o graficadas una junto a otra, facilitando la comparación visual sin exigir cómputo simbólico obligatorio. Si la tasa de error resulta alta en la práctica, reevaluar con un ADR nuevo. |
