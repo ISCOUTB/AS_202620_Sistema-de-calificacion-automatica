@@ -39,7 +39,17 @@ alcanzables desde la fila del aspecto que los realiza.
 **Estados:** *Declarado* = pasos 1 y 3 parciales (nombre, para quién, qué resuelve, requisitos
 y escenario asignados). *Especificado* = pasos 1 a 4 completos. *Construido* = pasos 5 a 7.
 
-**Por qué A-02 queda sin contexto.** Las tres relaciones del diagrama de Nivel 1
+**Contexto del mapa que realiza cada aspecto.** La columna de arriba cita las relaciones del
+**Nivel 1 del C4**, que describen cómo el sistema se comunica con actores externos. Los
+**contextos del [mapa de contextos](arc42/arc42-template-ES.md#81-mapa-de-contextos)** son otra
+cosa: son la división interna del dominio, y cada aspecto realiza uno. A-01 realiza **Ingesta**,
+A-02 realiza **OMR**, A-03 realiza **Calificación** y **Dashboard** (la comparación contra la clave
+y la publicación de resultados, RF-05), A-04 realiza **Autoría** y A-05 realiza **Identidad**. El
+séptimo contexto, **Infraestructura**, es de soporte y no tiene aspecto propio: interviene en A-01
+pero no decide ningún campo de negocio. La correspondencia completa, en las dos direcciones, está
+en [`08-propiedad-de-datos.md`](arc42/08-propiedad-de-datos.md#aspectos--contextos).
+
+**Por qué A-02 queda sin relación en el Nivel 1.** Las tres relaciones del diagrama de Nivel 1
 ([`c4/doc-c4.md`](c4/doc-c4.md#nivel-1--diagrama-de-contexto-del-sistema)) son comunicaciones que
 cruzan la frontera del sistema: el profesor que sube hojas o registra un banco (relación 1), el
 sistema que devuelve notas y alertas (relación 2), y el sistema que pide distractores al LLM
@@ -49,7 +59,9 @@ externo— así que no hay ninguna flecha del Nivel 1 que la represente: solo se
 dibujar el Nivel 2 o el Nivel 3 (semana 4). A-05, en cambio, sí se ancla a las relaciones
 existentes aunque no dibuje una propia: es la condición de autenticación y aislamiento por curso
 bajo la que ya operan las relaciones 1 y 2 con el Profesor/TA, no una comunicación adicional que
-falte por trazar. Ver también [`08-propiedad-de-datos.md`](arc42/08-propiedad-de-datos.md#aspectos--contextos)
+falte por trazar. **En el mapa de contextos de §8.1, en cambio, A-02 sí tiene
+contexto y es OMR**: la palabra «contexto» significa cosas distintas en el Nivel 1 del C4 y en el
+mapa de contextos, y esta es la fila donde más se nota. Ver también [`08-propiedad-de-datos.md`](arc42/08-propiedad-de-datos.md#aspectos--contextos)
 para la misma trazabilidad vista desde qué módulo y qué dato realiza cada aspecto.
 
 A-01 es el único aspecto que se trabaja completo en esta entrega. Los demás se declaran para
