@@ -233,17 +233,12 @@ política global.
 
 # 5. Building Block View
 
-> **Estado.** El C4 de Nivel 1 y el de Nivel 2 están cerrados
-> ([`../c4/doc-c4.md`](../c4/doc-c4.md)); el Nivel 3 sigue pendiente. El código ya materializa
+> **Estado.** El C4 está cerrado en sus Niveles 1, 2 y 3
+> ([`../c4/doc-c4.md`](../c4/doc-c4.md)). El código ya materializa
 > parcialmente esos contenedores: el aspecto **A-01 (carga de examen para calificación)** está
 > en estado *Construido* según [`../aspectos.md`](../aspectos.md#a-01), con recepción,
 > almacenamiento y encolado funcionando de punta a punta. Los otros cuatro aspectos (A-02 a
 > A-05) siguen *Declarados*, sin código.
->
-> **Nota de nombre.** El `doc-c4.md` actualizado identifica el sistema como **QuantIA** en su
-> tabla de metadatos y en el Nivel 2, mientras el resto del arc42 sigue usando «Sistema de
-> Calificación OMR». Esta sección sigue la nomenclatura del C4 tal como está hoy; la
-> unificación del nombre en todo el documento queda pendiente de que el equipo la resuelva.
 
 ## 5.1 Whitebox Overall System
 
@@ -787,6 +782,10 @@ cada docstring y una prueba análoga a la de fronteras) queda registrada como la
 - Mecanismo de persistencia y almacenamiento de las imágenes, con su política de retención
   (RNF-14). **Sigue abierta después de ADR-0006**, que cubrió solo el registro de la recepción y
   dejó el medio definitivo sin elegir, detrás del mismo puerto que ya aislaba el almacén.
+- **El nombre del sistema.** El equipo acordó cambiarlo, y la documentación usa hoy «Sistema de
+  Calificación OMR» de forma uniforme. Falta el ADR que registre la decisión y el cambio en los
+  documentos y en el código que la aplique. Se hace en la entrega siguiente, en un solo paso, para
+  que el nombre no quede a medias entre dos entregas.
 - Estrategia de calibración del umbral de confianza del OMR.
 - Si EC-05 necesita una medida de tiempo de revisión, y con qué valor — ver ADR-0004.
 - Si la calificación de riesgo técnico de EC-05 en el árbol de utilidad (hoy *Alto*) debe
