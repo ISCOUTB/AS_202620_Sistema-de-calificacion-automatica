@@ -168,6 +168,34 @@ python -m herramientas.medir_ec07 --hojas 200 --kb 200 --repeticiones 3 --fallar
 El resultado, el procedimiento y sus límites están en
 [`docs/evidencia/medicion-ec07.md`](docs/evidencia/medicion-ec07.md).
 
+## El contrato de la API
+
+Lo que la API promete devolver está escrito en un documento OpenAPI versionado en el
+repositorio: [`docs/contrato/openapi.json`](docs/contrato/openapi.json). Describe las dos rutas
+con el esquema de cada respuesta campo por campo, no solo el listado de endpoints.
+
+Está versionado y no se consulta en caliente por dos razones. `/openapi.json` solo existe
+mientras la API está levantada y describe la versión que esté corriendo en ese momento, así que
+ni un consumidor que quiera generar su cliente ni un revisor que quiera ver qué prometía la API
+en un commit dado pueden usarlo. Y con el documento dentro del repositorio, un cambio
+incompatible deja de ser invisible: aparece como un diff en ese archivo.
+
+**No se edita a mano.** Se genera desde la aplicación con una herramienta versionada, igual que
+las cifras de EC-07:
+
+```
+cd backend
+python -m herramientas.exportar_contrato
+```
+
+La salida es determinista (claves ordenadas, indentación fija), de modo que dos exportaciones
+del mismo código producen el mismo archivo. Si tras regenerar el diff sale vacío, el contrato no
+cambió; si sale con cambios, hay que revisarlos uno por uno antes de commitear, porque un campo
+que desaparece o un tipo que se estrecha rompen a quien ya consume la API.
+
+`docs/contrato/` guarda documentos de contrato generados, uno por interfaz. Hoy solo está la
+interfaz HTTP; la del sistema con la cola de trabajos todavía no está descrita.
+
 ## Restricciones y decisiones clave
 
 Las restricciones completas, clasificadas en técnicas, organizativas y legales, están en la [sección 2 del arc42](docs/arc42/arc42-template-ES.md). Las principales:
@@ -235,6 +263,8 @@ docs/
 │   └── 0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md
 ├── c4/
 │   └── doc-c4.md                                       # modelo C4 (Nivel 1; 2-3 pendientes)
+├── contrato/
+│   └── openapi.json                                    # contrato HTTP (OpenAPI 3.1), generado
 ├── ficha-problema.md                                    # el problema, usuarios y alcance
 ├── aspectos.md                                         # aspectos y tabla de trazabilidad
 └── ia.md                                               # registro de uso de IA

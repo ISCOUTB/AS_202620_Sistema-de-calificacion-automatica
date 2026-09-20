@@ -1,0 +1,270 @@
+{
+  "components": {
+    "schemas": {
+      "ArchivoRechazadoEnRespuesta": {
+        "description": "Un archivo que no se admitio, con el motivo en texto legible para el docente.\n\nEl motivo es obligatorio: EC-07 exige que ningun archivo desaparezca sin dejar traza, y un\nrechazo sin explicacion es indistinguible de una perdida desde el lado del usuario.",
+        "properties": {
+          "motivo": {
+            "description": "Por que no se admitio, redactado para el docente.",
+            "title": "Motivo",
+            "type": "string"
+          },
+          "nombre_archivo": {
+            "description": "Nombre con el que el docente envio el archivo.",
+            "title": "Nombre Archivo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "nombre_archivo",
+          "motivo"
+        ],
+        "title": "ArchivoRechazadoEnRespuesta",
+        "type": "object"
+      },
+      "Body_cargar_hojas_examenes__examen_id__hojas_post": {
+        "properties": {
+          "archivos": {
+            "items": {
+              "contentMediaType": "application/octet-stream",
+              "type": "string"
+            },
+            "title": "Archivos",
+            "type": "array"
+          }
+        },
+        "required": [
+          "archivos"
+        ],
+        "title": "Body_cargar_hojas_examenes__examen_id__hojas_post",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HojaAceptadaEnRespuesta": {
+        "description": "Una hoja que paso la validacion y quedo almacenada.\n\nNo lleva `examen_id` porque ya viaja una sola vez en la raiz de la respuesta, y repetirlo\npor hoja invitaria a un consumidor a suponer que un lote puede mezclar examenes. La\ndataclass del dominio si lo trae, y `model_validate` lo descarta al construir esta.",
+        "properties": {
+          "estado": {
+            "description": "encolada: su trabajo llego a la cola. pendiente_de_encolar: la hoja esta almacenada y registrada en la bitacora, pero su trabajo no llego a la cola y el sistema debe reintentarlo (ADR-0006).",
+            "enum": [
+              "encolada",
+              "pendiente_de_encolar"
+            ],
+            "title": "Estado",
+            "type": "string"
+          },
+          "nombre_archivo": {
+            "description": "Nombre con el que el docente envio el archivo.",
+            "title": "Nombre Archivo",
+            "type": "string"
+          },
+          "recibida_en": {
+            "description": "Momento en que el sistema acepto la hoja.",
+            "format": "date-time",
+            "title": "Recibida En",
+            "type": "string"
+          },
+          "referencia": {
+            "description": "Ubicacion que devolvio el almacen. Opaca a proposito: el consumidor no debe suponer que es una ruta de disco, porque el ADR de persistencia (R-06) puede convertirla en una clave de objeto sin que este contrato cambie.",
+            "title": "Referencia",
+            "type": "string"
+          },
+          "trabajo_id": {
+            "description": "Identificador del trabajo de procesamiento. Se acuna antes de tocar la cola, asi que existe tambien cuando el estado es pendiente_de_encolar.",
+            "title": "Trabajo Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "nombre_archivo",
+          "referencia",
+          "trabajo_id",
+          "recibida_en",
+          "estado"
+        ],
+        "title": "HojaAceptadaEnRespuesta",
+        "type": "object"
+      },
+      "RespuestaDeCarga": {
+        "description": "Lo que responde la carga de hojas: que entro y que no.\n\nLa invariante que promete es la de EC-07: `total_procesados` es igual al numero de\nelementos de `aceptadas` mas los de `rechazados`, y ese numero es el de archivos que el\ndocente envio. Ningun archivo se pierde en silencio.",
+        "properties": {
+          "aceptadas": {
+            "items": {
+              "$ref": "#/components/schemas/HojaAceptadaEnRespuesta"
+            },
+            "title": "Aceptadas",
+            "type": "array"
+          },
+          "examen_id": {
+            "description": "Examen al que se cargaron las hojas.",
+            "title": "Examen Id",
+            "type": "string"
+          },
+          "rechazados": {
+            "items": {
+              "$ref": "#/components/schemas/ArchivoRechazadoEnRespuesta"
+            },
+            "title": "Rechazados",
+            "type": "array"
+          },
+          "total_procesados": {
+            "description": "Aceptadas mas rechazados. Igual al numero de archivos enviados (EC-07).",
+            "title": "Total Procesados",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "examen_id",
+          "total_procesados",
+          "aceptadas",
+          "rechazados"
+        ],
+        "title": "RespuestaDeCarga",
+        "type": "object"
+      },
+      "RespuestaDeSalud": {
+        "description": "Lo que devuelve la sonda de vida. Hoy tiene un unico valor posible y el esquema lo dice\nasi: declararlo como texto libre prometeria una variedad que la ruta no tiene.",
+        "properties": {
+          "status": {
+            "const": "ok",
+            "description": "Unico valor posible mientras la API responde.",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "RespuestaDeSalud",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Interfaz HTTP del sistema de calificación de exámenes de opción múltiple. Hoy cubre el aspecto A-01 (carga de hojas escaneadas para calificación).",
+    "title": "Sistema de Calificación OMR",
+    "version": "1.0.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/examenes/{examen_id}/hojas": {
+      "post": {
+        "description": "Recibe una o varias hojas escaneadas de un examen y confirma qué entró y qué no (RF-01).\n\n**Responde 200 aunque haya archivos rechazados, y eso es deliberado.** La petición se\natendió por completo: el 200 confirma que el sistema procesó el lote entero, y el cuerpo\ndice archivo por archivo qué pasó. Devolver un error por un rechazo obligaría al cliente a\nreenviar el lote completo, que es justo lo que EC-07 quiere evitar.\n\n**Una hoja puede volver como aceptada y todavía pendiente de encolar.** Desde ADR-0006 el\ncampo `estado` de cada aceptada vale `encolada` o `pendiente_de_encolar`: la segunda es una\nhoja almacenada y registrada en la bitácora cuyo trabajo no llegó a la cola. Se reporta en\nvez de omitirse porque EC-07 exige que ningún archivo cargado desaparezca sin traza, y\nreintentarla es asunto del sistema, no del docente: el archivo ya está adentro.\n\n**El `examen_id` todavía no se verifica contra nada, y es un hueco conocido, no un olvido.**\nEl módulo `autoria` (aspecto A-04) es el que registrará los exámenes, y aún no existe;\n`identidad` (A-05) es el que comprobará que el docente puede cargar en ese curso, y\ntampoco. La ruta ya tiene la forma definitiva para que cuando esos módulos lleguen solo\nhaya que sumar la comprobación, sin migrar el frontend.",
+        "operationId": "cargar_hojas_examenes__examen_id__hojas_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "examen_id",
+            "required": true,
+            "schema": {
+              "title": "Examen Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_cargar_hojas_examenes__examen_id__hojas_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespuestaDeCarga"
+                }
+              }
+            },
+            "description": "Qué entró y qué no, archivo por archivo."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cargar hojas escaneadas de un examen"
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "salud_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespuestaDeSalud"
+                }
+              }
+            },
+            "description": "La API responde."
+          }
+        },
+        "summary": "Sonda de vida"
+      }
+    }
+  }
+}
