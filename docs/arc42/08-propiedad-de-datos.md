@@ -140,7 +140,7 @@ cada una lleva su acción correctiva y aquello de lo que depende para poder hace
 | ID | Violación | Dónde está | Acción correctiva | Depende de |
 |---|---|---|---|---|
 | V-1 | `api` y `worker` importan el dominio sin declarar frontera, y la prueba que la verifica no los recorre | `backend/api/__init__.py`, `backend/worker/__init__.py`, `backend/tests/test_fronteras.py:17` | Docstring con `Responsabilidad:` e `Importa:` en ambos y agregarlos a `MODULOS`, comprobando la prueba en rojo | Nada |
-| V-2 | El nombre de la cola está declarado dos veces y ninguna declaración es la fuente de verdad | `backend/api/settings.py:13`, `backend/worker/main.py:25` | Una sola declaración en `infraestructura/cola.py`, más `NOMBRE_COLA` y `RUTA_BITACORA` en `docker-compose.yml` y `.env.example` | Nada |
+| V-2 | El nombre de la cola está declarado dos veces y ninguna declaración es la fuente de verdad | `backend/api/settings.py:13`, `backend/worker/main.py:25` | Una sola declaración en `infraestructura/cola.py` y la prueba que falla si los dos procesos resuelven nombres distintos | Nada |
 | V-3 | El estado de una hoja existe en la bitácora y en la `HojaAceptada` que viajó al frontend, sin nada que los concilie | `backend/infraestructura/modelo.py:65`, `backend/ingesta/recepcion.py:165` | Que la bitácora sea la única fuente de verdad del estado al construir el reintento | Que exista A-02 |
 | V-4 | `BitacoraEnDisco` supone un único proceso escritor, y nada lo declara ni lo impide | `backend/infraestructura/bitacora.py:70` | Declarar el supuesto en el adaptador y cerrarlo en el ADR de persistencia definitiva | El ADR que cierra R-06 |
 | V-5 | La regla de dueño único vive solo en este documento: ninguna prueba la verifica | `backend/infraestructura/modelo.py`, `backend/tests/test_fronteras.py` | Línea `Posee:` en el docstring de cada módulo y extender la prueba de fronteras a la propiedad | Nada |
@@ -186,22 +186,27 @@ Que esto no lo cubre ninguna prueba no es una suposición: ya está registrado. 
 las seis con las que se validaron las pruebas del corte 1 era devolver el nombre de la cola del
 worker a un literal, y **no la detecta ninguna** de las 47 pruebas del backend; quedó declarada
 como hueco en [ADR-0006](../adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md) y
-en el [documento de evidencia](../evidencia/medicion-ec07.md). Lo que agrega este recorrido es la
-segunda mitad del problema: **ni `NOMBRE_COLA` ni `RUTA_BITACORA` aparecen en `docker-compose.yml`
-ni en `.env.example`**, donde sí están `REDIS_URL`, `DATABASE_URL`, `RUTA_ALMACEN` y
-`ALLOWED_ORIGIN`. Un despliegue que quiera cambiar el nombre de la cola tiene que fijarlo en dos
-servicios sin que ningún archivo del repositorio diga que son dos: fijarlo solo en `api` deja a la
-API encolando en una lista y al worker escuchando otra, con el lote confirmado al docente y
-ninguna hoja procesada. Es el mismo modo de fallo que ADR-0006 ataca desde el otro lado.
+en el [documento de evidencia](../evidencia/medicion-ec07.md). Lo que agregó este recorrido es la
+segunda mitad del problema: **ni `NOMBRE_COLA` ni `RUTA_BITACORA` aparecían en
+`docker-compose.yml` ni en `.env.example`**, donde sí están `REDIS_URL`, `DATABASE_URL`,
+`RUTA_ALMACEN` y `ALLOWED_ORIGIN`. Un despliegue que quisiera cambiar el nombre de la cola tenía
+que fijarlo en dos servicios sin que ningún archivo del repositorio dijera que son dos: fijarlo
+solo en `api` deja a la API encolando en una lista y al worker escuchando otra, con el lote
+confirmado al docente y ninguna hoja procesada. Es el mismo modo de fallo que ADR-0006 ataca desde
+el otro lado.
+
+**Esa mitad ya está cerrada.** Las dos variables están declaradas en `.env.example` y en
+`docker-compose.yml`: `NOMBRE_COLA` en los servicios `api` y `worker`, con el mismo valor por
+omisión que ya tenía el código, y `RUTA_BITACORA` solo en `api`, que es el único proceso que la
+lee. Lo que sigue abierto de V-2 es la declaración única y la prueba que la verifica.
 
 **Acción correctiva.** Dejar una sola declaración del valor por omisión en
 [`infraestructura/cola.py`](../../backend/infraestructura/cola.py), que es el módulo que los dos
 procesos ya importan, y que `api/settings.py` y `worker/main.py` la lean de ahí en vez de
 repetirla. Poner la declaración en `api/settings.py` y hacer que el worker la importe resolvería la
 duplicación creando una dependencia nueva de `worker` hacia `api`, que es justamente la frontera
-que V-1 deja sin declarar. Además, declarar `NOMBRE_COLA` y `RUTA_BITACORA` en
-`docker-compose.yml` para los dos servicios y en `.env.example`, y agregar la prueba que hoy falta,
-que es la que falla si los dos procesos resuelven nombres distintos. Esa prueba es también la que
+que V-1 deja sin declarar. Falta además la prueba que hoy no existe, que es la que falla si los
+dos procesos resuelven nombres distintos. Esa prueba es también la que
 cierra el hueco de mutación declarado en ADR-0006.
 
 ### V-3 · El estado de una hoja vive en dos sitios
