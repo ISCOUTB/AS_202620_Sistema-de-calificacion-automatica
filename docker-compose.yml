@@ -29,6 +29,12 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/omr}
       RUTA_ALMACEN: ${RUTA_ALMACEN:-/app/almacen_imagenes}
       ALLOWED_ORIGIN: ${ALLOWED_ORIGIN:-http://localhost:8080}
+      # Nombre de la cola: el mismo valor que lee `worker`, abajo. Si se cambia aquí y no
+      # allá, `api` encola en una lista y `worker` escucha otra.
+      NOMBRE_COLA: ${NOMBRE_COLA:-procesamiento}
+      # Bitácora de recepción (ADR-0006). Solo `api` la escribe. El código deriva esta ruta
+      # de RUTA_ALMACEN; aquí son dos literales, así que se cambian juntas.
+      RUTA_BITACORA: ${RUTA_BITACORA:-/app/almacen_imagenes/bitacora-de-recepcion.jsonl}
     volumes:
       - almacen_imagenes:/app/almacen_imagenes
     depends_on:
@@ -45,6 +51,9 @@ services:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/omr}
       RUTA_ALMACEN: ${RUTA_ALMACEN:-/app/almacen_imagenes}
+      # El mismo valor que lee `api`, arriba. RUTA_BITACORA no va aquí: `worker/main.py` no
+      # la lee, y declarar una variable que el servicio ignora es configuración muerta.
+      NOMBRE_COLA: ${NOMBRE_COLA:-procesamiento}
     volumes:
       - almacen_imagenes:/app/almacen_imagenes
     depends_on:
