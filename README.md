@@ -120,7 +120,7 @@ Backend (dentro de `backend/`, con Redis disponible vía `docker compose up -d r
 pytest
 ```
 
-Son 47 pruebas. Verifican: que la aplicación FastAPI arranca y su endpoint de salud responde
+Son 53 pruebas. Verifican: que la aplicación FastAPI arranca y su endpoint de salud responde
 200; que los siete módulos del dominio se importan sin error ni ciclos; que ningún módulo
 importa por fuera de lo declarado en el docstring de su `__init__.py` (la prueba de fronteras
 entre módulos); que un trabajo encolado en Redis se recupera igual al desencolarlo; y, para el
@@ -134,6 +134,22 @@ ninguna hoja queda sin reportar, que la que no se encoló queda pendiente en la 
 imagen recuperable, que el estado se relee desde el archivo y no de la memoria, que una línea
 truncada no inutiliza el registro, y que el lote deja de insistir contra una cola caída en vez de
 pagar el tiempo de espera de conexión doscientas veces.
+
+Seis son la **prueba de contrato** ([`backend/tests/test_contrato.py`](backend/tests/test_contrato.py)),
+y verifican que el documento de `docs/contrato/openapi.json` y la API que corre no se puedan
+separar: que el archivo versionado sea exactamente el que genera la aplicación de hoy, que su
+número de versión sea el declarado en el código, que sigan estando las dos rutas, que la
+respuesta de carga exija sus cuatro campos, que los estados publicados sean los dos del dominio,
+y que una respuesta real traiga exactamente los campos que el contrato anuncia, ni uno más ni
+uno menos.
+
+Un cambio incompatible las pone en rojo diciendo qué se rompió. Renombrar `nombre_archivo`
+produce:
+
+```
+El contrato versionado ya no describe a esta aplicacion:
+  esquema cambiado: HojaAceptadaEnRespuesta (campos quitados: ['nombre_archivo']; nuevos: ['archivo'])
+```
 
 Sin Redis levantado, la prueba de encolado se salta con un mensaje que dice qué levantar, en vez
 de fallar con un error de conexión confuso. Las demás corren igual.
