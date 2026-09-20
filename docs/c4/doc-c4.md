@@ -149,7 +149,7 @@ diagrama es donde se hace visible. Si en el futuro se integrara la publicación 
 académico entraría aquí como sistema externo con su propia flecha etiquetada.
 
 ---
-Nivel 2 · Diagrama de Contenedores
+## Nivel 2 · Diagrama de Contenedores
 Tipo de diagrama: C4 Nivel 2 — Contenedores
 Ámbito: Sistema de Calificación OMR
 Fecha: 2026-08-29
