@@ -10,15 +10,56 @@ arc42, la plantilla para documentar arquitecturas de software y de sistemas.
 Versión de plantilla 9.0. Creada y mantenida por Dr. Peter Hruschka, Dr. Gernot Starke
 y colaboradores. Ver [https://arc42.org](https://arc42.org).
 
-**Estado de este documento:** semana 4 del curso. Las secciones 1 a 6, 9, 10, 11 y 12 están
-escritas; las secciones 7 y 8 se completan más adelante, y cada una indica explícitamente
-cuándo se llena y por qué todavía no se puede.
+**Estado de este documento:** las secciones 1 a 6 y 8 a 12 están escritas. La única pendiente es
+la 7 (*Deployment View*), y en su lugar queda escrito de qué depende y por qué todavía no se
+puede cerrar.
 
 Las secciones 5 y 6 describen **el estado real del código**, no el diseño previsto. Eso las
 obliga a envejecer con cada avance: conviene revisarlas (y con ellas la sección 11) en el mismo
 *pull request* que añade código, igual que se actualiza el docstring de un módulo cuando cambia
 su frontera.
 
+
+## Contenido
+
+- [1. Introduction and Goals](#1-introduction-and-goals)
+  - [1.1 Requirements Overview](#11-requirements-overview)
+  - [1.2 Quality Goals](#12-quality-goals)
+  - [1.3 Stakeholders](#13-stakeholders)
+- [2. Architecture Constraints](#2-architecture-constraints)
+  - [2.1 Restricciones técnicas](#21-restricciones-técnicas)
+  - [2.2 Restricciones organizativas](#22-restricciones-organizativas)
+  - [2.3 Restricciones legales](#23-restricciones-legales)
+- [3. Context and Scope](#3-context-and-scope)
+  - [3.1 Business Context](#31-business-context)
+  - [3.2 Technical Context](#32-technical-context)
+  - [3.3 Fuera de alcance](#33-fuera-de-alcance)
+- [4. Solution Strategy](#4-solution-strategy)
+  - [4.1 Matriz comparativa de los tres estilos frente al árbol de utilidad](#41-matriz-comparativa-de-los-tres-estilos-frente-al-árbol-de-utilidad)
+  - [4.2 Tácticas frente a los escenarios priorizados](#42-tácticas-frente-a-los-escenarios-priorizados)
+- [5. Building Block View](#5-building-block-view)
+  - [5.1 Whitebox Overall System](#51-whitebox-overall-system)
+  - [5.2 Level 2](#52-level-2)
+  - [5.3 Level 3](#53-level-3)
+- [6. Runtime View](#6-runtime-view)
+  - [6.1 Arranque y verificación de salud](#61-arranque-y-verificación-de-salud)
+  - [6.2 Carga de una hoja escaneada (RF-01 · aspecto A-01 · EC-07)](#62-carga-de-una-hoja-escaneada-rf-01--aspecto-a-01--ec-07)
+  - [6.3 Escenarios pendientes](#63-escenarios-pendientes)
+- [7. Deployment View](#7-deployment-view)
+- [8. Cross-cutting Concepts](#8-cross-cutting-concepts)
+  - [8.1 Mapa de contextos](#81-mapa-de-contextos)
+  - [8.2 Lenguaje ubicuo](#82-lenguaje-ubicuo)
+  - [8.3 Propiedad de datos](#83-propiedad-de-datos)
+  - [Conceptos transversales todavía sin desarrollar](#conceptos-transversales-todavía-sin-desarrollar)
+- [9. Architecture Decisions](#9-architecture-decisions)
+- [10. Quality Requirements](#10-quality-requirements)
+  - [10.1 Quality Requirements Overview](#101-quality-requirements-overview)
+  - [10.2 Escenarios de calidad priorizados](#102-escenarios-de-calidad-priorizados)
+  - [10.3 Escenarios complementarios](#103-escenarios-complementarios)
+- [11. Risks and Technical Debts](#11-risks-and-technical-debts)
+- [12. Glossary](#12-glossary)
+
+---
 **Convenciones de identificadores usadas en todo el repositorio:**
 
 | Prefijo | Significado | Dónde se define |
@@ -31,8 +72,6 @@ su frontera.
 | `A-nn` | Aspecto (corte vertical) | [`../aspectos.md`](../aspectos.md) |
 | `T-n` | Tensión de calidad | [`../aspectos.md`](../aspectos.md) |
 | `ADR-nnnn` | Decisión de arquitectura | [`../adr/`](../adr/) |
-
----
 
 # 1. Introduction and Goals
 
