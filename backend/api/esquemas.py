@@ -52,7 +52,7 @@ class HojaAceptadaEnRespuesta(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    nombre_archivo: str = Field(description="Nombre con el que el docente envio el archivo.")
+     archivo: str = Field(description="Nombre con el que el docente envio el archivo.")
     referencia: str = Field(
         description=(
             "Ubicacion que devolvio el almacen. Opaca a proposito: el consumidor no debe "
