@@ -24,7 +24,22 @@ jobs:
           python-version: "3.12"
       - run: |
           pip install --only-binary :all: --require-hashes -r backend/requirements.txt
-      - run: pytest -v
+
+      # Este paso corre un archivo que el paso siguiente vuelve a correr dentro de la suite
+      # completa, y la redundancia es deliberada: no la quites.
+      #
+      # Que el contrato de `docs/contrato/openapi.json` siga describiendo a la API es una
+      # promesa hacia afuera, no una prueba unitaria mas. Aislarla le da dos cosas que
+      # `pytest -v` no da: aparece con nombre propio en la lista de pasos del run, asi que
+      # cuando un cambio rompe el contrato se ve cual fallo sin abrir el log; y corre antes
+      # que el resto, de modo que un contrato desincronizado corta el pipeline en dos
+      # segundos en vez de al final.
+      - name: Prueba de contrato (OpenAPI)
+        run: pytest -v tests/test_contrato.py
+        working-directory: backend
+
+      - name: Suite completa del backend
+        run: pytest -v
         working-directory: backend
 
   frontend-tests:
