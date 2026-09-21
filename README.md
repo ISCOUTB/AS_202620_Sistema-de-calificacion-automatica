@@ -151,6 +151,10 @@ El contrato versionado ya no describe a esta aplicacion:
   esquema cambiado: HojaAceptadaEnRespuesta (campos quitados: ['nombre_archivo']; nuevos: ['archivo'])
 ```
 
+Que falla de verdad no es una afirmación: se comprobó rompiendo el contrato en `master` y
+mirando el pipeline. El experimento, con los tres runs y la salida completa, está en
+[`docs/evidencia/prueba-de-contrato-falla.md`](docs/evidencia/prueba-de-contrato-falla.md).
+
 Sin Redis levantado, la prueba de encolado se salta con un mensaje que dice qué levantar, en vez
 de fallar con un error de conexión confuso. Las demás corren igual.
 

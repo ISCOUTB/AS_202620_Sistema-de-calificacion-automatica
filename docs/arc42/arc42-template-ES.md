@@ -209,9 +209,9 @@ diagrama C4 de contexto en [`../c4/doc-c4.md`](../c4/doc-c4.md).
 
 | Canal / Interfaz | Entrada | Salida | Protocolo / Formato | Socio de 3.1 |
 |---|---|---|---|---|
-| Interfaz Web (Dashboard) | Autenticación, gestión de cursos y bancos de preguntas, carga de escaneos, resolución de marcas ambiguas | Notas, gráficos, alertas de ambigüedad y de clave inválida | HTTPS · JSON en las respuestas; multipart/form-data en la carga de escaneos. Frontend en Flutter compilado a web. Interfaz descrita campo por campo en [../contrato/openapi.json](../contrato/openapi.json) | Profesor / TA |
-| Canal de ingesta OMR | Lote de imágenes o PDF de hojas escaneadas | Matriz de respuestas detectadas con nivel de confianza (%) por pregunta | Carga HTTP multipart. Procesamiento previsto con OpenCV sobre PNG, JPG o PDF a 300 DPI; aún no está implementado (ver A-02) | Profesor / TA |
-| Proveedor de LLM (pendiente y opcional) | Especificación de la pregunta para la que se piden distractores | Distractores candidatos, cada uno con la etiqueta del error de procedimiento que representa, sujetos a la decisión del profesor (RF-11) | Pendiente de decidir. Si se usa una API alojada, es HTTPS/JSON contra un sistema externo; si se usa un modelo local, es in-process. Ver R-02. | Proveedor de LLM |
+| **Interfaz Web (Dashboard)** | Autenticación, gestión de cursos y bancos de preguntas, carga de escaneos, resolución de marcas ambiguas | Notas, gráficos, alertas de ambigüedad y de clave inválida | HTTPS · JSON en las respuestas; multipart/form-data en la carga de escaneos. Frontend en Flutter compilado a web. Interfaz descrita campo por campo en [../contrato/openapi.json](../contrato/openapi.json) | Profesor / TA |
+| **Canal de ingesta OMR** | Lote de imágenes o PDF de hojas escaneadas | Matriz de respuestas detectadas con nivel de confianza (%) por pregunta | Carga HTTP multipart. Procesamiento previsto con OpenCV sobre PNG, JPG o PDF a 300 DPI; **aún no está implementado** (ver A-02) | Profesor / TA |
+| **Proveedor de LLM** *(pendiente y opcional)* | Especificación de la pregunta para la que se piden distractores | Distractores candidatos, cada uno con la etiqueta del error de procedimiento que representa, sujetos a la decisión del profesor (RF-11) | **Pendiente de decidir.** Si se usa una API alojada, es HTTPS/JSON contra un sistema externo; si se usa un modelo local, es in-process. Ver R-02. | Proveedor de LLM |
 
 ## 3.3 Fuera de alcance
 
@@ -431,7 +431,11 @@ su cifra de latencia es una cota inferior.
 Redis ni servidor) y `backend/tests/test_carga_hojas.py` (el endpoint visto desde fuera, con
 `dependency_overrides` sustituyendo almacén y cola). En el frontend, `widget_test.dart` cubre
 que la pantalla de carga no ofrece subir si el backend no responde, y que el reporte distingue
-una falla de red de un rechazo.
+una falla de red de un rechazo. El contrato de este recorrido está versionado en
+[`../contrato/openapi.json`](../contrato/openapi.json) y lo vigila
+`backend/tests/test_contrato.py`, que el pipeline ejecuta como paso propio; que esa prueba falla
+de verdad ante un cambio incompatible está comprobado en
+[`../evidencia/prueba-de-contrato-falla.md`](../evidencia/prueba-de-contrato-falla.md).
 
 ## 6.3 Escenarios pendientes
 
