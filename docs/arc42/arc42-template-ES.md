@@ -209,9 +209,9 @@ diagrama C4 de contexto en [`../c4/doc-c4.md`](../c4/doc-c4.md).
 
 | Canal / Interfaz | Entrada | Salida | Protocolo / Formato | Socio de 3.1 |
 |---|---|---|---|---|
-| **Interfaz Web (Dashboard)** | Autenticación, gestión de cursos y bancos de preguntas, carga de escaneos, resolución de marcas ambiguas | Notas, gráficos, alertas de ambigüedad y de clave inválida | HTTPS · HTML5 / CSS / JSON | Profesor / TA |
-| **Canal de ingesta OMR** | Lote de imágenes o PDF de hojas escaneadas | Matriz de respuestas detectadas con nivel de confianza (%) por pregunta | Carga HTTP multipart; procesamiento con OpenCV sobre PNG, JPG o PDF a 300 DPI | Profesor / TA |
-| **Proveedor de LLM** *(pendiente y opcional)* | Especificación de la pregunta para la que se piden distractores | Distractores candidatos, cada uno con la etiqueta del error de procedimiento que representa, sujetos a la decisión del profesor (RF-11) | **Pendiente de decidir.** Si se usa una API alojada, es HTTPS/JSON contra un sistema externo; si se usa un modelo local, es in-process. Ver R-02. | Proveedor de LLM |
+| Interfaz Web (Dashboard) | Autenticación, gestión de cursos y bancos de preguntas, carga de escaneos, resolución de marcas ambiguas | Notas, gráficos, alertas de ambigüedad y de clave inválida | HTTPS · JSON en las respuestas; multipart/form-data en la carga de escaneos. Frontend en Flutter compilado a web. Interfaz descrita campo por campo en [../contrato/openapi.json](../contrato/openapi.json) | Profesor / TA |
+| Canal de ingesta OMR | Lote de imágenes o PDF de hojas escaneadas | Matriz de respuestas detectadas con nivel de confianza (%) por pregunta | Carga HTTP multipart. Procesamiento previsto con OpenCV sobre PNG, JPG o PDF a 300 DPI; aún no está implementado (ver A-02) | Profesor / TA |
+| Proveedor de LLM (pendiente y opcional) | Especificación de la pregunta para la que se piden distractores | Distractores candidatos, cada uno con la etiqueta del error de procedimiento que representa, sujetos a la decisión del profesor (RF-11) | Pendiente de decidir. Si se usa una API alojada, es HTTPS/JSON contra un sistema externo; si se usa un modelo local, es in-process. Ver R-02. | Proveedor de LLM |
 
 ## 3.3 Fuera de alcance
 
