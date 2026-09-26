@@ -54,7 +54,9 @@ def serializar(documento: dict) -> str:
 
 def exportar() -> Path:
     RUTA_CONTRATO.parent.mkdir(parents=True, exist_ok=True)
-    RUTA_CONTRATO.write_text(serializar(documento_openapi()), encoding="utf-8")
+    # `newline="\n"` fija el fin de linea. Sin el, Windows traduce cada salto a CRLF y dos
+    # exportaciones del mismo codigo dejan de ser el mismo byte segun quien las corra.
+    RUTA_CONTRATO.write_text(serializar(documento_openapi()), encoding="utf-8", newline="\n")
     return RUTA_CONTRATO
 
 
