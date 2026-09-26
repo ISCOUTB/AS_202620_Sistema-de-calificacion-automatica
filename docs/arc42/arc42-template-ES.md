@@ -1,6 +1,6 @@
 ---
 date: 2026-08-30
-title: "Arquitectura del Sistema de Calificación OMR"
+title: "Arquitectura de QuantIA"
 ---
 
 # **About arc42**
@@ -77,7 +77,7 @@ su frontera.
 
 ## 1.1 Requirements Overview
 
-El **Sistema de Calificación OMR** automatiza la evaluación y calificación de exámenes de
+**QuantIA** ([ADR-0008](../adr/0008-renombrar-el-sistema-a-quantia.md)) automatiza la evaluación y calificación de exámenes de
 opción múltiple para la asignatura de **Cálculo Diferencial** en facultades de ingeniería,
 ciencias exactas y economía. El profesor carga su banco de preguntas y su clave de respuestas,
 aplica el examen en papel, y el sistema lee las hojas escaneadas mediante **Reconocimiento
@@ -493,7 +493,7 @@ justamente uno de los tres tipos que este criterio pide nombrar.
 
 ```mermaid
 ---
-title: "Mapa de contextos — Sistema de Calificación OMR"
+title: "Mapa de contextos · QuantIA"
 ---
 flowchart TB
     identidad["<b>Identidad</b>
@@ -757,6 +757,7 @@ decisión cambia, se escribe uno nuevo y el anterior pasa a estado *reemplazado 
 | [0005](../adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md) | Acotar el LLM a la generación de distractores diagnósticos | **aceptado** | 2026-08-29 | [EC-05](#ec-05) |
 | [0006](../adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md) | Registrar la recepción en una bitácora antes de encolar | **aceptado** | 2026-09-06 | [EC-07](#ec-07) |
 | [0007](../adr/0007-declarar-los-contextos-delimitados-y-la-regla-de-dueno-unico.md) | Declarar los contextos delimitados y la regla de dueño único de los datos | **aceptado** | 2026-09-13 | ninguno declarado |
+| [0008](../adr/0008-renombrar-el-sistema-a-quantia.md) | Renombrar el sistema a QuantIA | **aceptado** | 2026-09-22 | ninguno declarado |
 
 **Por qué 0002 reemplaza a 0001.** La revisión de coherencia previa al corte 1 encontró que
 EC-03 y EC-04 no se pueden cumplir a la vez con procesamiento síncrono(200 hojas × 5 s son
@@ -818,6 +819,10 @@ decisión: nada la verifica todavía. La corrección que la haría automática (
 cada docstring y una prueba análoga a la de fronteras) queda registrada como la violación V-5 de
 [`08-propiedad-de-datos.md`](08-propiedad-de-datos.md), no como una intención en el texto del ADR.
 
+**Qué decide 0008 y qué no toca.** Es una decisión de identidad del producto: no mueve
+fronteras, contratos ni escenarios, así que no reemplaza ni precisa a ningún ADR anterior. Los
+ADR 0001 a 0007 conservan el nombre anterior, porque un ADR aceptado no se edita.
+
 **Decisiones previstas (aún no tomadas):**
 
 - Proveedor de LLM y su modo de consumo, externo o local — ver R-02. (La elección de stack de
@@ -825,10 +830,6 @@ cada docstring y una prueba análoga a la de fronteras) queda registrada como la
 - Mecanismo de persistencia y almacenamiento de las imágenes, con su política de retención
   (RNF-14). **Sigue abierta después de ADR-0006**, que cubrió solo el registro de la recepción y
   dejó el medio definitivo sin elegir, detrás del mismo puerto que ya aislaba el almacén.
-- **El nombre del sistema.** El equipo acordó cambiarlo, y la documentación usa hoy «Sistema de
-  Calificación OMR» de forma uniforme. Falta el ADR que registre la decisión y el cambio en los
-  documentos y en el código que la aplique. Se hace en la entrega siguiente, en un solo paso, para
-  que el nombre no quede a medias entre dos entregas.
 - Estrategia de calibración del umbral de confianza del OMR.
 - Si EC-05 necesita una medida de tiempo de revisión, y con qué valor — ver ADR-0004.
 - Si la calificación de riesgo técnico de EC-05 en el árbol de utilidad (hoy *Alto*) debe
