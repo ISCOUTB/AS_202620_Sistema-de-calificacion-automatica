@@ -192,8 +192,8 @@
     }
   },
   "info": {
-    "description": "Interfaz HTTP del sistema de calificación de exámenes de opción múltiple. Hoy cubre el aspecto A-01 (carga de hojas escaneadas para calificación).",
-    "title": "Sistema de Calificación OMR",
+    "description": "Interfaz HTTP de QuantIA, sistema de calificación de exámenes de opción múltiple. Hoy cubre el aspecto A-01 (carga de hojas escaneadas para calificación).",
+    "title": "QuantIA",
     "version": "1.0.0"
   },
   "openapi": "3.1.0",

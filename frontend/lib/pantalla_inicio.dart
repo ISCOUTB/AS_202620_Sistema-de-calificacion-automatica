@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'pantalla_carga.dart';
 import 'servicio_salud.dart' as servicio;
 
-const nombreSistema = 'Sistema de Calificación OMR';
+const nombreSistema = 'QuantIA';
 
 class PantallaInicio extends StatefulWidget {
   const PantallaInicio({super.key, this.verificarSalud = servicio.verificarSalud});

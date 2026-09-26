@@ -1,5 +1,5 @@
 name: frontend
-description: Frontend mínimo del Sistema de Calificación OMR (Flutter compilado a web).
+description: Frontend mínimo de QuantIA (Flutter compilado a web).
 publish_to: 'none'
 version: 0.1.0
 

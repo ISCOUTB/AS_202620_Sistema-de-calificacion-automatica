@@ -28,13 +28,13 @@ from infraestructura.modelo import ArchivoCargado
 from ingesta import recibir_lote
 
 app = FastAPI(
-    title="Sistema de Calificación OMR",
+    title="QuantIA",
     # Sin `version`, FastAPI publica «0.1.0» por omisión y el documento no dice nada: un
     # consumidor no puede distinguir un contrato estable de uno recién generado. El número lo
     # fija `api/esquemas.py`, junto a los esquemas que versiona.
     version=VERSION_DEL_CONTRATO,
     description=(
-        "Interfaz HTTP del sistema de calificación de exámenes de opción múltiple. "
+        "Interfaz HTTP de QuantIA, sistema de calificación de exámenes de opción múltiple. "
         "Hoy cubre el aspecto A-01 (carga de hojas escaneadas para calificación)."
     ),
 )
