@@ -2,6 +2,27 @@
 
 Proyecto que automatiza la calificación de exámenes de opción múltiple de cálculo diferencial. El profesor carga su banco de preguntas y su clave de respuestas, aplica el examen en papel y sube los escaneos; el sistema los lee mediante reconocimiento óptico de marcas (OMR), califica contra esa clave y publica los resultados en un dashboard, devolviendo a revisión manual toda marca que no supere el umbral de confianza. Como apoyo opcional durante la preparación, puede proponer **distractores diagnósticos** con ayuda de un modelo de lenguaje. El sistema es una herramienta de apoyo al criterio del profesor, no un reemplazo de su decisión final.
 
+## Dónde está la evidencia de cada entrega
+
+La documentación larga vive en pocos archivos. Esta tabla dice, para lo que pide cada ficha, en
+qué archivo y en qué sección está.
+
+| Entrega | Qué | Dónde |
+|---|---|---|
+| Corte 1 | Medición de EC-07 antes y después del cambio, con su herramienta | [`docs/evidencia/medicion-ec07.md`](docs/evidencia/medicion-ec07.md) |
+| S6 | Mapa de contextos y lenguaje ubicuo | [arc42 §8.1 y §8.2](docs/arc42/arc42-template-ES.md#81-mapa-de-contextos) |
+| S6 | Tabla módulo → dato, recorrido de la auditoría y violaciones V-1 a V-5 con su plan | [arc42 §8.3](docs/arc42/arc42-template-ES.md#83-propiedad-de-datos) |
+| S6 | Contexto del mapa que realiza cada aspecto | [`docs/aspectos.md`](docs/aspectos.md#tabla-de-trazabilidad) · [ADR-0007](docs/adr/0007-declarar-los-contextos-delimitados-y-la-regla-de-dueno-unico.md) |
+| S6 | Hallazgos de SonarQube Cloud y sus correcciones | [`docs/evidencia/hallazgos-y-correcciones.md`](docs/evidencia/hallazgos-y-correcciones.md) |
+| S7 | Contrato OpenAPI versionado (1.0.0) | [`docs/contrato/openapi.json`](docs/contrato/openapi.json) |
+| S7 | Prueba de contrato y su paso propio en el pipeline | [`backend/tests/test_contrato.py`](backend/tests/test_contrato.py) · paso «Prueba de contrato (OpenAPI)» de [`ci.yml`](.github/workflows/ci.yml) |
+| S7 | La prueba falla ante un cambio incompatible, con los tres runs | [`docs/evidencia/prueba-de-contrato-falla.md`](docs/evidencia/prueba-de-contrato-falla.md) |
+| S7 | Flujos de interacción | [arc42 §6](docs/arc42/arc42-template-ES.md#6-runtime-view) |
+| S7 | C4 Nivel 2 con protocolo y formato en cada relación | [`docs/c4/doc-c4.md`](docs/c4/doc-c4.md#nivel-2--diagrama-de-contenedores) |
+| Todas | Pipeline de integración continua | [Runs de GitHub Actions](https://github.com/ISCOUTB/AS_202620_Sistema-de-calificacion-automatica/actions) |
+| Todas | Análisis estático y su *Quality Gate* | [SonarQube Cloud](https://sonarcloud.io/summary/new_code?id=ISCOUTB_AS_202620_Sistema-de-calificacion-automatica) |
+| Todas | Respuesta a la retroalimentación automática | [`correcciones.md`](correcciones.md) |
+
 ## Cómo se arranca
 
 Requiere Docker (con el plugin Compose). Antes de la primera vez, copiar `.env.example` a `.env`;
