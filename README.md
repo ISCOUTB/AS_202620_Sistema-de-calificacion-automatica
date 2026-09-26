@@ -317,8 +317,7 @@ Los ADR aceptados no se editan ni se borran: si una decisión cambia, se escribe
 ```
 docs/
 ├── arc42/
-│   ├── arc42-template-ES.md                            # documento de arquitectura (arc42)
-│   └── 08-propiedad-de-datos.md                        # sección 8.3: propiedad de datos
+│   └── arc42-template-ES.md                            # documento de arquitectura (arc42)
 ├── adr/                                                # 0001 a 0008; el 0001, reemplazado por el 0002
 ├── c4/
 │   └── doc-c4.md                                       # modelo C4 (Niveles 1, 2 y 3)
