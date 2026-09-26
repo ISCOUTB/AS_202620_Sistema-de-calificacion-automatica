@@ -11,7 +11,7 @@ sección 4, donde se reconoce explícitamente lo que la revisión señaló con r
 **Método.** Cada afirmación se contrasta contra **el commit que la propia revisión declara haber
 mirado**, no contra el estado actual. Si el equipo arregló algo después del cierre, no es un error
 de la revisión y no aparece aquí. Los comandos para repetir cualquier comprobación están en la
-sección 6.
+sección 6, y los de S6 y S7, en la 7.5.
 
 **Este documento no corrige nada.** Reporta el hallazgo y dice si corresponde corregir, dónde y
 por qué. Las correcciones que ya se hicieron por otras razones se indican como tales.
@@ -23,6 +23,8 @@ por qué. Las correcciones que ya se hicieron por otras razones se indican como 
 | Evidencia S3 | `dd422fb2` | 2026-08-23T23:52:23-05:00 | 2026-08-24T05:00:00Z |
 | Evidencia S4 | `cede35e4` | 2026-08-30T23:51:34-05:00 | 2026-08-31T05:00:00Z |
 | Primer corte | `cede35e4` (sin etiqueta) | 2026-08-30T23:51:34-05:00 | 2026-09-07T05:00:00Z |
+| Evidencia S6 (pasada temprana) | `a47d5bd` | 2026-09-13T23:21:55-05:00 | 2026-09-14T05:00:00Z |
+| Evidencia S7 (revisión corregida del 24 de septiembre) | `2269ca5` | 2026-09-20T21:48:00-05:00 | 2026-09-21T05:00:00Z |
 
 ---
 
@@ -151,8 +153,125 @@ git ls-tree -r --name-only dd422fb
 git shortlog -sn d4302f4
 ```
 
+## 7. Evidencias S6 y S7
+
+Esta sección aplica el mismo método a las dos revisiones publicadas después del primer corte.
+**La de S7 ya se corrigió**: el 24 de septiembre se publicó una revisión definitiva sobre
+`2269ca5`, con 10 de 10, que reemplazó a la preliminar sobre `a47d5bd`. **La de S6 sigue siendo
+una pasada temprana**: su encabezado lo dice, y `estado-s6.json` del repositorio de
+retroalimentación registra `"modo": "early"`. Si se publica una pasada definitiva de S6, esta
+sección se revisa contra ella.
+
+### 7.1 S7: lo que se corrigió y lo que queda
+
+| Hecho | Evidencia verificable |
+|---|---|
+| La revisión preliminar miró un commit anterior al cierre, pero no el último | Evaluó `a47d5bd` (13 de septiembre). El último commit de `master` anterior al cierre (`2026-09-21T05:00:00Z`) es `2269ca5`, y entre los dos hay 19 commits de los cuatro integrantes |
+| La revisión corregida lo reconoce | Su encabezado: «El informe preliminar había omitido 19 commits elegibles; esta versión evalúa el último commit de `origin/master` anterior al cierre». Estado revisado: `2269ca5`, 10 de 10 |
+| Nada que solicitar sobre la matriz de la ficha | Las diez filas quedaron en `Cumple` |
+
+Quedan dos filas de la matriz transversal. Una es cierta y está en 7.4 (SonarCloud). La otra se
+solicita revisar:
+
+| # | Dónde lo dice la revisión | Qué afirma | Qué hay | ¿Corregir? |
+|---|---|---|---|---|
+| **9** | S7, transversal, «Contribución de todos los integrantes» → `No verificado`; `feedback.md` S7: «confirmar de forma explícita la asociación de las cuentas» | «`git shortlog -sne 2269ca5` produce cuatro grupos de identidad, pero `EQUIPOS.md` solo confirma dos cuentas» | La tabla de `EQUIPOS.md` que cita es la de «Usuarios de GitHub vistos en el historial», que el propio archivo presenta como cuentas **sin asignar a persona** y como punto de partida para la planilla. La **planilla de este equipo**, en su tabla «Contribución por integrante», ya asocia las cuatro: Sebastián Cañas Plata, `scp1109`; Josué David Ortega De Arco, `josueacademico17-source`; Susana Marcela Rosales Castellar, `SusanaRosales`; María Del Mar Restrepo Licona, `Mariadelmar-restrepo`. El equipo confirma esa asociación, y la deja escrita también en la sección «Equipo» del README | **Sí.** Se solicita tomar la asociación de la planilla y actualizar la tabla de `EQUIPOS.md`, que registra las cuentas de la primera consulta |
+
+### 7.2 Lo que el revisor automático alcanza a leer de este repositorio
+
+Varias filas de S6 quedaron en `No verificado` con el mismo motivo: «no se incluyó el contenido».
+No es que el contenido falte. `scripts/cron/evaluar-semana.py`, que es lo que ejecuta el workflow
+`revision-semanal.yml`, arma la evidencia con cuatro cortes:
+
+- cada archivo de `docs/` y el README llegan con **sus primeras 300 líneas y, de ellas, los
+  primeros 9 000 caracteres** (líneas 186 a 188 del script);
+- `correcciones.md`, con el mismo corte (líneas 189 a 191);
+- **`CONTRATO.md` llega con sus primeros 8 000 caracteres** (línea 421), y su apartado 11, la
+  matriz transversal, empieza en el carácter 9 344;
+- **toda la evidencia se trunca en 95 000 caracteres** al armar el mensaje para el modelo, y los
+  documentos van antes que los runs de CI.
+
+Los valores son los mismos en las versiones del script que corrieron las pasadas de S6
+(`93594f6`) y de S7 (`e5609fc`). Reproducida esa lógica sobre `a47d5bd`, la evidencia mide
+167 822 caracteres y se corta en 95 000. Contrastado con lo que las revisiones publicaron, lo que
+el revisor cita está siempre dentro de lo que llega, y lo que declara no haber visto está siempre
+fuera:
+
+| Lo que dice la revisión | Dónde está | ¿Llega al revisor automático? |
+|---|---|---|
+| S6, «Tabla módulo → dato con seis entidades» (`Cumple`) | `08-propiedad-de-datos.md` en `a47d5bd`, carácter 1 330 | Sí |
+| S6, «No se incluyó la sección de violaciones» (`No verificado`), **del mismo archivo** | carácter 9 205: el corte de 9 000 cae 205 caracteres antes | No |
+| S6, «No se incluyó la sección 8 del arc42» | carácter 43 476 del arc42 en `a47d5bd` | No |
+| S6, «no se incluyó el contenido» de `docs/aspectos.md` y `docs/ia.md` | los dos archivos quedan enteros después del corte de 95 000 | No |
+| S6, «no se aportaron runs_ci» | `runs_ci` es el último campo de la evidencia | No |
+
+Dos hechos posteriores lo confirman desde el lado del revisor.
+
+- **Sobre el mismo commit, dos lectores distintos.** La revisión corregida de S7 y la pasada
+  temprana de S8 miraron el mismo `2269ca5`. La primera, una «revisión académica local sobre
+  evidencia Git», cita el contenido con número de línea: `docs/ia.md:126-138`, arc42 `356-440` y el
+  run `35555368047` en verde. La segunda es la pasada automática, y dice de ese mismo commit que
+  `docs/ia.md` «no se aporta el
+  contenido», que la sección 2 del arc42 no está en la evidencia (empieza en el carácter 11 432,
+  y del arc42 le llegan 8 272) y que «no hay runs_ci».
+- **El propio revisor automático lo anota.** La pasada temprana de S8 termina con este hallazgo:
+  «El contrato recibido no incluye el apartado 11; la matriz transversal se armó con los
+  apartados 1 a 8». Es el corte de 8 000 caracteres sobre `CONTRATO.md`.
+
+No se pide nada sobre S8, que todavía no cierra: se cita solo como evidencia del método.
+
+**¿Corregir?** Sí: se solicita revisar el método. Un límite de 9 000 caracteres por archivo y de
+95 000 en total deja fuera, en este repositorio, `aspectos.md`, el C4, `ia.md`, el contrato
+OpenAPI, toda la carpeta `docs/evidencia/`, este mismo documento y los runs de CI; y el corte
+sobre `CONTRATO.md` deja al revisor sin la matriz transversal que debe llenar. El comando para
+repetir la reconstrucción está en 7.5.
+
+### 7.3 Filas de S6 en `No verificado` cuyo contenido está en `a47d5bd`
+
+| # | Fila y estado publicado | Qué afirma | Qué hay en `a47d5bd` | ¿Corregir? |
+|---|---|---|---|---|
+| **10** | «No conformidades de propiedad de datos detectadas»: `No verificado` | «No se incluyó la sección de violaciones» | `docs/arc42/08-propiedad-de-datos.md` línea 135, «Violaciones de propiedad de datos», con la tabla de V-1 a V-5 en las líneas 140 a 146: violación, dónde está, acción correctiva y de qué depende | **Sí** |
+| **11** | «Plan de corrección por no conformidad»: `No verificado` | «No se incluyó la sección con planes de corrección» | La misma tabla, columnas «Acción correctiva» y «Depende de», y un apartado por violación a continuación | **Sí** |
+| **12** | «arc42 sección 8 con lenguaje ubicuo y mapa de contextos»: `No verificado` | «No se incluyó la sección 8 del arc42» | `docs/arc42/arc42-template-ES.md`: sección 8 en la línea 421, mapa de contextos (8.1) en la 443 y lenguaje ubicuo (8.2) en la 604 | **Sí** |
+| **13** | «Aspectos relacionables con los contextos del mapa»: `No verificado` | «No se incluyó el contenido de docs/aspectos.md» | `docs/aspectos.md` línea 42, que asigna a cada aspecto su contexto del mapa, y `08-propiedad-de-datos.md` línea 274, «Aspectos ↔ contextos», en las dos direcciones | **Sí** |
+| **14** | «C4 nivel 3 y ADR si los límites cambiaron»: `No verificado` | «No se aportó [...] el contenido de docs/c4» | `docs/c4/doc-c4.md` línea 325, «Nivel 3 · Diagrama de Componentes», y ADR-0007 | **Sí, con la salvedad de 7.4** |
+| **15** | Transversal, «La tabla de aspectos» y «Registro de uso de IA»: `No verificado` | «no se incluyó su contenido» | `docs/aspectos.md`, filas de A-01 a A-05 en las líneas 33 a 37; `docs/ia.md`, ocho entradas, con «Qué se rechazó» en las líneas 23, 34, 45, 56, 67, 78, 89 y 105 | **Sí** |
+| **16** | Transversal, «Pipeline y análisis estático»: `No verificado` | «no se aportaron runs_ci, URL pública de SonarCloud ni línea del scanner» | El run `34805781748` corre sobre `a47d5bd` con conclusión *success*. Lo del scanner es cierto (ver 7.4) | **En parte**: los runs sí |
+
+El equipo no solicita una nota: solicita que estas filas se evalúen sobre lo que contenía
+`a47d5bd`.
+
+### 7.4 Lo que las revisiones de S6 y S7 señalan y es cierto
+
+| Revisión | Observación | Comprobación |
+|---|---|---|
+| S6 y S7 | No hay línea del workflow que invoque el analizador de SonarCloud ni archivo de configuración del análisis | Correcto en `a47d5bd` y en `2269ca5`: `.github/workflows/ci.yml` no menciona SonarCloud y no existe `sonar-project.properties`. El análisis corre desde SonarCloud y su *Quality Gate* es público, pero `CONTRATO.md` §8 pide las tres evidencias juntas |
+| S6 | El Nivel 3 del C4 no se pudo verificar | La salvedad es del equipo: en `a47d5bd`, las líneas 336 a 342 de `doc-c4.md` decían que el repositorio «todavía no tiene código» y que el reparto salía de un resumen de la actividad y no del código. Era falso desde el 30 de agosto. El Nivel 3 se reescribió después contra el código real |
+
+### 7.5 Cómo repetir las comprobaciones de esta sección
+
+```bash
+# 7.1 - el commit que correspondía a S7
+git log -1 --format='%H %cI %s' --until=2026-09-21T05:00:00Z origin/master
+git log --format='%h %cI %an' a47d5bd..2269ca5
+
+# 7.2 - los cortes del revisor (en un clon de ISCOUTB/AS_202620_feedback)
+grep -nE 'max_lines=300|\[:9000\]|\[:95000\]|contrato\[:8000\]' scripts/cron/evaluar-semana.py
+python -c "t=open('CONTRATO.md',encoding='utf-8').read(); print(t.find('## 11.'))"
+
+# 7.2 - dónde cae el corte (en este repositorio)
+git show a47d5bd:docs/arc42/08-propiedad-de-datos.md | python -c "import sys; t=sys.stdin.buffer.read().decode('utf-8'); print(t.find('## Violaciones'))"
+git show 2269ca5:docs/arc42/arc42-template-ES.md | python -c "import sys; t=sys.stdin.buffer.read().decode('utf-8'); print(t.find('# 2. Architecture Constraints'))"
+
+# 7.3 - las secciones en el commit revisado
+git show a47d5bd:docs/arc42/08-propiedad-de-datos.md | sed -n '135,146p'
+git show a47d5bd:docs/arc42/arc42-template-ES.md | grep -nE '^# 8\.|^## 8\.[12]'
+git show a47d5bd:docs/c4/doc-c4.md | grep -n '^## Nivel 3'
+git show a47d5bd:docs/ia.md | grep -n 'Qué se rechazó'
+```
+
 ---
 
 *Documento elaborado por el equipo a solicitud del docente. Primera versión: 2026-09-06, sobre un
-estado posterior a `cede35e`. El 2026-09-26 se corrigió la nota A, que daba por corregida una frase
+estado posterior a `cede35e`. El 2026-09-26 se agregó la sección 7, sobre S6 y S7, y se corrigió la nota A, que daba por corregida una frase
 del C4 que no lo estaba, y un conteo de la sección 4.*
