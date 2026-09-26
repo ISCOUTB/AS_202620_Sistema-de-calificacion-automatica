@@ -10,7 +10,7 @@ mantenibilidad, Susana.
 Esta revisión es **automática**: encuentra patrones de código que una herramienta reconoce sin
 conocer el dominio. Es distinta del recorrido **manual** de propiedad de datos, que pregunta qué
 módulo decide el contenido de cada campo de negocio y vive en
-[`docs/arc42/08-propiedad-de-datos.md`](../arc42/08-propiedad-de-datos.md). Las dos recorren el
+la [sección 8.3 del arc42](../arc42/arc42-template-ES.md#83-propiedad-de-datos). Las dos recorren el
 mismo código y no se sustituyen: ninguna herramienta conoce la regla de dueño único, y la
 herramienta encuentra cosas que un recorrido a mano no busca.
 
