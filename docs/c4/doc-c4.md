@@ -1,4 +1,4 @@
-# Diagramas C4 — Sistema de Calificación OMR
+# Diagramas C4 — QuantIA
 
 Este documento es la **fuente única de los diagramas C4** del proyecto. Los diagramas se
 escriben como código (Mermaid) para que se revisen en el pull request junto al resto de los
@@ -6,7 +6,7 @@ cambios y no se desincronicen en silencio.
 
 | | |
 |---|---|
-| **Sistema** | Sistema de Calificación OMR |
+| **Sistema** | QuantIA, sistema de calificación de exámenes de opción múltiple mediante OMR ([ADR-0008](../adr/0008-renombrar-el-sistema-a-quantia.md)) |
 | **Última actualización** | 2026-09-22 |
 | **Niveles completos** | Nivel 1 (Contexto), Nivel 2 (Contenedores) y Nivel 3 (Componentes) |
 | **Notación** | C4 model — [c4model.com](https://c4model.com) · Renderizado con Mermaid `flowchart` |
@@ -17,17 +17,17 @@ cambios y no se desincronicen en silencio.
 ## Nivel 1 · Diagrama de Contexto del Sistema
 
 **Tipo de diagrama:** C4 Nivel 1 — Contexto del Sistema
-**Ámbito:** Sistema de Calificación OMR
+**Ámbito:** QuantIA
 **Fecha:** 2026-08-29
 **Audiencia:** cualquier persona, técnica o no
 
-El diagrama representa el Sistema de Calificación OMR **como una caja negra**, junto a sus
+El diagrama representa QuantIA **como una caja negra**, junto a sus
 usuarios y a los sistemas externos con los que interactúa. No muestra nada de su estructura
 interna: eso corresponde al Nivel 2.
 
 ```mermaid
 ---
-title: "C4 Nivel 1 · Contexto — Sistema de Calificación OMR (2026-08-29)"
+title: "C4 Nivel 1 · Contexto — QuantIA (2026-08-29)"
 ---
 flowchart TB
     profesor["<b>Profesor / TA</b>
@@ -35,7 +35,7 @@ flowchart TB
 
     Gestión."]
 
-    sistema["<b>Sistema de Calificación OMR</b>
+    sistema["<b>QuantIA</b>
     [Sistema de software]
 
     Procesa las hojas escaneadas,
@@ -76,7 +76,7 @@ flowchart TB
 | Elemento | Tipo | Descripción |
 |---|---|---|
 | **Profesor / TA** | Persona | Docente autorizado que registra los bancos de preguntas y la clave, sube los escaneos de las hojas de respuesta, resuelve las marcas ambiguas y consulta los resultados. Es el **único** usuario humano del sistema (restricción RNF-05). |
-| **Sistema de Calificación OMR** | Sistema en alcance | Recibe el banco de preguntas y la clave que registra el profesor, procesa las hojas escaneadas mediante reconocimiento óptico de marcas, calcula las calificaciones y las presenta en un dashboard interactivo. |
+| **QuantIA** | Sistema en alcance | Recibe el banco de preguntas y la clave que registra el profesor, procesa las hojas escaneadas mediante reconocimiento óptico de marcas, calcula las calificaciones y las presenta en un dashboard interactivo. |
 | **Proveedor de LLM** | Sistema externo *(opcional y pendiente)* | Servicio de modelo de lenguaje que el profesor puede invocar en la **fase de autoría** para que le proponga distractores diagnósticos (RF-11). No participa en la calificación, y el sistema opera completo sin invocarlo nunca. Su salida nunca se acepta sola: el profesor decide qué acepta y habilita el examen (RF-07). |
 
 ### Relaciones
@@ -154,11 +154,11 @@ académico entraría aquí como sistema externo con su propia flecha etiquetada.
 ## Nivel 2 · Diagrama de Contenedores
 
 **Tipo de diagrama:** C4 Nivel 2 — Contenedores  
-**Ámbito:** Sistema de Calificación OMR  
+**Ámbito:** QuantIA  
 **Fecha:** 2026-08-29  
 **Audiencia:** equipo de desarrollo y personas con conocimiento técnico
 
-El diagrama representa la estructura interna del **Sistema de Calificación OMR** mediante sus principales contenedores. A diferencia del Nivel 1, donde el Sistema de Calificación OMR se representa como una caja negra, este nivel muestra las unidades principales que componen el sistema y las relaciones entre ellas.
+El diagrama representa la estructura interna de **QuantIA** mediante sus principales contenedores. A diferencia del Nivel 1, donde QuantIA se representa como una caja negra, este nivel muestra las unidades principales que componen el sistema y las relaciones entre ellas.
 
 El diseño está condicionado por [ADR-0002](../adr/0002-procesar-calificacion-de-forma-asincrona.md), que establece un procesamiento asíncrono. La aplicación web recibe las operaciones del profesor y coordina el procesamiento mediante una cola de trabajos. El procesamiento de las hojas escaneadas, el reconocimiento óptico de marcas y el cálculo de las calificaciones se ejecutan en un worker independiente.
 
@@ -166,7 +166,7 @@ Los contenedores son cinco: **aplicación web**, **worker de procesamiento**, **
 
 ```mermaid
 ---
-title: "C4 Nivel 2 · Contenedores — Sistema de Calificación OMR (2026-08-29)"
+title: "C4 Nivel 2 · Contenedores — QuantIA (2026-08-29)"
 ---
 flowchart TB
     profesor["<b>Profesor / TA</b>
@@ -174,7 +174,7 @@ flowchart TB
 
     Gestión."]
 
-    subgraph sistema_omr["<b>Sistema de Calificación OMR</b>"]
+    subgraph sistema_omr["<b>QuantIA</b>"]
 
         web["<b>Aplicación web</b>
         [Contenedor]
@@ -259,10 +259,10 @@ flowchart TB
 
 | Elemento | Tipo | Descripción |
 |---|---|---|
-| **Aplicación web** | Contenedor | Interfaz principal del Sistema de Calificación OMR para el profesor. Gestiona la autenticación, los cursos, los bancos de preguntas, los exámenes, la carga de hojas escaneadas y la consulta de resultados. También inicia los trabajos de procesamiento y, opcionalmente, solicita distractores al proveedor de LLM. |
+| **Aplicación web** | Contenedor | Interfaz principal de QuantIA para el profesor. Gestiona la autenticación, los cursos, los bancos de preguntas, los exámenes, la carga de hojas escaneadas y la consulta de resultados. También inicia los trabajos de procesamiento y, opcionalmente, solicita distractores al proveedor de LLM. |
 | **Worker de procesamiento** | Contenedor | Ejecuta de forma asíncrona el procesamiento de las hojas escaneadas. Realiza el reconocimiento óptico de marcas (OMR), calcula las calificaciones y genera alertas para los casos que requieren revisión manual. |
 | **Cola de trabajos** | Contenedor | Mantiene los trabajos de procesamiento pendientes y permite desacoplar la aplicación web del procesamiento OMR. |
-| **Base de datos** | Contenedor | Almacena la información estructurada del Sistema de Calificación OMR, incluyendo usuarios, cursos, preguntas, claves de respuesta, exámenes y resultados de las calificaciones. |
+| **Base de datos** | Contenedor | Almacena la información estructurada de QuantIA, incluyendo usuarios, cursos, preguntas, claves de respuesta, exámenes y resultados de las calificaciones. |
 | **Almacén de imágenes** | Contenedor | Conserva las hojas de respuesta escaneadas y los archivos necesarios para su procesamiento. |
 | **Proveedor de LLM** | Sistema externo *(opcional y pendiente)* | Servicio externo utilizado durante la fase de autoría para proponer distractores diagnósticos. No participa en el procesamiento OMR ni en el cálculo de las calificaciones. |
 
@@ -271,7 +271,7 @@ flowchart TB
 | # | Origen → Destino | Propósito | Protocolo y formato | Estado |
 |---|---|---|---|---|
 | 1 | Profesor / TA → Aplicación web | Gestiona cursos, bancos de preguntas, exámenes, escaneos y consulta resultados. | HTTPS · frontend Flutter compilado a web · respuestas en JSON; la carga de hojas viaja como `multipart/form-data`. Descrita campo por campo en [`../contrato/openapi.json`](../contrato/openapi.json). | **Construido** |
-| 2 | Aplicación web → Base de datos | Consulta y persiste la información estructurada del Sistema de Calificación OMR. | SQL sobre PostgreSQL | **Previsto.** El contenedor se levanta, pero no tiene esquema y ningún componente lo consulta. Depende del ADR que cierre el riesgo R-06. |
+| 2 | Aplicación web → Base de datos | Consulta y persiste la información estructurada de QuantIA. | SQL sobre PostgreSQL | **Previsto.** El contenedor se levanta, pero no tiene esquema y ningún componente lo consulta. Depende del ADR que cierre el riesgo R-06. |
 | 3 | Aplicación web → Almacén de imágenes | Almacena las hojas de respuesta escaneadas. | Llamada en proceso al puerto `AlmacenDeImagenes`, no una API de objetos. El adaptador actual escribe los bytes en un volumen local. | **Construido**, con adaptador provisional (riesgo R-06). |
 | 4 | Aplicación web → Cola de trabajos | Crea los trabajos que deben ser procesados de forma asíncrona. | Redis · `RPUSH` sobre una lista · JSON con la forma `{"id": ..., "payload": {...}}` | **Construido** |
 | 5 | Cola de trabajos → Worker de procesamiento | Entrega los trabajos pendientes para su procesamiento. | Redis · `BLPOP`, bloqueante con timeout de 5 s · el mismo JSON | **Construido** |
@@ -283,17 +283,17 @@ flowchart TB
 
 ### Notas de modelado
 
-Estas notas explican **por qué** se han separado los diferentes contenedores y cómo se relacionan con las decisiones arquitectónicas establecidas para el Sistema de Calificación OMR.
+Estas notas explican **por qué** se han separado los diferentes contenedores y cómo se relacionan con las decisiones arquitectónicas establecidas para QuantIA.
 
 **Por qué la aplicación web y el worker están separados.** El procesamiento de las hojas de respuesta puede requerir operaciones de reconocimiento de imágenes y cálculo que no deben bloquear la interacción del profesor. Por esta razón, la aplicación web recibe la solicitud y delega el procesamiento al worker mediante la cola de trabajos, siguiendo la decisión establecida en [ADR-0002](../adr/0002-procesar-calificacion-de-forma-asincrona.md).
 
 **Por qué existe una cola de trabajos.** La cola permite implementar el procesamiento asíncrono. Cuando el profesor carga las hojas escaneadas, la aplicación web crea un trabajo y lo coloca en la cola. El worker toma posteriormente ese trabajo. Hoy el worker solo lo registra en su log; el procesamiento de la hoja está previsto y todavía no está construido. De esta manera, la aplicación web puede continuar atendiendo otras solicitudes mientras se procesa el examen.
 
-**Por qué el almacén de imágenes está separado de la base de datos.** Las hojas de respuesta escaneadas son archivos binarios y no forman parte de la información estructurada del Sistema de Calificación OMR. Por ello, se almacenan en un contenedor de almacenamiento independiente. La base de datos está prevista para conservar la información estructurada y las referencias necesarias para relacionar cada archivo con su examen correspondiente.
+**Por qué el almacén de imágenes está separado de la base de datos.** Las hojas de respuesta escaneadas son archivos binarios y no forman parte de la información estructurada de QuantIA. Por ello, se almacenan en un contenedor de almacenamiento independiente. La base de datos está prevista para conservar la información estructurada y las referencias necesarias para relacionar cada archivo con su examen correspondiente.
 
-**Por qué la base de datos aparece como contenedor.** La base de datos forma parte de la infraestructura necesaria para operar el Sistema de Calificación OMR y está prevista para ser utilizada directamente por los contenedores de la aplicación web y del worker. Hoy el contenedor se levanta, pero no tiene esquema y ningún componente lo consulta. En el Nivel 1 permanece oculta porque es una parte interna del sistema; en este nivel se muestra para explicar cómo se persistirá la información.
+**Por qué la base de datos aparece como contenedor.** La base de datos forma parte de la infraestructura necesaria para operar QuantIA y está prevista para ser utilizada directamente por los contenedores de la aplicación web y del worker. Hoy el contenedor se levanta, pero no tiene esquema y ningún componente lo consulta. En el Nivel 1 permanece oculta porque es una parte interna del sistema; en este nivel se muestra para explicar cómo se persistirá la información.
 
-**Por qué el profesor interactúa únicamente con la aplicación web.** El profesor es el único usuario humano del Sistema de Calificación OMR (RNF-05). No interactúa directamente con la base de datos, la cola, el worker ni el almacén de imágenes. La aplicación web actúa como punto de entrada para sus operaciones.
+**Por qué el profesor interactúa únicamente con la aplicación web.** El profesor es el único usuario humano de QuantIA (RNF-05). No interactúa directamente con la base de datos, la cola, el worker ni el almacén de imágenes. La aplicación web actúa como punto de entrada para sus operaciones.
 
 **Por qué el worker accede directamente al almacén de imágenes.** El worker necesita recuperar las hojas escaneadas para realizar el procesamiento OMR. La aplicación web se encarga de registrar la carga y almacenar el archivo, mientras que el worker lo recuperará cuando consuma el trabajo correspondiente. Esta relación está prevista y todavía no está construida: hoy el worker solo registra el trabajo en su log.
 
@@ -301,15 +301,15 @@ Estas notas explican **por qué** se han separado los diferentes contenedores y 
 
 **Por qué el proveedor de LLM se conecta con la aplicación web.** El LLM únicamente participa en la fase de autoría, cuando el profesor solicita propuestas de distractores diagnósticos (RF-11). No participa en el flujo de procesamiento de las hojas ni en el cálculo de las calificaciones. Por ello, la interacción se realiza desde la aplicación web.
 
-**Por qué la relación con el proveedor de LLM aparece punteada.** Al igual que en el Nivel 1, el uso del LLM es opcional y la decisión sobre cómo consumir el modelo todavía está pendiente. Si se utiliza una API alojada, continuará representándose como un sistema externo. Si se decide alojar un modelo local, el proveedor externo desaparecerá del Nivel 1 y el modelo o servicio correspondiente deberá representarse como un contenedor del Sistema de Calificación OMR.
+**Por qué la relación con el proveedor de LLM aparece punteada.** Al igual que en el Nivel 1, el uso del LLM es opcional y la decisión sobre cómo consumir el modelo todavía está pendiente. Si se utiliza una API alojada, continuará representándose como un sistema externo. Si se decide alojar un modelo local, el proveedor externo desaparecerá del Nivel 1 y el modelo o servicio correspondiente deberá representarse como un contenedor de QuantIA.
 
 **Qué información se envía al LLM.** De acuerdo con RNF-13, la interacción con el proveedor de LLM se limita a especificaciones de preguntas matemáticas necesarias para generar distractores. No deben enviarse nombres de estudiantes, calificaciones ni hojas escaneadas.
 
-**Por qué no aparece el sistema académico institucional.** Actualmente no existe una integración con el sistema académico institucional. El Sistema de Calificación OMR presenta los resultados directamente al profesor, por lo que no se incorpora un contenedor o sistema externo adicional en este nivel.
+**Por qué no aparece el sistema académico institucional.** Actualmente no existe una integración con el sistema académico institucional. QuantIA presenta los resultados directamente al profesor, por lo que no se incorpora un contenedor o sistema externo adicional en este nivel.
 
-**Por qué no aparece el estudiante.** El estudiante no interactúa directamente con el Sistema de Calificación OMR ni dispone de una cuenta (RNF-05). Su participación consiste en completar la hoja física de respuestas, que posteriormente es escaneada y cargada por el profesor.
+**Por qué no aparece el estudiante.** El estudiante no interactúa directamente con QuantIA ni dispone de una cuenta (RNF-05). Su participación consiste en completar la hoja física de respuestas, que posteriormente es escaneada y cargada por el profesor.
 
-**Por qué no aparece el escáner.** El escáner es una herramienta externa utilizada para digitalizar la hoja física. Su resultado es un archivo que el profesor carga en el Sistema de Calificación OMR, por lo que no constituye un contenedor ni un sistema con el que el Sistema de Calificación OMR mantenga una integración propia.
+**Por qué no aparece el escáner.** El escáner es una herramienta externa utilizada para digitalizar la hoja física. Su resultado es un archivo que el profesor carga en QuantIA, por lo que no constituye un contenedor ni un sistema con el que QuantIA mantenga una integración propia.
 
 **Procesamiento asíncrono.** El flujo principal previsto es el siguiente. **Los pasos 1 a 4 están construidos**; del 5 en adelante, hoy el worker solo consume el trabajo y lo registra en su log, y el resto está previsto.
 
