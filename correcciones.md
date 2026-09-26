@@ -51,8 +51,11 @@ como un error solo del revisor. En el commit revisado, la línea 11 de `docs/c4/
 ciento cuarenta líneas más abajo, y la línea 164 anunciaba los contenedores como «previstos». La
 revisión cita esas dos frases como su evidencia. Son exactamente las dos que un lector encontraría
 primero, y la contradicción es responsabilidad del equipo. Lo que se solicita revisar es la
-conclusión, no la lectura: el diagrama estaba ahí y era comprobable en el mismo archivo. Las dos
-frases ya fueron corregidas.
+conclusión, no la lectura: el diagrama estaba ahí y era comprobable en el mismo archivo. De las dos
+frases, la primera se corrigió en `201acac`. La segunda («Los contenedores previstos son», hoy en
+la línea 165) no se corrigió entonces, aunque este documento lo daba por hecho: se corrigió junto
+con la reescritura del Nivel 3 del C4, y se puede verificar con
+`git log -S'Los contenedores previstos son' -- docs/c4/doc-c4.md`.
 
 **Nota B: qué hizo el equipo ante la restricción que no llegó.** El equipo no dejó el reto sin
 responder. Se tomó como restricción la deuda **R-06** (ausencia de decisión de persistencia y de
@@ -95,7 +98,7 @@ verificó contra el commit correspondiente y **la revisión tiene razón**.
 | S2 | Restricciones sin categorías organizativas ni legales | En `d4302f4` la sección 2 tiene seis restricciones con categorías propias (tecnológica, de entrada, de diseño, de dominio, de usuarios, de salida). Ninguna organizativa ni legal |
 | S2 | `docs/aspectos.md` no enlaza los escenarios desde la fila del aspecto | Correcto en `d4302f4` |
 | S2 | Una sola cuenta hasta el cierre | `git shortlog -sn d4302f4` devuelve una sola cuenta |
-| S3 | No hay arranque, ni prueba, ni estructura de paquetes al cierre | `git ls-tree -r dd422fb` contiene únicamente `README.md` y nueve archivos bajo `docs/`. No hay código |
+| S3 | No hay arranque, ni prueba, ni estructura de paquetes al cierre | `git ls-tree -r dd422fb` contiene únicamente `README.md` y ocho archivos bajo `docs/`. No hay código |
 | S3 | Dos commits posteriores al cierre; el esqueleto llegó cerca de dos horas tarde | Correcto. El equipo lo asume y no lo discute |
 | S4 | La fila A-01 debe enlazar un contenedor C4 real y no «C2 pendiente» | Correcto. `docs/aspectos.md` línea 29 en `cede35e` dice `C1: Sistema de Calificación OMR · C2 pendiente (S4)` |
 | S4 | Secciones 7 y 8 del arc42 pendientes | Correcto, y declarado como tal en el propio documento |
@@ -150,6 +153,6 @@ git shortlog -sn d4302f4
 
 ---
 
-*Documento elaborado por el equipo a solicitud del docente. Fecha: 2026-09-06. Estado del
-repositorio en el momento de escribirlo: posterior a `cede35e`, con las correcciones de las notas
-A y B ya aplicadas.*
+*Documento elaborado por el equipo a solicitud del docente. Primera versión: 2026-09-06, sobre un
+estado posterior a `cede35e`. El 2026-09-26 se corrigió la nota A, que daba por corregida una frase
+del C4 que no lo estaba, y un conteo de la sección 4.*
