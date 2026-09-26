@@ -1,6 +1,6 @@
-# Sistema de calificación automática de exámenes de cálculo diferencial mediante OMR
+# QuantIA
 
-Proyecto que automatiza la calificación de exámenes de opción múltiple de cálculo diferencial. El profesor carga su banco de preguntas y su clave de respuestas, aplica el examen en papel y sube los escaneos; el sistema los lee mediante reconocimiento óptico de marcas (OMR), califica contra esa clave y publica los resultados en un dashboard, devolviendo a revisión manual toda marca que no supere el umbral de confianza. Como apoyo opcional durante la preparación, puede proponer **distractores diagnósticos** con ayuda de un modelo de lenguaje. El sistema es una herramienta de apoyo al criterio del profesor, no un reemplazo de su decisión final.
+QuantIA es el sistema que automatiza la calificación de exámenes de opción múltiple de cálculo diferencial ([ADR-0008](docs/adr/0008-renombrar-el-sistema-a-quantia.md) explica el nombre). El profesor carga su banco de preguntas y su clave de respuestas, aplica el examen en papel y sube los escaneos; el sistema los lee mediante reconocimiento óptico de marcas (OMR), califica contra esa clave y publica los resultados en un dashboard, devolviendo a revisión manual toda marca que no supere el umbral de confianza. Como apoyo opcional durante la preparación, puede proponer **distractores diagnósticos** con ayuda de un modelo de lenguaje. El sistema es una herramienta de apoyo al criterio del profesor, no un reemplazo de su decisión final.
 
 ## Equipo
 
