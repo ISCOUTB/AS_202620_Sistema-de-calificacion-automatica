@@ -40,6 +40,7 @@ import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 import redis.exceptions
 from fastapi.testclient import TestClient
@@ -263,7 +264,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", type=Path, default=None)
     args = parser.parse_args(argv)
 
-    informe = {
+    informe: dict[str, Any] = {
         "escenario": "EC-07 - Confirmacion fiable de recepcion del lote",
         "aspecto": "A-01",
         "entorno": _entorno(),

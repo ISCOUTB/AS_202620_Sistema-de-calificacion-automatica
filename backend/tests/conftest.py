@@ -1,4 +1,5 @@
 import os
+from collections.abc import Iterator
 
 import pytest
 import redis
@@ -7,7 +8,7 @@ from infraestructura.cola import cliente_redis
 
 
 @pytest.fixture
-def cliente() -> redis.Redis:
+def cliente() -> Iterator[redis.Redis]:
     """Cliente Redis para la prueba de encolado. Si no hay un Redis real disponible
     (por ejemplo, no se levantó `docker compose up -d redis`), la prueba se salta con un
     mensaje claro en vez de fallar de forma confusa."""

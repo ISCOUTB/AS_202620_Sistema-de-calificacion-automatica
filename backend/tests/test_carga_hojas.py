@@ -8,6 +8,7 @@ Las dependencias del almacén y de la cola se sustituyen con `dependency_overrid
 razón por la que `api/main.py` las declara con `Depends` en lugar de construirlas al importar:
 así esta prueba corre sin Redis y sin escribir en el volumen real."""
 
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -19,7 +20,7 @@ from tests.test_recepcion import JPG, PDF, PNG, ColaFalsa
 
 
 @pytest.fixture
-def cliente(tmp_path) -> TestClient:
+def cliente(tmp_path) -> Iterator[TestClient]:
     cola = ColaFalsa()
     app.dependency_overrides[obtener_almacen] = lambda: AlmacenEnDisco(tmp_path)
     app.dependency_overrides[obtener_cliente_cola] = lambda: cola
