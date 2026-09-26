@@ -44,7 +44,7 @@ propiedad no es lo mismo que ubicación: quien decide qué significa cada campo 
 cambia de valor es `ingesta.recepcion.recibir_lote`, que es donde se construyen las cinco
 instancias con datos reales —el motivo de un rechazo, el estado `encolada` o
 `pendiente_de_encolar`, el `trabajo_id`— y no `infraestructura`, que no conoce esas reglas de
-negocio. `api/main.py` construye un `ArchivoCargado` en la línea 85, pero solo como el adaptador
+negocio. `api/main.py` construye un `ArchivoCargado` en la línea 106, pero solo como el adaptador
 HTTP que traduce el `multipart/form-data` de la petición al tipo que `ingesta` ya definió; no
 decide ningún campo de negocio, se limita a copiar nombre y bytes.
 
@@ -52,7 +52,7 @@ decide ningún campo de negocio, se limita a copiar nombre y bytes.
 ([`cola.py:26`](../../backend/infraestructura/cola.py)) no es una entidad de negocio sino el
 **sobre de transporte** con el que un encargo viaja a la cola, y su dueño es `infraestructura`
 porque es quien decide lo único que el sobre declara por su cuenta: el identificador, acuñado en
-`preparar_trabajo` (`cola.py:38`). El `payload` lo arma `ingesta` en
+`preparar_trabajo` (`cola.py:40`). El `payload` lo arma `ingesta` en
 [`recepcion.py:130`](../../backend/ingesta/recepcion.py), y a primera vista eso parece dos manos
 sobre la misma entidad. No lo es: `infraestructura` nunca interpreta ese diccionario, lo serializa
 entero al publicar (`cola.py:55`), así que no decide ninguno de sus campos ni se convierte en
@@ -82,11 +82,11 @@ complete por adición y no se reescriba cuando esos aspectos se especifiquen.
 
 | Entidad prevista | Módulo dueño previsto | Aspecto | Estado |
 |---|---|---|---|
-| Marca detectada y su nivel de confianza | `omr` | A-02 | Pendiente (S4) |
-| Nota / resultado de calificación | `calificacion` | A-03 | Pendiente (S4) |
-| Banco de preguntas y clave de respuestas | `autoria` | A-04 | Pendiente (S6) |
-| Distractor diagnóstico (RF-11, opcional) | `autoria` | A-04 | Pendiente (S6) |
-| Usuario, rol y curso | `identidad` | A-05 | Pendiente (S6) |
+| Marca detectada y su nivel de confianza | `omr` | A-02 | Pendiente |
+| Nota / resultado de calificación | `calificacion` | A-03 | Pendiente |
+| Banco de preguntas y clave de respuestas | `autoria` | A-04 | Pendiente |
+| Distractor diagnóstico (RF-11, opcional) | `autoria` | A-04 | Pendiente |
+| Usuario, rol y curso | `identidad` | A-05 | Pendiente |
 
 Que el dueño previsto de la nota sea `calificacion` y no `omr` ni `dashboard` es deliberado:
 `calificacion` es el único módulo cuyo `__init__.py` declara la responsabilidad de «cálculo de
@@ -134,8 +134,9 @@ con cada aspecto que se construya.
 
 ## Violaciones de propiedad de datos
 
-Las cinco que salieron del recorrido. **Todas están abiertas**, verificadas contra `8f662e3`, y
-cada una lleva su acción correctiva y aquello de lo que depende para poder hacerse.
+Las cinco que salieron del recorrido. **Las cinco siguen abiertas**; de V-2 ya se cerró la mitad
+de configuración, como explica su apartado. Rutas y líneas verificadas contra `2269ca5`; cada
+una lleva su acción correctiva y aquello de lo que depende para poder hacerse.
 
 | ID | Violación | Dónde está | Acción correctiva | Depende de |
 |---|---|---|---|---|
@@ -152,7 +153,7 @@ paquetes del backend sin docstring, frente a los siete del dominio, que declaran
 `Responsabilidad:` y su `Importa:`. Y los dos importan dominio:
 [`api/main.py`](../../backend/api/main.py) trae `infraestructura.almacen`,
 `infraestructura.bitacora`, `infraestructura.cola`, `infraestructura.modelo` e `ingesta` en sus
-líneas 17 a 21, y [`worker/main.py`](../../backend/worker/main.py) trae `infraestructura.cola` en
+líneas 24 a 28, y [`worker/main.py`](../../backend/worker/main.py) trae `infraestructura.cola` en
 su línea 15.
 
 Por qué es una violación de propiedad de datos y no solo de estructura: el único mecanismo que hoy
@@ -161,7 +162,7 @@ hace cumplir algo parecido a la regla de dueño único es
 docstring y falla si un módulo importa algo que no declaró. Su lista `MODULOS` (líneas 17 a 25)
 contiene exactamente los siete módulos del dominio, así que **los dos paquetes que tocan las
 entidades desde fuera del dominio son precisamente los dos que la prueba no recorre**.
-`api/main.py` construye un `ArchivoCargado` en su línea 85; hoy es traducción fiel del
+`api/main.py` construye un `ArchivoCargado` en su línea 106; hoy es traducción fiel del
 `multipart/form-data` a un tipo que `ingesta` ya definió, y por eso no aparece como segundo dueño
 en la tabla de arriba, pero nada en el repositorio verificaría que siga siéndolo.
 
@@ -184,7 +185,7 @@ no tiene un dueño: tiene dos declaraciones de igual rango.
 
 Que esto no lo cubre ninguna prueba no es una suposición: ya está registrado. La sexta mutación de
 las seis con las que se validaron las pruebas del corte 1 era devolver el nombre de la cola del
-worker a un literal, y **no la detecta ninguna** de las 47 pruebas del backend; quedó declarada
+worker a un literal, y **no la detecta ninguna** de las 47 pruebas que tenía entonces el backend; quedó declarada
 como hueco en [ADR-0006](../adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md) y
 en el [documento de evidencia](../evidencia/medicion-ec07.md). Lo que agregó este recorrido es la
 segunda mitad del problema: **ni `NOMBRE_COLA` ni `RUTA_BITACORA` aparecían en
