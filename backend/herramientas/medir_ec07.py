@@ -69,7 +69,12 @@ CABECERA_JPEG = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x
 
 
 class ColaEnMemoria:
-    """Sustituta de `redis.Redis` que solo entiende `rpush`, que es lo único que usa `encolar`.
+    """Sustituta de `redis.Redis` que solo entiende `rpush`, que es lo único que usa `publicar`.
+
+    Tiene que aceptar la misma llamada que el cliente real, `rpush(nombre_de_la_cola, valor)`,
+    porque `infraestructura/cola.py` la invoca así sin saber a quién le habla. Por eso `rpush`
+    conserva el parámetro `cola` aunque su cuerpo no lo use: quitarlo rompe la herramienta, y
+    `tests/test_medir_ec07.py` es la prueba que lo detecta.
 
     `fallar_en` provoca un `ConnectionError` de redis-py justo antes de encolar la hoja número
     N del lote. No es un caso rebuscado: es exactamente lo que ocurre si Redis se reinicia o
@@ -81,7 +86,10 @@ class ColaEnMemoria:
         self.demora_del_fallo = demora_del_fallo
         self.intentos = 0
 
-    def rpush(self, valor: str) -> int:
+    # El parámetro `cola` no se usa en el cuerpo, pero es parte de la firma de redis-py que
+    # `publicar` invoca. SonarQube lo marca como parámetro sin usar (python:S1172); quitarlo
+    # rompió esta herramienta una vez, así que el aviso se suprime aquí a propósito.
+    def rpush(self, cola: str, valor: str) -> int:  # NOSONAR
         self.intentos += 1
         if self.fallar_en is not None and len(self.encolados) >= self.fallar_en:
             # Un cliente de Redis que no encuentra servidor no falla al instante: agota el
