@@ -23,7 +23,7 @@ Este ADR responde las dos, y existe porque una regla que solo vive en un documen
 
 ### Dónde se localiza el impacto
 
-- **Documentación:** arc42 §8.1 (mapa de contextos), §8.2 (lenguaje ubicuo) y [`08-propiedad-de-datos.md`](../arc42/08-propiedad-de-datos.md), que aplica la regla entidad por entidad.
+- **Documentación:** arc42 §8.1 (mapa de contextos), §8.2 (lenguaje ubicuo) y §8.3 ([propiedad de datos](../arc42/arc42-template-ES.md#83-propiedad-de-datos)), que aplica la regla entidad por entidad.
 - **Código:** `backend/infraestructura/modelo.py` y `backend/infraestructura/cola.py`, donde están declaradas las seis entidades existentes; los siete `__init__.py`, que declaran responsabilidad y fronteras; `backend/tests/test_fronteras.py`, que hoy verifica imports y no propiedad.
 - **Aspectos:** los cinco. Cada uno realiza un contexto, y la correspondencia en las dos direcciones está en [`docs/aspectos.md`](../aspectos.md#tabla-de-trazabilidad).
 
@@ -93,7 +93,7 @@ Una lista cerrada de siete contextos con sus relaciones tipificadas, y una regla
 
 **5. Un adaptador que relee un dato no se convierte en segundo dueño**, siempre que devuelva los mismos campos que el dueño escribió sin inferir ni corregir ninguno. Lo mismo vale para un sobre de transporte que lleva un contenido que no interpreta.
 
-**6. La regla se audita a mano y esa es su debilidad conocida.** Su verificación automática, una línea `Posee:` en cada docstring y una prueba que falle si una entidad no aparece declarada por exactamente un módulo, queda registrada como la violación V-5 de [`08-propiedad-de-datos.md`](../arc42/08-propiedad-de-datos.md), con su corrección escrita. No se implementa en esta decisión.
+**6. La regla se audita a mano y esa es su debilidad conocida.** Su verificación automática, una línea `Posee:` en cada docstring y una prueba que falle si una entidad no aparece declarada por exactamente un módulo, queda registrada como la violación V-5 de la [sección 8.3 del arc42](../arc42/arc42-template-ES.md#83-propiedad-de-datos), con su corrección escrita. No se implementa en esta decisión.
 
 **7. Esta decisión no cierra R-06 ni toca ADR-0002.** No elige medio de persistencia, no mueve ninguna frontera de importación y no cambia la responsabilidad de ningún módulo.
 
@@ -120,7 +120,7 @@ Una lista cerrada de siete contextos con sus relaciones tipificadas, y una regla
 | Riesgo | Disparador | Mitigación |
 |---|---|---|
 | Una entidad nueva nace sin dueño declarado. | Construir A-02 o A-03 sin volver a la tabla. | La corrección de V-5: `Posee:` en el docstring más la prueba que lo verifica. |
-| Se toma la definición de dueño por la de quien persiste. | Que alguien lea la tabla sin leer la regla. | El punto 4 lo declara y `08-propiedad-de-datos.md` lo argumenta en el caso concreto de las cinco entidades. |
+| Se toma la definición de dueño por la de quien persiste. | Que alguien lea la tabla sin leer la regla. | El punto 4 lo declara y la sección 8.3 del arc42 lo argumenta en el caso concreto de las cinco entidades. |
 | Un adaptador empieza a inferir campos al releer y nadie lo nota. | Que `BitacoraEnDisco` decida un `estado` que `ingesta` no le dio, al construir el reintento de A-02. | El punto 5 fija el límite, y la tabla es lo que lo haría visible. |
 
 ### Qué dato haría revisar esta decisión
@@ -141,5 +141,5 @@ Una lista cerrada de siete contextos con sus relaciones tipificadas, y una regla
 - **Aspectos afectados:** los cinco, en su relación con los contextos. Ver [`docs/aspectos.md`](../aspectos.md#tabla-de-trazabilidad).
 - **Elementos C4 afectados:** ninguno. El mapa de contextos de §8.1 no es un diagrama C4 y no sustituye a ninguno de los tres niveles.
 - **ADR relacionados, no modificados:** [0002](0002-procesar-calificacion-de-forma-asincrona.md), que estableció los siete módulos y sus fronteras de importación. Esta decisión responde una pregunta que 0002 no se planteó, quién posee cada dato, y por eso conviven en lugar de reemplazarse.
-- **Documentación que la implementa:** arc42 §8.1 y §8.2, y [`docs/arc42/08-propiedad-de-datos.md`](../arc42/08-propiedad-de-datos.md) con la tabla módulo a dato, el recorrido de la auditoría, las cinco violaciones y su plan de corrección.
+- **Documentación que la implementa:** arc42 §8.1, §8.2 y [§8.3](../arc42/arc42-template-ES.md#83-propiedad-de-datos), con la tabla módulo a dato, el recorrido de la auditoría, las cinco violaciones y su plan de corrección.
 - **Pruebas que la cubren:** ninguna todavía, y está declarado. [`test_fronteras.py`](../../backend/tests/test_fronteras.py) verifica las fronteras de importación de ADR-0002, no la propiedad de los datos. Cerrarlo es la corrección de la violación V-5.
