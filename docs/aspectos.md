@@ -47,7 +47,7 @@ A-02 realiza **OMR**, A-03 realiza **Calificación** y **Dashboard** (la compara
 y la publicación de resultados, RF-05), A-04 realiza **Autoría** y A-05 realiza **Identidad**. El
 séptimo contexto, **Infraestructura**, es de soporte y no tiene aspecto propio: interviene en A-01
 pero no decide ningún campo de negocio. La correspondencia completa, en las dos direcciones, está
-en [`08-propiedad-de-datos.md`](arc42/08-propiedad-de-datos.md#aspectos--contextos).
+en la [sección 8.3 del arc42](arc42/arc42-template-ES.md#83-propiedad-de-datos), apartado «Aspectos ↔ contextos».
 
 **Por qué A-02 queda sin relación en el Nivel 1.** Las tres relaciones del diagrama de Nivel 1
 ([`c4/doc-c4.md`](c4/doc-c4.md#nivel-1--diagrama-de-contexto-del-sistema)) son comunicaciones que
@@ -61,7 +61,7 @@ existentes aunque no dibuje una propia: es la condición de autenticación y ais
 bajo la que ya operan las relaciones 1 y 2 con el Profesor/TA, no una comunicación adicional que
 falte por trazar. **En el mapa de contextos de §8.1, en cambio, A-02 sí tiene
 contexto y es OMR**: la palabra «contexto» significa cosas distintas en el Nivel 1 del C4 y en el
-mapa de contextos, y esta es la fila donde más se nota. Ver también [`08-propiedad-de-datos.md`](arc42/08-propiedad-de-datos.md#aspectos--contextos)
+mapa de contextos, y esta es la fila donde más se nota. Ver también la [sección 8.3 del arc42](arc42/arc42-template-ES.md#83-propiedad-de-datos)
 para la misma trazabilidad vista desde qué módulo y qué dato realiza cada aspecto.
 
 A-01 es el único aspecto construido. Los demás están declarados para fijar el orden de trabajo y
