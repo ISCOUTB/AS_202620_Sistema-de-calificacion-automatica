@@ -120,7 +120,7 @@ Backend (dentro de `backend/`, con Redis disponible vía `docker compose up -d r
 pytest
 ```
 
-Son 53 pruebas. Verifican: que la aplicación FastAPI arranca y su endpoint de salud responde
+Son 56 pruebas. Verifican: que la aplicación FastAPI arranca y su endpoint de salud responde
 200; que los siete módulos del dominio se importan sin error ni ciclos; que ningún módulo
 importa por fuera de lo declarado en el docstring de su `__init__.py` (la prueba de fronteras
 entre módulos); que un trabajo encolado en Redis se recupera igual al desencolarlo; y, para el
@@ -155,8 +155,17 @@ Que falla de verdad no es una afirmación: se comprobó rompiendo el contrato en
 mirando el pipeline. El experimento, con los tres runs y la salida completa, está en
 [`docs/evidencia/prueba-de-contrato-falla.md`](docs/evidencia/prueba-de-contrato-falla.md).
 
+Tres más verifican que la herramienta que mide EC-07 siga corriendo contra el código de hoy
+([`backend/tests/test_medir_ec07.py`](backend/tests/test_medir_ec07.py)). La herramienta es la
+evidencia reproducible del escenario, y ya dejó de correr una vez sin que nada lo detectara.
+
 Sin Redis levantado, la prueba de encolado se salta con un mensaje que dice qué levantar, en vez
 de fallar con un error de conexión confuso. Las demás corren igual.
+
+La prueba de contrato lee `docs/contrato/openapi.json` desde la raíz del repositorio, así que se
+corre fuera de la imagen, como la corre el pipeline. Dentro de un contenedor construido desde
+`backend/` (por ejemplo, con `docker compose run api pytest`) ese archivo no existe y sus seis
+pruebas terminan en error.
 
 Frontend (dentro de `frontend/`):
 
@@ -248,6 +257,9 @@ El desarrollo sigue Aspect Driven Development (ADD): cada funcionalidad se decla
 | [0003](docs/adr/0003-usar-fastapi-y-flutter.md) | Usar FastAPI en el backend y Flutter en el frontend | aceptado |
 | [0004](docs/adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md) | Quitar la validación simbólica obligatoria de la clave de respuestas | aceptado |
 | [0005](docs/adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md) | Acotar el LLM a la generación de distractores diagnósticos | aceptado |
+| [0006](docs/adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md) | Registrar la recepción en una bitácora antes de encolar | aceptado |
+| [0007](docs/adr/0007-declarar-los-contextos-delimitados-y-la-regla-de-dueno-unico.md) | Declarar los contextos delimitados y la regla de dueño único de los datos | aceptado |
+| [0008](docs/adr/0008-renombrar-el-sistema-a-quantia.md) | Renombrar el sistema a QuantIA | aceptado |
 
 Los ADR aceptados no se editan ni se borran: si una decisión cambia, se escribe uno nuevo y el anterior pasa a estado *reemplazado por*.
 
@@ -256,14 +268,15 @@ Los ADR aceptados no se editan ni se borran: si una decisión cambia, se escribe
 - [x] Aspecto A-01 (carga de examen) construido de punta a punta; A-02 a A-05 declarados
 - [x] arc42: objetivos de calidad, restricciones clasificadas y contexto
 - [x] arc42: estrategia de solución, decisiones de arquitectura y riesgos
-- [x] Escenarios de calidad: 5 priorizados y 2 complementarios
-- [x] C4 Nivel 1
-- [x] ADR 0001, 0002, 0003, 0004 y 0005
+- [x] arc42: Building Block View, Runtime View y Cross-cutting Concepts (secciones 5, 6 y 8)
+- [ ] arc42: Deployment View (sección 7)
+- [x] Escenarios de calidad: 5 priorizados y 2 complementarios; EC-07 medido
+- [x] C4 Niveles 1, 2 y 3
+- [x] ADR 0001 a 0008
 - [x] Elección de stack: FastAPI en el backend, Flutter en el frontend
-- [ ] arc42: Building Block View, Runtime View, Deployment View, Cross-cutting Concepts
-- [ ] C4 Niveles 2 y 3
 - [x] Esqueleto ejecutable
-- [x] Corte vertical de A-01: `ingesta`, almacén, encolado y pantalla de carga
+- [x] Corte vertical de A-01: `ingesta`, almacén, bitácora, encolado y pantalla de carga
+- [x] Contrato de la API (OpenAPI) versionado y su prueba en el pipeline
 - [ ] ADR de persistencia y almacenamiento (riesgo R-06); el adaptador actual es provisional
 - [ ] Modelo de datos compartido más allá de lo que A-01 necesitó
 - [ ] Elección de proveedor de LLM
@@ -274,18 +287,19 @@ Los ADR aceptados no se editan ni se borran: si una decisión cambia, se escribe
 ```
 docs/
 ├── arc42/
-│   └── arc42-template-ES.md                            # documento de arquitectura (arc42)
-├── adr/
-│   ├── 0001-usar-monolito-modular.md                   # reemplazado por 0002
-│   ├── 0002-procesar-calificacion-de-forma-asincrona.md
-│   ├── 0003-usar-fastapi-y-flutter.md
-│   ├── 0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md
-│   └── 0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md
+│   ├── arc42-template-ES.md                            # documento de arquitectura (arc42)
+│   └── 08-propiedad-de-datos.md                        # sección 8.3: propiedad de datos
+├── adr/                                                # 0001 a 0008; el 0001, reemplazado por el 0002
 ├── c4/
-│   └── doc-c4.md                                       # modelo C4 (Nivel 1; 2-3 pendientes)
+│   └── doc-c4.md                                       # modelo C4 (Niveles 1, 2 y 3)
 ├── contrato/
 │   └── openapi.json                                    # contrato HTTP (OpenAPI 3.1), generado
-├── ficha-problema.md                                    # el problema, usuarios y alcance
+├── evidencia/                                          # medición de EC-07, prueba de contrato, SonarQube
+├── ficha-problema.md                                   # el problema, usuarios y alcance
 ├── aspectos.md                                         # aspectos y tabla de trazabilidad
 └── ia.md                                               # registro de uso de IA
 ```
+
+En la raíz, [`correcciones.md`](correcciones.md) responde a la retroalimentación automática del
+curso. El registro de uso de IA está en [`docs/ia.md`](docs/ia.md) y la ficha del problema en
+[`docs/ficha-problema.md`](docs/ficha-problema.md).
