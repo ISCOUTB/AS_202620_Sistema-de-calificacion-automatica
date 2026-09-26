@@ -568,8 +568,8 @@ persistencia (R-06) elige almacenamiento de objetos, lo que cambia es ese adapta
 **Por qué `api` y `worker` aparecen aunque no sean módulos del dominio.** Son los puntos de
 entrada de los dos procesos: sin ellos el diagrama no explica cómo llega una petición al dominio ni
 quién consume la cola. No declaran `Importa:` en su docstring y la prueba de fronteras no los
-recorre; esa es la violación V-1 de
-[`08-propiedad-de-datos.md`](../arc42/08-propiedad-de-datos.md#violaciones-de-propiedad-de-datos).
+recorre; esa es la violación V-1 de la
+[sección 8.3 del arc42](../arc42/arc42-template-ES.md#83-propiedad-de-datos).
 
 **Por qué `herramientas` no aparece.** No es parte del sistema en operación: son las herramientas
 versionadas que miden EC-07 y exportan el contrato, y su docstring declara que nada de `backend/`
