@@ -1,9 +1,9 @@
 # Ficha del problema
 
-**Proyecto:** Sistema de Calificación OMR — calificación automática de exámenes de opción
-múltiple de cálculo diferencial
+**Proyecto:** QuantIA, sistema de calificación automática de exámenes de opción múltiple de
+cálculo diferencial mediante OMR ([ADR-0008](adr/0008-renombrar-el-sistema-a-quantia.md))
 **Equipo:** Josué Ortega De Arco, María Restrepo Licona, Sebastián Cañas Plata, Susana Rosales Castellar
-**Última actualización:** 2026-08-30
+**Última actualización:** 2026-09-22
 
 ---
 
