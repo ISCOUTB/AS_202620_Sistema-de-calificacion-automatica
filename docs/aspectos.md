@@ -31,10 +31,10 @@ alcanzables desde la fila del aspecto que los realiza.
 | ID | Aspecto | Estado | Requisito | Escenario de calidad | Contexto C4 (Nivel 1) | C4 | ADR | Código | Pruebas | Evidencia |
 |---|---|---|---|---|---|---|---|---|---|---|
 | **[A-01](#a-01)** | Carga de examen para calificación | **Construido** | RF-01 | [EC-07](arc42/arc42-template-ES.md#ec-07) | [Rel. 1](c4/doc-c4.md#relaciones): Profesor/TA → Sistema | C1: [Sistema de Calificación OMR](c4/doc-c4.md#nivel-1--diagrama-de-contexto-del-sistema) · C2: [Aplicación web](c4/doc-c4.md#nivel-2--diagrama-de-contenedores), [Almacén de imágenes](c4/doc-c4.md#nivel-2--diagrama-de-contenedores), [Cola de trabajos](c4/doc-c4.md#nivel-2--diagrama-de-contenedores) | [0002](adr/0002-procesar-calificacion-de-forma-asincrona.md) · [0006](adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md) | [`ingesta/recepcion.py`](../backend/ingesta/recepcion.py) · [`infraestructura/almacen.py`](../backend/infraestructura/almacen.py) · [`infraestructura/bitacora.py`](../backend/infraestructura/bitacora.py) · [`infraestructura/modelo.py`](../backend/infraestructura/modelo.py) · [`api/main.py`](../backend/api/main.py) · [`frontend/lib/pantalla_carga.dart`](../frontend/lib/pantalla_carga.dart) | [`test_recepcion.py`](../backend/tests/test_recepcion.py) · [`test_durabilidad_recepcion.py`](../backend/tests/test_durabilidad_recepcion.py) · [`test_carga_hojas.py`](../backend/tests/test_carga_hojas.py) · [`widget_test.dart`](../frontend/test/widget_test.dart) | [Medición de EC-07](evidencia/medicion-ec07.md): 1,744 s contra ≤10 s · 0 % de pérdida silenciosa · [captura](#a-01-evidencia) |
-| **[A-02](#a-02)** | Detección de marcas y nivel de confianza | Declarado | RF-02, RF-03 | [EC-01](arc42/arc42-template-ES.md#ec-01) · [EC-02](arc42/arc42-template-ES.md#ec-02) | **Sin contexto propio** — proceso interno, no cruza la frontera del sistema (ver nota abajo) | Pendiente (S4) | ADR de umbral previsto (S4) | Pendiente | Pendiente | Pendiente |
-| **[A-03](#a-03)** | Calificación contra la clave y publicación | Declarado | RF-04, RF-05, RF-08 | [EC-03](arc42/arc42-template-ES.md#ec-03) · [EC-04](arc42/arc42-template-ES.md#ec-04) | [Rel. 2](c4/doc-c4.md#relaciones): Sistema → Profesor/TA | Pendiente (S4) | [0002](adr/0002-procesar-calificacion-de-forma-asincrona.md) | Pendiente | Pendiente | Pendiente |
-| **[A-04](#a-04)** | Registro del banco y habilitación del examen | Declarado | RF-06, RF-07, RF-11 | [EC-05](arc42/arc42-template-ES.md#ec-05) | [Rel. 1 y 3](c4/doc-c4.md#relaciones): Profesor/TA → Sistema · Sistema → Proveedor de LLM (opcional, RF-11) | Pendiente (S4) | [0003](adr/0003-usar-fastapi-y-flutter.md) · [0004](adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md) · [0005](adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md) | Pendiente | Pendiente | Pendiente |
-| **[A-05](#a-05)** | Identidad y aislamiento por curso | Declarado | RF-09, RF-10 | [EC-06](arc42/arc42-template-ES.md#ec-06) | [Rel. 1 y 2](c4/doc-c4.md#relaciones): transversal a ambas — condición de «docente autenticado» bajo la que operan | Pendiente (S4) | ADR de auditoría previsto (S6) | Pendiente | Pendiente | Pendiente |
+| **[A-02](#a-02)** | Detección de marcas y nivel de confianza | Declarado | RF-02, RF-03 | [EC-01](arc42/arc42-template-ES.md#ec-01) · [EC-02](arc42/arc42-template-ES.md#ec-02) | **Sin contexto propio** — proceso interno, no cruza la frontera del sistema (ver nota abajo) | Pendiente | ADR de umbral previsto (R-04) | Pendiente | Pendiente | Pendiente |
+| **[A-03](#a-03)** | Calificación contra la clave y publicación | Declarado | RF-04, RF-05, RF-08 | [EC-03](arc42/arc42-template-ES.md#ec-03) · [EC-04](arc42/arc42-template-ES.md#ec-04) | [Rel. 2](c4/doc-c4.md#relaciones): Sistema → Profesor/TA | Pendiente | [0002](adr/0002-procesar-calificacion-de-forma-asincrona.md) | Pendiente | Pendiente | Pendiente |
+| **[A-04](#a-04)** | Registro del banco y habilitación del examen | Declarado | RF-06, RF-07, RF-11 | [EC-05](arc42/arc42-template-ES.md#ec-05) | [Rel. 1 y 3](c4/doc-c4.md#relaciones): Profesor/TA → Sistema · Sistema → Proveedor de LLM (opcional, RF-11) | Pendiente | [0003](adr/0003-usar-fastapi-y-flutter.md) · [0004](adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md) · [0005](adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md) | Pendiente | Pendiente | Pendiente |
+| **[A-05](#a-05)** | Identidad y aislamiento por curso | Declarado | RF-09, RF-10 | [EC-06](arc42/arc42-template-ES.md#ec-06) | [Rel. 1 y 2](c4/doc-c4.md#relaciones): transversal a ambas — condición de «docente autenticado» bajo la que operan | Pendiente | ADR de auditoría previsto (RF-10) | Pendiente | Pendiente | Pendiente |
 
 **Estados:** *Declarado* = pasos 1 y 3 parciales (nombre, para quién, qué resuelve, requisitos
 y escenario asignados). *Especificado* = pasos 1 a 4 completos. *Construido* = pasos 5 a 7.
@@ -55,8 +55,8 @@ cruzan la frontera del sistema: el profesor que sube hojas o registra un banco (
 sistema que devuelve notas y alertas (relación 2), y el sistema que pide distractores al LLM
 (relación 3). La detección de marcas de A-02 ocurre enteramente **dentro** de la caja negra —
 entre el almacén de imágenes y la cola de trabajos, disparada por el worker, no por un actor
-externo— así que no hay ninguna flecha del Nivel 1 que la represente: solo se hará visible al
-dibujar el Nivel 2 o el Nivel 3 (semana 4). A-05, en cambio, sí se ancla a las relaciones
+externo— así que no hay ninguna flecha del Nivel 1 que la represente: se hace visible en el
+[Nivel 3 del C4](c4/doc-c4.md#nivel-3--diagrama-de-componentes), donde `omr` es un componente previsto del worker. A-05, en cambio, sí se ancla a las relaciones
 existentes aunque no dibuje una propia: es la condición de autenticación y aislamiento por curso
 bajo la que ya operan las relaciones 1 y 2 con el Profesor/TA, no una comunicación adicional que
 falte por trazar. **En el mapa de contextos de §8.1, en cambio, A-02 sí tiene
@@ -64,15 +64,16 @@ contexto y es OMR**: la palabra «contexto» significa cosas distintas en el Niv
 mapa de contextos, y esta es la fila donde más se nota. Ver también [`08-propiedad-de-datos.md`](arc42/08-propiedad-de-datos.md#aspectos--contextos)
 para la misma trazabilidad vista desde qué módulo y qué dato realiza cada aspecto.
 
-A-01 es el único aspecto que se trabaja completo en esta entrega. Los demás se declaran para
-fijar el orden de trabajo y para que cada escenario de calidad tenga un aspecto responsable
-desde ya; se especificarán en las semanas 4 y 6.
+A-01 es el único aspecto construido. Los demás están declarados para fijar el orden de trabajo y
+para que cada escenario de calidad tenga un aspecto responsable; cada uno se especifica cuando se
+levanta lo que lo bloquea, que está escrito en su sección («Por qué no se trabaja todavía»).
 
-**Por qué A-01 llega a «Construido» con la evidencia pendiente.** Los pasos 5 y 6 (construir y
-verificar) están hechos y son comprobables. El paso 7, evidenciar, exige medir las dos cifras de
-EC-07: la confirmación en ≤10 segundos y el 0 % de pérdida silenciosa bajo reinicio. La primera
-no se ha medido; la segunda depende de una decisión de almacenamiento todavía abierta (R-06).
-Declararlas cumplidas sin medirlas sería peor que dejarlas pendientes.
+**Por qué A-01 está en «Construido».** Los pasos 5 a 7 (construir, verificar y evidenciar) están
+hechos y son comprobables: el código y las pruebas están en la fila de la tabla, y las dos cifras
+de EC-07 están medidas con una herramienta versionada
+([`evidencia/medicion-ec07.md`](evidencia/medicion-ec07.md)): confirmación del lote en 1,744 s
+contra un techo de 10 s, y 0 % de pérdida silenciosa. Lo que sigue abierto (el medio definitivo
+de almacenamiento y la retención de RNF-14) depende de R-06, no de A-01.
 
 ---
 
@@ -121,9 +122,10 @@ recepción.
 en la relación *Profesor / TA → Sistema*. Está enteramente dentro del sistema; no involucra
 ningún sistema externo. Ver [`c4/doc-c4.md`](c4/doc-c4.md).
 
-**Nivel 2 (contenedores):** pendiente hasta la semana 4. Según ADR-0002, el aspecto atravesará
-la **aplicación web** (recepción HTTP y validación), el **almacén de imágenes** (persistencia
-del archivo) y la **cola de trabajos** (encolado del procesamiento).
+**Nivel 2 (contenedores):** el aspecto atraviesa la **aplicación web** (recepción HTTP y
+validación), el **almacén de imágenes** (persistencia del archivo y de la bitácora) y la **cola
+de trabajos** (encolado del procesamiento): las relaciones 1, 3, 4 y 5 del
+[Nivel 2](c4/doc-c4.md#nivel-2--diagrama-de-contenedores), todas construidas.
 
 **Módulos afectados (ADR-0002):** `ingesta` como responsable principal, `identidad` para
 verificar que el docente puede cargar en ese curso, e `infraestructura` para el almacenamiento
@@ -139,8 +141,9 @@ alcance mayor.
 
 Queda **una decisión estructural pendiente** que sí ameritará su propio ADR: **dónde y cómo se
 almacenan las imágenes cargadas**, incluyendo la política de retención que exige RNF-14 (los
-escaneos no pueden conservarse indefinidamente). Se pospone a la semana 4 porque depende de la
-decisión de persistencia, todavía abierta (riesgo R-06 del arc42).
+escaneos no pueden conservarse indefinidamente). Sigue abierta porque depende de la
+decisión de persistencia (riesgo R-06 del arc42);
+[ADR-0006](adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md) decidió solo la parte de la recepción que impedía medir EC-07.
 
 **Cómo se construyó el aspecto sin cerrar esa decisión.** El corte necesitaba guardar archivos
 hoy, y elegir un almacenamiento al paso habría cerrado R-06 sin ADR. La salida es la que el
@@ -179,10 +182,12 @@ Tres decisiones de construcción que conviene poder defender:
 3. **Primero se almacena, después se encola.** Al revés, el worker podría recibir un trabajo que
    apunta a una imagen que todavía no existe.
 
-Queda un hueco conocido y nombrado en el código: entre el guardado y el encolado no hay
-transacción, así que si el proceso muere justo en medio el archivo queda huérfano en el almacén.
-Cerrarlo exige acuse de recibo en la cola o una bitácora de recepción, y eso es parte de lo que
-el ADR de persistencia (R-06) tiene que resolver.
+El hueco entre el guardado y el encolado lo cerró
+[ADR-0006](adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md): una hoja almacenada
+cuyo trabajo no llegó a la cola queda registrada en la bitácora como pendiente, y se puede
+reintentar sin pedirle el archivo al docente. Siguen abiertos el reintento automático, que es
+trabajo de A-02, y el caso de una hoja que llegó a la cola pero el worker no terminó de procesar:
+la cola no tiene acuse de recibo.
 
 El `examen_id` tampoco se verifica contra nada, porque el módulo `autoria` (aspecto A-04) es el
 que registrará los exámenes y aún no existe. La ruta ya tiene su forma definitiva para que
@@ -276,10 +281,11 @@ El identificador de trabajo `2eede6b8-dd9f-4db6-a3ab-6205644ea416` que se ve en 
 mismo que registró el worker en el contenedor aparte. Esa coincidencia es lo que convierte a la
 captura en evidencia del recorrido completo y no solo de que la pantalla dibuja bien.
 
-La distinción importa para no leer de más ni de menos esta fila: **que el aspecto funciona está
-demostrado** por las pruebas del paso 6 y por el recorrido de extremo a extremo. Lo que falta es
-la medición de las dos cifras de EC-07, que es otra pregunta —cuán rápido y cuán a prueba de
-caídas— y que no se puede responder hasta cerrar R-06.
+La distinción importa para no leer de más ni de menos esta fila: **que el aspecto funciona** lo
+demuestran las pruebas del paso 6 y el recorrido de extremo a extremo; **cuán rápido y cuán a
+prueba de caídas** lo responde la medición de EC-07 de la tabla anterior. Lo que ninguna de las
+dos cubre es la caída del sistema operativo, que solo se comprobaría cortándole la corriente a la
+máquina.
 
 ### Por qué se eligió este aspecto primero
 
@@ -296,7 +302,7 @@ caídas— y que no se puede responder hasta cerrar R-06.
 
 ## Aspecto A-02: Detección de marcas y nivel de confianza
 
-**Declarado.** Se especifica en la semana 4.
+**Declarado.**
 
 - **Para quién es:** el profesor, que necesita que la lectura sea fiel a lo que el estudiante
   marcó; y el estudiante, que soporta las consecuencias de un error.
@@ -316,7 +322,7 @@ caídas— y que no se puede responder hasta cerrar R-06.
 
 ## Aspecto A-03: Calificación contra la clave y publicación de resultados
 
-**Declarado.** Se especifica en la semana 4.
+**Declarado.**
 
 - **Para quién es:** el profesor y el TA, que necesitan la nota y las estadísticas por
   pregunta.
@@ -337,7 +343,7 @@ caídas— y que no se puede responder hasta cerrar R-06.
 
 ## Aspecto A-04: Registro del banco y habilitación del examen
 
-**Declarado.** Se especifica en la semana 6.
+**Declarado.**
 
 - **Para quién es:** el profesor que prepara el examen.
 - **Qué problema resuelve:** recibe el banco de preguntas y la clave que el profesor trae
@@ -358,8 +364,10 @@ caídas— y que no se puede responder hasta cerrar R-06.
 - **Restricción legal relevante:** RNF-13 — ningún dato personal de estudiantes se envía al
   proveedor de LLM. Este aspecto es el único que se comunica con un servicio externo, así que
   es donde esa restricción se hace efectiva.
-- **Por qué no se trabaja todavía:** requiere haber decidido el proveedor de LLM y su modo de
-  consumo (riesgo R-02).
+- **Por qué no se trabaja todavía:** no le falta nada técnico. El registro del banco, la clave y
+  la habilitación funcionan sin LLM, y RF-11 es opcional
+  ([ADR-0005](adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md)), así que el
+  proveedor (riesgo R-02) solo hace falta para esa función. Es una cuestión de orden de trabajo.
 
 ---
 
@@ -367,7 +375,7 @@ caídas— y que no se puede responder hasta cerrar R-06.
 
 ## Aspecto A-05: Identidad y aislamiento de datos por curso
 
-**Declarado.** Se especifica en la semana 6.
+**Declarado.**
 
 - **Para quién es:** el Comité Académico y los administradores de TI, responsables de la
   confidencialidad de las calificaciones; y el estudiante, titular de los datos.
