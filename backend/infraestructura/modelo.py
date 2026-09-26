@@ -46,7 +46,7 @@ class ArchivoCargado:
 
 @dataclass(frozen=True)
 class HojaAceptada:
-    """Una hoja que pasó la validación, quedó almacenada y tiene un trabajo encolado.
+    """Una hoja que pasó la validación y quedó almacenada, con su trabajo encolado o pendiente.
 
     `referencia` es la ubicación que devolvió el almacén, opaca a propósito: quien la recibe no
     debe suponer que es una ruta de disco, porque el ADR de persistencia (R-06) puede

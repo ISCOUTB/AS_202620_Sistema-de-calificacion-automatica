@@ -1,7 +1,7 @@
 """Punto de entrada del worker: consume la cola de `infraestructura` en un ciclo. Comparte el
 mismo código de dominio que la API (misma imagen, mismo proyecto); todavía no ejecuta el
-pipeline de calificación (omr -> calificacion), solo confirma que la hoja que `ingesta` encoló
-le llegó y que puede ubicarla en el almacén."""
+pipeline de calificación (omr -> calificacion): solo registra en su log el trabajo que `ingesta`
+encoló, con la referencia de la hoja en el almacén, sin abrirla todavía."""
 
 import logging
 import os

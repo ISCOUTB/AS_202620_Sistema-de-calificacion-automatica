@@ -1,6 +1,6 @@
 """Adaptador minimalista de cola sobre Redis: una lista FIFO, sin reintentos ni acuses de
-recibo. Es el germen de lo que EC-07 (confirmación fiable de recepción del lote) va a exigir
-más adelante, no una cola de producción."""
+recibo. Basta para lo que EC-07 mide, la recepción; el acuse de recibo que exigirá procesar
+cada hoja sin perderla es trabajo de A-02, así que no es todavía una cola de producción."""
 
 import json
 import os
