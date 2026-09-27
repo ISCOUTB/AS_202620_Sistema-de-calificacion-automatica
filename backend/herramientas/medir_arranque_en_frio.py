@@ -31,12 +31,22 @@ arranque, y no depende del ancho de banda de subida. Las hojas son JPEG sintéti
 Para que la medición en frío sea válida, **nadie más puede usar el servicio durante las
 esperas** y cualquier monitor que lo mantenga despierto tiene que estar apagado.
 
+A qué apunta y dónde escribe
+----------------------------
+La URL no se recibe por la línea de comandos: `--destino` elige entre la API desplegada y la que
+corre en local, y las dos direcciones están escritas abajo, en `API_DESPLEGADA` y `API_LOCAL`. El
+informe se escribe solo dentro de `docs/evidencia/`, y `--json` recibe el nombre del archivo, no
+una ruta. Las dos cosas cierran los hallazgos de SonarQube Cloud sobre herramientas de línea de
+comandos que un agente de IA podría invocar con argumentos manipulados: con una URL libre, la
+herramienta podía usarse para hacer peticiones a cualquier servidor, y con una ruta libre, para
+escribir en cualquier archivo. Si la URL de la API cambia, se cambia aquí y en `render.yaml`.
+
 Uso
 ---
-    python -m herramientas.medir_arranque_en_frio --url https://<api> --json informe.json
-    python -m herramientas.medir_arranque_en_frio --url https://<api> \\
+    python -m herramientas.medir_arranque_en_frio --json medicion-arranque-en-frio.json
+    python -m herramientas.medir_arranque_en_frio --destino desplegada \\
         --frio-salud 3 --frio-lote 2 --espera-min 16 --caliente 30 --lote-hojas 20 --kb 200 \\
-        --red "datos moviles, fuera de la red de la universidad" --json informe.json
+        --red "datos moviles, fuera de la red de la universidad" --json medicion.json
 
 Con los valores por omisión tarda unas dos horas: cada muestra en frío espera 16 minutos.
 """
@@ -46,11 +56,13 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import platform
 import statistics
 import sys
 import time
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -60,6 +72,30 @@ ESPERA_DE_LA_PANTALLA_SEGUNDOS = 5.0
 APAGADO_DE_RENDER_MINUTOS = 15
 CABECERA_JPEG = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"
 CARTAGENA = timezone(timedelta(hours=-5))
+
+API_DESPLEGADA = "https://quantia-utb-api.onrender.com"
+API_LOCAL = "http://127.0.0.1:8000"
+CARPETA_DE_EVIDENCIA = Path(__file__).resolve().parent.parent.parent / "docs" / "evidencia"
+
+
+def _url_del_destino(destino: str) -> str:
+    """Devuelve una de las dos direcciones fijas. Se elige con una condición y no se arma con lo
+    que llega por la línea de comandos, para que ningún argumento decida a qué servidor se le
+    hacen las peticiones."""
+    return API_LOCAL if destino == "local" else API_DESPLEGADA
+
+
+def _ruta_del_informe(nombre: str) -> Path:
+    """Ruta del informe dentro de `docs/evidencia/`. Se resuelve la ruta canónica y se comprueba
+    que siga dentro de esa carpeta, con el separador al final para que una carpeta hermana con el
+    mismo prefijo no pase la comprobación."""
+    base = os.path.realpath(CARPETA_DE_EVIDENCIA)
+    ruta = os.path.realpath(os.path.join(base, nombre))
+    if not ruta.startswith(base + os.sep):
+        raise SystemExit(
+            f"--json tiene que ser un nombre de archivo dentro de docs/evidencia/: {nombre!r}"
+        )
+    return Path(ruta)
 
 
 def _p95(valores: list[float]) -> float:
@@ -174,10 +210,10 @@ def medir_en_caliente(cliente: httpx.Client, url: str, salud: int, lotes: int, h
     }
 
 
-def _entorno(args: argparse.Namespace) -> dict[str, Any]:
+def _entorno(args: argparse.Namespace, url: str) -> dict[str, Any]:
     return {
         "medido_desde_la_red": args.red,
-        "url": args.url,
+        "url": url,
         "python": platform.python_version(),
         "httpx": httpx.__version__,
         "espera_antes_de_cada_muestra_en_frio_min": args.espera_min,
@@ -191,7 +227,8 @@ def _entorno(args: argparse.Namespace) -> dict[str, Any]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Mide el arranque en frío de la API desplegada frente a EC-07.")
-    parser.add_argument("--url", required=True, help="URL pública de la API, sin barra final")
+    parser.add_argument("--destino", choices=["desplegada", "local"], default="desplegada",
+                        help=f"desplegada: {API_DESPLEGADA} · local: {API_LOCAL}")
     parser.add_argument("--frio-salud", type=int, default=3)
     parser.add_argument("--frio-lote", type=int, default=2)
     parser.add_argument("--espera-min", type=float, default=16.0)
@@ -200,9 +237,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--lote-hojas", type=int, default=20)
     parser.add_argument("--kb", type=int, default=200)
     parser.add_argument("--red", default="sin declarar")
-    parser.add_argument("--json", default=None)
+    parser.add_argument("--json", default=None,
+                        help="nombre del archivo del informe, que se escribe en docs/evidencia/")
     args = parser.parse_args(argv)
-    url = args.url.rstrip("/")
+    url = _url_del_destino(args.destino)
+    ruta_del_informe = _ruta_del_informe(args.json) if args.json else None
 
     inicio = _ahora()
     with httpx.Client(timeout=httpx.Timeout(180.0),
@@ -224,7 +263,7 @@ def main(argv: list[str] | None = None) -> int:
         "pieza": "API (servicio api)",
         "inicio": inicio,
         "fin": _ahora(),
-        "entorno": _entorno(args),
+        "entorno": _entorno(args, url),
         "muestras_en_frio": frio,
         "muestras_en_caliente": caliente,
         "resumen": {
@@ -251,8 +290,8 @@ def main(argv: list[str] | None = None) -> int:
 
     texto = json.dumps(informe, indent=2, ensure_ascii=False)
     print(texto)
-    if args.json:
-        with open(args.json, "w", encoding="utf-8", newline="\n") as salida:
+    if ruta_del_informe is not None:
+        with open(ruta_del_informe, "w", encoding="utf-8", newline="\n") as salida:
             salida.write(texto + "\n")
     return 0
 
