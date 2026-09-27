@@ -1,0 +1,319 @@
+{
+  "escenario": "EC-07 - Confirmacion fiable de recepcion del lote (<= 10 s)",
+  "condicion_operativa": "patron de carga",
+  "pieza": "API (servicio api)",
+  "inicio": {
+    "utc": "2026-09-27T19:58:12+00:00",
+    "cartagena": "2026-09-27T14:58:12-05:00"
+  },
+  "fin": {
+    "utc": "2026-09-27T21:19:35+00:00",
+    "cartagena": "2026-09-27T16:19:35-05:00"
+  },
+  "entorno": {
+    "medido_desde_la_red": "internet residencial en Cartagena, fuera de la red de la universidad",
+    "url": "https://quantia-utb-api.onrender.com",
+    "python": "3.13.1",
+    "httpx": "0.28.1",
+    "espera_antes_de_cada_muestra_en_frio_min": 16.0,
+    "apagado_por_inactividad_de_render_min": 15,
+    "lote": {
+      "hojas": 20,
+      "kb_por_hoja": 200,
+      "megabytes": 3.91
+    },
+    "hojas": "JPEG sintéticos; el entorno de demostración no recibe hojas de estudiantes"
+  },
+  "muestras_en_frio": [
+    {
+      "muestra": 1,
+      "utc": "2026-09-27T20:14:12+00:00",
+      "cartagena": "2026-09-27T15:14:12-05:00",
+      "peticion": "GET /health",
+      "codigo": 200,
+      "segundos": 12.495
+    },
+    {
+      "muestra": 2,
+      "utc": "2026-09-27T20:30:24+00:00",
+      "cartagena": "2026-09-27T15:30:24-05:00",
+      "peticion": "POST lote de 20 hojas de 200 KB",
+      "codigo": 200,
+      "segundos": 13.466,
+      "aceptadas": 20,
+      "rechazados": 0,
+      "pendientes_de_encolar": 0
+    },
+    {
+      "muestra": 3,
+      "utc": "2026-09-27T20:46:38+00:00",
+      "cartagena": "2026-09-27T15:46:38-05:00",
+      "peticion": "GET /health",
+      "codigo": 200,
+      "segundos": 12.511
+    },
+    {
+      "muestra": 4,
+      "utc": "2026-09-27T21:02:50+00:00",
+      "cartagena": "2026-09-27T16:02:50-05:00",
+      "peticion": "POST lote de 20 hojas de 200 KB",
+      "codigo": 200,
+      "segundos": 23.984,
+      "aceptadas": 20,
+      "rechazados": 0,
+      "pendientes_de_encolar": 0
+    },
+    {
+      "muestra": 5,
+      "utc": "2026-09-27T21:19:14+00:00",
+      "cartagena": "2026-09-27T16:19:14-05:00",
+      "peticion": "GET /health",
+      "codigo": 200,
+      "segundos": 12.506
+    }
+  ],
+  "muestras_en_caliente": {
+    "inicio": {
+      "utc": "2026-09-27T21:19:35+00:00",
+      "cartagena": "2026-09-27T16:19:35-05:00"
+    },
+    "peticion_para_despertar": {
+      "peticion": "GET /health",
+      "codigo": 200,
+      "segundos": 0.122
+    },
+    "salud": [
+      {
+        "peticion": "GET /health",
+        "codigo": 200,
+        "segundos": 0.119
+      },
+      {
+        "peticion": "GET /health",
+        "codigo": 200,
+        "segundos": 0.12
+      },
+      {
+        "peticion": "GET /health",
+        "codigo": 200,
+        "segundos": 0.119
+      },
+      {
+        "peticion": "GET /health",
+        "codigo": 200,
+        "segundos": 0.127
+      },
+      {
+        "peticion": "GET /health",
+        "codigo": 200,
+        "segundos": 0.121
+      },
+      {
+        "peticion": "GET /health",
+        "codigo": 200,
+        "segundos": 0.122
+      },
+      {
+        "peticion": "GET /health",
+        "codigo": 200,
+        "segundos": 0.122
+      },
+      {
+        "peticion": "GET /health",
+        "codigo": 200,
+        "segundos": 0.119
+      },
+      {
+        "peticion": "GET /health",
+        "codigo": 200,
+        "segundos": 0.119
+      },
+      {
+        "peticion": "GET /health",
+        "codigo": 200,
+        "segundos": 0.116
+      },
+      {
+        "peticion": "GET /health",
+        "codigo": 200,
+        "segundos": 0.122
+      },
+      {
+        "peticion": "GET /health",
+        "codigo": 200,
+        "segundos": 0.113
+      },
+      {
+        "peticion": "GET /health",
+        "codigo": 200,
+        "segundos": 0.116
+      },
+      {
+        "peticion": "GET /health",
+        "codigo": 200,
+        "segundos": 0.12
+      },
+      {
+        "peticion": "GET /health",
+        "codigo": 200,
+        "segundos": 0.122
+      },
+      {
+        "peticion": "GET /health",
+        "codigo": 200,
+        "segundos": 0.114
+      },
+      {
+        "peticion": "GET /health",
+        "codigo": 200,
+        "segundos": 0.127
+      },
+      {
+        "peticion": "GET /health",
+        "codigo": 200,
+        "segundos": 0.243
+      },
+      {
+        "peticion": "GET /health",
+        "codigo": 200,
+        "segundos": 0.117
+      },
+      {
+        "peticion": "GET /health",
+        "codigo": 200,
+        "segundos": 0.117
+      },
+      {
+        "peticion": "GET /health",
+        "codigo": 200,
+        "segundos": 0.119
+      },
+      {
+        "peticion": "GET /health",
+        "codigo": 200,
+        "segundos": 0.118
+      },
+      {
+        "peticion": "GET /health",
+        "codigo": 200,
+        "segundos": 0.111
+      },
+      {
+        "peticion": "GET /health",
+        "codigo": 200,
+        "segundos": 0.118
+      },
+      {
+        "peticion": "GET /health",
+        "codigo": 200,
+        "segundos": 0.118
+      },
+      {
+        "peticion": "GET /health",
+        "codigo": 200,
+        "segundos": 0.117
+      },
+      {
+        "peticion": "GET /health",
+        "codigo": 200,
+        "segundos": 0.119
+      },
+      {
+        "peticion": "GET /health",
+        "codigo": 200,
+        "segundos": 0.118
+      },
+      {
+        "peticion": "GET /health",
+        "codigo": 200,
+        "segundos": 0.117
+      },
+      {
+        "peticion": "GET /health",
+        "codigo": 200,
+        "segundos": 0.126
+      }
+    ],
+    "lotes": [
+      {
+        "peticion": "POST lote de 20 hojas de 200 KB",
+        "codigo": 200,
+        "segundos": 1.321,
+        "aceptadas": 20,
+        "rechazados": 0,
+        "pendientes_de_encolar": 0
+      },
+      {
+        "peticion": "POST lote de 20 hojas de 200 KB",
+        "codigo": 200,
+        "segundos": 1.13,
+        "aceptadas": 20,
+        "rechazados": 0,
+        "pendientes_de_encolar": 0
+      },
+      {
+        "peticion": "POST lote de 20 hojas de 200 KB",
+        "codigo": 200,
+        "segundos": 0.876,
+        "aceptadas": 20,
+        "rechazados": 0,
+        "pendientes_de_encolar": 0
+      },
+      {
+        "peticion": "POST lote de 20 hojas de 200 KB",
+        "codigo": 200,
+        "segundos": 0.714,
+        "aceptadas": 20,
+        "rechazados": 0,
+        "pendientes_de_encolar": 0
+      },
+      {
+        "peticion": "POST lote de 20 hojas de 200 KB",
+        "codigo": 200,
+        "segundos": 0.746,
+        "aceptadas": 20,
+        "rechazados": 0,
+        "pendientes_de_encolar": 0
+      }
+    ]
+  },
+  "resumen": {
+    "salud_en_frio": {
+      "muestras": 3,
+      "mediana_segundos": 12.506,
+      "p95_segundos": 12.511,
+      "peor_segundos": 12.511,
+      "mejor_segundos": 12.495
+    },
+    "salud_en_caliente": {
+      "muestras": 30,
+      "mediana_segundos": 0.119,
+      "p95_segundos": 0.127,
+      "peor_segundos": 0.243,
+      "mejor_segundos": 0.111
+    },
+    "lote_en_frio": {
+      "muestras": 2,
+      "mediana_segundos": 18.725,
+      "p95_segundos": 23.984,
+      "peor_segundos": 23.984,
+      "mejor_segundos": 13.466
+    },
+    "lote_en_caliente": {
+      "muestras": 5,
+      "mediana_segundos": 0.876,
+      "p95_segundos": 1.321,
+      "peor_segundos": 1.321,
+      "mejor_segundos": 0.714
+    },
+    "segundos_que_agrega_el_arranque_al_lote": [
+      12.59,
+      23.108
+    ],
+    "umbral_ec07_segundos": 10.0,
+    "espera_de_la_pantalla_de_inicio_segundos": 5.0,
+    "salud_en_frio_supera_la_espera_de_la_pantalla": true,
+    "lote_en_frio_cumple_ec07": false,
+    "lote_en_caliente_p95_cumple_ec07": true
+  }
+}
