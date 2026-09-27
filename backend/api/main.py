@@ -2,6 +2,8 @@
 vuelta, y ese es todo su trabajo. La validación, el almacenamiento y el encolado viven en
 `ingesta` e `infraestructura`."""
 
+import logging
+import time
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, UploadFile
@@ -24,8 +26,12 @@ from api.settings import (
 from infraestructura.almacen import AlmacenDeImagenes, AlmacenEnDisco
 from infraestructura.bitacora import BitacoraDeRecepcion, BitacoraEnDisco
 from infraestructura.cola import cliente_redis
-from infraestructura.modelo import ArchivoCargado
+from infraestructura.modelo import PENDIENTE_DE_ENCOLAR, ArchivoCargado
+from infraestructura.registro import configurar_registro
 from ingesta import recibir_lote
+
+configurar_registro()
+logger = logging.getLogger("api")
 
 app = FastAPI(
     title="QuantIA",
@@ -102,6 +108,7 @@ async def cargar_hojas(
     tampoco. La ruta ya tiene la forma definitiva para que cuando esos módulos lleguen solo
     haya que sumar la comprobación, sin migrar el frontend.
     """
+    inicio = time.perf_counter()
     cargados = [
         ArchivoCargado(nombre=archivo.filename or "sin-nombre", contenido=await archivo.read())
         for archivo in archivos
@@ -114,6 +121,26 @@ async def cargar_hojas(
         cliente_cola=cliente_cola,
         nombre_cola=NOMBRE_COLA,
         bitacora=bitacora,
+    )
+
+    # La métrica de EC-07 («confirmación del lote en <= 10 s, 0 % de pérdida silenciosa»),
+    # registrada en cada lote real y no solo en la medición del corte 1. Cuenta desde que el
+    # endpoint tiene los archivos hasta la confirmación, así que no incluye la subida por la red
+    # del docente. Aceptadas y rechazadas suman los archivos cargados, que es la invariante de
+    # `ResultadoRecepcion`, y las pendientes son las aceptadas que quedaron en la bitácora sin
+    # llegar a la cola (ADR-0006).
+    logger.info(
+        "Lote confirmado",
+        extra={
+            "evento": "lote_confirmado",
+            "examen": resultado.examen_id,
+            "hojas_aceptadas": len(resultado.aceptadas),
+            "hojas_pendientes_de_encolar": sum(
+                1 for hoja in resultado.aceptadas if hoja.estado == PENDIENTE_DE_ENCOLAR
+            ),
+            "hojas_rechazadas": len(resultado.rechazados),
+            "duracion_confirmacion_ms": round((time.perf_counter() - inicio) * 1000, 1),
+        },
     )
 
     # La raíz se construye campo por campo porque los dos que lleva son decisiones del contrato:
