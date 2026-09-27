@@ -1,0 +1,80 @@
+# Entorno de demostración de QuantIA en Render, en la capa gratuita y sin tarjeta.
+#
+# Describe y crea el entorno desplegado; el entorno local sigue siendo docker-compose.yml. Se
+# aplica como Blueprint desde el panel de Render (New > Blueprint, sobre este repositorio), y cada
+# pieza tiene su decisión en un ADR de plataforma.
+#
+# Es un entorno de demostración: solo recibe hojas sintéticas, nunca hojas de estudiantes
+# (RNF-12). El disco de la API y la cola no persisten entre reinicios, así que lo cargado se
+# pierde en cada despliegue; la decisión de almacenamiento definitiva sigue abierta (R-06).
+#
+# Las URL públicas son las que Render asigna por el nombre del servicio. Si un nombre ya está
+# tomado, Render le agrega un sufijo: en ese caso hay que corregir ALLOWED_ORIGIN y BACKEND_URL.
+services:
+  # La API y el worker en la misma instancia. Render no tiene plan gratuito para workers en
+  # segundo plano, y el worker no lee el disco: solo consume la cola y registra lo que recibe.
+  - type: web
+    name: quantia-utb-api
+    runtime: docker
+    plan: free
+    region: virginia
+    dockerContext: ./backend
+    dockerfilePath: ./backend/Dockerfile
+    # El ciclo `while` vuelve a levantar el worker si termina, que es lo que hace
+    # `restart: unless-stopped` en el compose. `exec` deja a uvicorn como proceso principal: si la
+    # API cae, cae la instancia y Render la reinicia. PORT lo fija Render (10000 por omisión).
+    dockerCommand: >-
+      sh -c "(while true; do python -m worker.main; sleep 5; done) &
+      exec uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8000}"
+    healthCheckPath: /health
+    # Solo se despliega un commit cuyo pipeline terminó en verde, y solo si cambió el backend: un
+    # commit de documentación no reinicia la API ni borra lo que tenga en disco.
+    autoDeployTrigger: checksPass
+    buildFilter:
+      paths:
+        - backend/**
+    envVars:
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: quantia-utb-cola
+          property: connectionString
+      - key: NOMBRE_COLA
+        value: procesamiento
+      - key: RUTA_ALMACEN
+        value: /app/almacen_imagenes
+      - key: RUTA_BITACORA
+        value: /app/almacen_imagenes/bitacora-de-recepcion.jsonl
+      - key: ALLOWED_ORIGIN
+        value: https://quantia-utb.onrender.com
+
+  # La cola. Solo es accesible por la red privada de Render (lista de IP vacía), y con
+  # `noeviction` no descarta trabajos para hacer espacio: si se llena, el encolado falla y la
+  # hoja queda `pendiente_de_encolar` en la bitácora, como cuando la cola se cae (ADR-0006).
+  - type: keyvalue
+    name: quantia-utb-cola
+    plan: free
+    region: virginia
+    ipAllowList: []
+    maxmemoryPolicy: noeviction
+
+  # El sitio: Flutter compilado a archivos estáticos, sin apagado por inactividad. La URL de la
+  # API se hornea en la compilación, porque Flutter web no lee variables en ejecución. El SDK va
+  # fijado en la misma versión del CI y del frontend/Dockerfile.
+  - type: web
+    name: quantia-utb
+    runtime: static
+    buildCommand: >-
+      git clone --depth 1 --branch 3.44.3 https://github.com/flutter/flutter.git /tmp/flutter &&
+      export PATH="/tmp/flutter/bin:$PATH" &&
+      cd frontend &&
+      flutter pub get --enforce-lockfile &&
+      flutter build web --release --dart-define=BACKEND_URL="$BACKEND_URL"
+    staticPublishPath: ./frontend/build/web
+    autoDeployTrigger: checksPass
+    buildFilter:
+      paths:
+        - frontend/**
+    envVars:
+      - key: BACKEND_URL
+        value: https://quantia-utb-api.onrender.com
