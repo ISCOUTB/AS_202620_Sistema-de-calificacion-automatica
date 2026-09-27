@@ -14,6 +14,7 @@ COPY omr/ ./omr/
 COPY worker/ ./worker/
 COPY tests/ ./tests/
 COPY pytest.ini ./
+COPY arrancar-api-y-worker.sh ./
 RUN useradd --system --uid 10001 --create-home appuser \
  && mkdir -p /app/almacen_imagenes \
  && chown -R appuser:appuser /app

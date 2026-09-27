@@ -20,12 +20,10 @@ services:
     region: virginia
     dockerContext: ./backend
     dockerfilePath: ./backend/Dockerfile
-    # El ciclo `while` vuelve a levantar el worker si termina, que es lo que hace
-    # `restart: unless-stopped` en el compose. `exec` deja a uvicorn como proceso principal: si la
-    # API cae, cae la instancia y Render la reinicia. PORT lo fija Render (10000 por omisión).
-    dockerCommand: >-
-      sh -c "(while true; do python -m worker.main; sleep 5; done) &
-      exec uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8000}"
+    # El script levanta el worker en segundo plano, lo vuelve a levantar si termina, y deja a
+    # uvicorn como proceso principal. Va en un archivo porque Render no interpreta las comillas de
+    # este campo (ver backend/arrancar-api-y-worker.sh).
+    dockerCommand: sh arrancar-api-y-worker.sh
     healthCheckPath: /health
     # Solo se despliega un commit cuyo pipeline terminó en verde, y solo si cambió el backend: un
     # commit de documentación no reinicia la API ni borra lo que tenga en disco.
