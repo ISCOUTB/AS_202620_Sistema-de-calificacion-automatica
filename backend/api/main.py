@@ -6,7 +6,7 @@ import logging
 import time
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, File, UploadFile
+from fastapi import Depends, FastAPI, File, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.esquemas import (
@@ -75,6 +75,16 @@ def obtener_cliente_cola():
 @app.get("/health", summary="Sonda de vida", response_description="La API responde.")
 def salud() -> RespuestaDeSalud:
     return RespuestaDeSalud(status="ok")
+
+
+# La misma sonda para `HEAD`, que es el método con el que la consulta el monitor externo que
+# mantiene despierta la API desplegada (ADR-0009): sin esta ruta respondía 405 y el monitor la
+# daba por caída aunque estuviera atendiendo. Queda fuera del contrato publicado a propósito: es
+# una conveniencia de operación, no una operación nueva de la API, y `test_contrato.py` sigue
+# comparando las mismas dos rutas.
+@app.head("/health", include_in_schema=False)
+def salud_para_monitores() -> Response:
+    return Response(status_code=200)
 
 
 @app.post(
