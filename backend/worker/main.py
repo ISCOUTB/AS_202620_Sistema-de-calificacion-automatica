@@ -13,8 +13,9 @@ import redis
 import redis.exceptions
 
 from infraestructura.cola import cliente_redis, desencolar
+from infraestructura.registro import configurar_registro
 
-logging.basicConfig(level=logging.INFO)
+configurar_registro()
 logger = logging.getLogger("worker")
 
 # Se lee del entorno, con el mismo valor por omisión que `api/settings.py`. Estuvo escrito
@@ -28,12 +29,17 @@ ESPERA_TRAS_ERROR_SEGUNDOS = 5
 
 def ejecutar() -> None:
     cliente = cliente_redis()
-    logger.info("Worker escuchando la cola '%s'", NOMBRE_COLA)
+    logger.info(
+        "Worker escuchando la cola", extra={"evento": "worker_iniciado", "cola": NOMBRE_COLA}
+    )
     while True:
         try:
             trabajo = desencolar(cliente, NOMBRE_COLA, timeout=5)
         except redis.exceptions.RedisError as error:
-            logger.warning("Fallo transitorio de Redis, reintentando: %s", error)
+            logger.warning(
+                "Fallo transitorio de Redis, reintentando",
+                extra={"evento": "fallo_de_la_cola", "error": str(error)},
+            )
             time.sleep(ESPERA_TRAS_ERROR_SEGUNDOS)
             continue
         if trabajo is None:
@@ -44,11 +50,14 @@ def ejecutar() -> None:
         # todavía no existe. Registrarlo es, por ahora, el final del recorrido: es lo que hace
         # observable de punta a punta el corte vertical de A-01.
         logger.info(
-            "Hoja recibida | trabajo=%s examen=%s archivo=%s referencia=%s",
-            trabajo.id,
-            datos.get("examen_id"),
-            datos.get("nombre_archivo"),
-            datos.get("referencia"),
+            "Hoja recibida",
+            extra={
+                "evento": "hoja_recibida",
+                "trabajo": trabajo.id,
+                "examen": datos.get("examen_id"),
+                "archivo": datos.get("nombre_archivo"),
+                "referencia": datos.get("referencia"),
+            },
         )
 
 
