@@ -152,3 +152,39 @@ Fecha, actividad realizada, herramienta utilizada, respuesta obtenida (resumen),
   - **Borrar o renombrar la rama remota `corte-1`.** La herramienta lo propuso porque su nombre coincide con el de la etiqueta del primer corte. El equipo no lo aceptó, porque la rama responde a una indicación del docente. Sí quedó verificado que la rama no representa el estado del corte: se creó el 13 de septiembre y lleva dos commits que no están en `master`.
   - **Pedir el reproceso de S7.** Era la primera propuesta de la auditoría del 22 de septiembre. El docente corrigió la revisión el 24, antes de que se enviara la solicitud, así que la sección de `correcciones.md` se reescribió: registra la corrección y responde solo lo que quedó abierto.
 - **Justificación:** el criterio es el de las entradas anteriores, y esta vez dejó dos precisiones. La primera: la herramienta de medición llevaba nueve días rota y ninguna revisión lo notó, porque todas la leían; lo encontró ejecutarla. Lo mismo pasó con la verificación de Docker. La segunda: saber cuánto de cada archivo lee el revisor automático no cambia lo que hay que escribir, pero sí dónde conviene que esté la evidencia para que se encuentre.
+
+### Entrada 11
+
+- **Fecha:** 2026-09-26 y 2026-09-27
+- **Actividad realizada:** Despliegue de la semana 8 y taller de despliegue.
+  - **Código:** logs en JSON ([`registro.py`](../backend/infraestructura/registro.py)), la métrica de EC-07 en el evento `lote_confirmado`, el entorno de Render en [`render.yaml`](../render.yaml), el script que arranca la API y el worker en una misma instancia, y `HEAD /health` para el monitor que mantiene despierta la API.
+  - **Medición:** una herramienta que mide el arranque en frío de la API desplegada ([`medir_arranque_en_frio.py`](../backend/herramientas/medir_arranque_en_frio.py)) y su resultado ([`medicion-arranque-en-frio.json`](evidencia/medicion-arranque-en-frio.json)).
+  - **Documentos:** revisión de los que redactó cada integrante (ADR-0010 a ADR-0012, las secciones 2, 7, 9 y 11 del arc42 y el README), y redacción de [ADR-0009](adr/0009-desplegar-la-api-en-el-servicio-web-gratuito-de-render-y-mantenerla-despierta.md), la [estimación de costo](despliegue/costo-mensual.md) y el [documento del taller](despliegue/taller-despliegue-api.md).
+- **Herramienta utilizada:** Claude (Anthropic), en una sesión, con un agente auxiliar que verificó en las páginas oficiales de cada proveedor la capa gratuita y si pide tarjeta.
+- **Prompt utilizado (resumen):** Se pidió un plan para la semana a partir de las fichas de la S8 y del taller, repartido entre los cuatro integrantes. Después, el código del despliegue en el clon local, sin commits. Por último, la revisión de lo que cada integrante subía y los documentos que faltaban. La condición de método fue la de siempre: toda cifra de un proveedor con su fuente y su fecha, y nada se da por bueno sin haberlo ejecutado.
+- **Respuesta obtenida (resumen):**
+  - Un plan con la ruta de despliegue en Render, sin tarjeta, y la condición operativa del taller.
+  - El código con sus pruebas: 62 en el backend, todas en verde en Docker con Redis real y la prueba de contrato.
+  - La medición del arranque en frío desde fuera de la universidad: 12,5 s frente a los 10 s de EC-07.
+  - Las correcciones a los documentos del equipo, antes de subirlos.
+- **Qué se aceptó:**
+  - **Render en su capa gratuita**, con la API y el worker en una sola instancia, porque Render no tiene plan gratuito para *background workers*.
+  - **Patrón de carga como condición del taller**, con la API como pieza.
+  - **Mantener la API despierta con un monitor gratuito**, después de medir el arranque en frío y no antes.
+  - **La métrica de EC-07 en el log** y no en una ruta nueva, para que el contrato no cambie.
+  - **Desplegar solo cuando el CI termina en verde** y solo el servicio cuya carpeta cambió.
+- **Qué se rechazó y se corrigió:**
+  - **El comando de arranque escrito en `render.yaml` como `sh -c "…"`.** La herramienta lo dio por probado porque lo ejecutó directo en Docker, y en Render el primer despliegue falló con «not found»: Render no interpreta las comillas de ese campo. El comando pasó a un script. La prueba tenía que reproducir cómo ejecuta la plataforma, no cómo ejecuta Docker.
+  - **Las plataformas que piden tarjeta.** Fly.io, Google Cloud Run, Koyeb y Oracle Cloud la exigen, y Hugging Face Spaces cobra por los espacios con Docker. Upstash como cola también se descartó: su plan gratuito da 500 000 comandos al mes y el worker hace 518 400 solo esperando.
+  - **Una ruta nueva `/metricas`.** Se descartó para no cambiar el contrato publicado; la métrica quedó en el log.
+  - **Los argumentos libres de la herramienta de medición.** SonarQube Cloud marcó tres vulnerabilidades: `--url` permitía hacer peticiones a cualquier servidor y `--json` escribir en cualquier archivo. Se corrigieron en vez de silenciarlas: la dirección sale de una lista fija y el informe solo se escribe en `docs/evidencia/`.
+  - **El primer cálculo del peso del sitio.** Se estimaron 9 a 10 MB por visita a partir de la compilación local. Medido sobre el sitio desplegado son 0,75 MB, porque el navegador descarga CanvasKit del CDN de Google y no de Render.
+  - **Errores en los documentos que redactaron las herramientas de IA del equipo**, corregidos antes de subirlos:
+    - un enlace a ADR-0006 con un nombre de archivo inventado;
+    - un diagrama de la sección 7 donde el worker escribía en el disco y faltaba la flecha de la API a la cola;
+    - la afirmación de que el CI usa `docker-compose.yml`;
+    - un ADR que no declaraba que la cola gratuita contradice la «cola persistente» de ADR-0002.
+- **Justificación:** tres lecciones de esta semana.
+  - **Medir antes de decidir.** Que el servicio gratuito se apaga estaba en la documentación del proveedor; cuánto le cuesta eso a EC-07 solo lo dijo la medición.
+  - **Probar como corre la plataforma.** El único fallo de despliegue salió de una diferencia entre cómo ejecuta Docker y cómo ejecuta Render.
+  - **Limitar la IA a una tabla de hechos verificados.** Las herramientas de IA inventaron datos justo donde no la tenían: un nombre de archivo y un detalle del CI.
