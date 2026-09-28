@@ -100,9 +100,9 @@ Render, sin depender de la de un integrante ([ADR-0009](docs/adr/0009-desplegar-
 4. Si Render asignó URL distintas (cuando un nombre ya está tomado le agrega un sufijo), poner las
    reales en `ALLOWED_ORIGIN` (servicio de la API) y `BACKEND_URL` (sitio) de `render.yaml`, y volver a
    desplegar el sitio: la URL de la API queda horneada al compilar.
-5. Crear en UptimeRobot, en su plan gratuito, un monitor HTTP(s) a `<URL de la API>/health` cada
+5. Crear en UptimeRobot, en su plan gratuito, un monitor HTTP(s) a `https://quantia-utb-api.onrender.com/health` (o a la URL que Render le haya asignado a la API) cada
    5 minutos. Mantiene despierta la API, que en frío tarda 12,5 s en responder.
-6. Comprobar desde fuera de la universidad que el sitio y `<URL de la API>/health` responden 200,
+6. Comprobar desde fuera de la universidad que el sitio y el `/health` de la API responden 200,
    cargar una hoja sintética desde el sitio y buscar en los logs de `quantia-utb-api` los eventos
    `lote_confirmado` y `hoja_recibida`.
 
