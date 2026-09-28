@@ -10,9 +10,8 @@ arc42, la plantilla para documentar arquitecturas de software y de sistemas.
 Versión de plantilla 9.0. Creada y mantenida por Dr. Peter Hruschka, Dr. Gernot Starke
 y colaboradores. Ver [https://arc42.org](https://arc42.org).
 
-**Estado de este documento:** las secciones 1 a 6 y 8 a 12 están escritas. La única pendiente es
-la 7 (*Deployment View*), y en su lugar queda escrito de qué depende y por qué todavía no se
-puede cerrar.
+**Estado de este documento:** las doce secciones están escritas, incluida la 7 (*Deployment
+View*), escrita el 27 de septiembre de 2026 con el despliegue en Render (ADR-0009 a ADR-0012).
 
 Las secciones 5 y 6 describen **el estado real del código**, no el diseño previsto. Eso las
 obliga a envejecer con cada avance: conviene revisarlas (y con ellas la sección 11) en el mismo
@@ -46,6 +45,10 @@ su frontera.
   - [6.2 Carga de una hoja escaneada (RF-01 · aspecto A-01 · EC-07)](#62-carga-de-una-hoja-escaneada-rf-01--aspecto-a-01--ec-07)
   - [6.3 Escenarios pendientes](#63-escenarios-pendientes)
 - [7. Deployment View](#7-deployment-view)
+  - [7.1 Las seis piezas del despliegue](#71-las-seis-piezas-del-despliegue)
+  - [7.2 Entorno local](#72-entorno-local)
+  - [7.3 Lo que no se despliega](#73-lo-que-no-se-despliega)
+  - [7.4 Limitaciones de este entorno](#74-limitaciones-de-este-entorno)
 - [8. Cross-cutting Concepts](#8-cross-cutting-concepts)
   - [8.1 Mapa de contextos](#81-mapa-de-contextos)
   - [8.2 Lenguaje ubicuo](#82-lenguaje-ubicuo)
@@ -172,6 +175,7 @@ describen el espacio dentro del cual se puede diseñar.
 | **RNF-09** | **Equipo de cuatro estudiantes con dedicación parcial y cronograma fijado por el curso** (cortes en las semanas 5 y 10, entrega final en la 16). | Contexto académico | Limita la complejidad operacional asumible: no hay capacidad para operar infraestructura distribuida ni para sostener varios despliegues. Es uno de los argumentos que sostiene la elección de monolito modular frente a microservicios en ADR-0002. |
 | **RNF-10** | **Todos los integrantes deben contribuir al historial del repositorio**, con código y documentación repartidos a lo largo del semestre. | `CONTRATO.md` §10 del curso | Criterio calificado. Obliga a repartir el trabajo por módulos y a usar ramas y *pull requests* en lugar de commits directos de una sola persona, lo que a su vez favorece una descomposición con fronteras claras que puedan asignarse por separado. |
 | **RNF-11** | **Repositorio público, en la organización `ISCOUTB` y con la convención de nombres del curso.** | `CONTRATO.md` del curso | Ninguna parte del sistema puede depender de artefactos privados ni de secretos versionados. Cualquier credencial (por ejemplo, la clave del proveedor de LLM) debe leerse de variables de entorno y nunca del repositorio. |
+| **RNF-16** | **Costo mensual de US$0 y ninguna cuenta con tarjeta vinculada.** | Política de costos de la «Guía de despliegue y costos» del curso: «Ninguna cuenta personal de pago es obligatoria en este curso.» | Obliga a que toda pieza desplegada quepa en capas gratuitas sin tarjeta (Render Hobby): servicio web Free, Key Value Free y sitio estático. Descarta cualquier instancia de pago (Starter US$7, disco persistente US$0,25/GB) y condiciona la elección de Render sobre alternativas que sí piden tarjeta, o que todavía no verifican si la piden (ver [ADR-0011](../adr/0011-consumir-la-cola-desde-la-instancia-de-la-api-con-el-key-value-gratuito.md) y [ADR-0012](../adr/0012-mantener-el-almacen-en-el-disco-efimero-de-la-instancia-hasta-cerrar-r-06.md)). |
 
 ## 2.3 Restricciones legales
 
@@ -449,15 +453,92 @@ de verdad ante un cambio incompatible está comprobado en
 
 # 7. Deployment View
 
-> **Pendiente.** No se documenta todavía porque el equipo no ha decidido el entorno de
-> despliegue. Esa decisión depende de si el LLM se consume como API externa o se aloja
-> localmente (R-02) y del mecanismo de persistencia, todavía abierto (R-06). La elección de
-> stack de RNF-08 ya no la condiciona: quedó resuelta en
-> [ADR-0003](../adr/0003-usar-fastapi-y-flutter.md).
->
-> Lo que sí existe y servirá de base son el Nivel 2 del C4, que fija qué contenedores componen
-> el sistema, y el `docker-compose.yml`, que los levanta hoy en una sola máquina. Falta decidir
-> dónde corre eso y con qué topología, que es lo que ninguno de los dos dice.
+La «Guía de despliegue y costos» del curso pide una caja por cada una de sus seis piezas: el
+sitio, la API, la base de datos, los ficheros, los trabajos y consumidores de cola, y el
+pipeline. Esta sección sigue ese orden.
+
+## 7.1 Las seis piezas del despliegue
+
+| # | Pieza (guía) | Dónde se ejecuta | ADR |
+|---|---|---|---|
+| 1 | El sitio | `quantia-utb`, sitio estático de Render, siempre gratis y sin apagado | [ADR-0010](../adr/0010-servir-el-sitio-como-archivos-estaticos-en-render.md) |
+| 2 | La API | `quantia-utb-api`, servicio web Free de Render (0,1 CPU, 512 MB), que un monitor externo mantiene despierto | [ADR-0009](../adr/0009-desplegar-la-api-en-el-servicio-web-gratuito-de-render-y-mantenerla-despierta.md) |
+| 3 | La base de datos | No desplegada: Postgres está declarado en `docker-compose.yml`, pero ningún módulo la usa todavía | No aplica: no hay decisión de plataforma |
+| 4 | Los ficheros | Disco efímero de la instancia de `quantia-utb-api` | [ADR-0012](../adr/0012-mantener-el-almacen-en-el-disco-efimero-de-la-instancia-hasta-cerrar-r-06.md) |
+| 5 | Trabajos y consumidores de cola | Worker como segundo proceso en la misma instancia de la API (`backend/arrancar-api-y-worker.sh`), leyendo de `quantia-utb-cola` (Key Value Free) | [ADR-0011](../adr/0011-consumir-la-cola-desde-la-instancia-de-la-api-con-el-key-value-gratuito.md) |
+| 6 | El pipeline | GitHub Actions (`.github/workflows/ci.yml`); redespliega solo si el CI del commit termina en verde | Ya existía (`ci.yml`); sin ADR nuevo |
+
+```mermaid
+flowchart TB
+    profesor["Profesor o TA<br/>(navegador)"]
+    github["GitHub Actions<br/>Pieza 6: el pipeline"]
+    monitor["UptimeRobot<br/>consulta /health cada 5 min"]
+
+    subgraph render["Render, capa gratuita, región virginia, Blueprint desde render.yaml"]
+        sitio["quantia-utb<br/>Pieza 1: el sitio<br/>sitio estático"]
+        subgraph instancia["quantia-utb-api: una sola instancia Free"]
+            api["Proceso API<br/>Pieza 2: la API"]
+            worker["Proceso worker<br/>Pieza 5: consumidor de cola"]
+            disco["Disco efímero<br/>Pieza 4: los ficheros"]
+        end
+        cola["quantia-utb-cola<br/>Pieza 5: la cola<br/>Key Value Free"]
+    end
+
+    postgres["Postgres<br/>Pieza 3: la base de datos<br/>no se despliega"]
+
+    profesor -->|HTTPS: descarga el sitio| sitio
+    profesor -->|HTTPS: carga de hojas desde el sitio| api
+    monitor -->|HTTPS: /health| api
+    api -->|guarda hojas y bitácora| disco
+    api -->|RPUSH, red privada| cola
+    cola -->|BLPOP, red privada| worker
+    github -->|despliega si el CI queda en verde| render
+```
+
+### Tabla de servicios de Render
+
+| Servicio | Tipo (plan) | Recursos | Notas |
+|---|---|---|---|
+| `quantia-utb` | Sitio estático | Siempre gratis | Flutter 3.44.3 compilado por Render, con la URL de la API horneada al compilar (ADR-0010); si la URL cambia, hay que recompilar. |
+| `quantia-utb-api` | Servicio web Free | 0,1 CPU, 512 MB | Docker con `backend/Dockerfile`. API y worker en la misma instancia (`backend/arrancar-api-y-worker.sh`), porque Render no ofrece plan gratuito para *background workers*. Se apagaría a los 15 min sin tráfico; el monitor externo lo evita (ADR-0009, R-13). |
+| `quantia-utb-cola` | Key Value Free | 25 MB, 50 conexiones | Sin persistencia, solo red privada (`ipAllowList: []`), política `noeviction` (ADR-0011). |
+
+`REDIS_URL` la inyecta Render desde `quantia-utb-cola` hacia `quantia-utb-api` con `fromService`;
+no hay secretos versionados en el código.
+
+**URL declarada del sistema:** https://quantia-utb.onrender.com. La raíz de la API
+(https://quantia-utb-api.onrender.com) responde 404 porque no existe `GET /`; eso es normal y no
+se declara como URL del sistema. El *health check* está en
+https://quantia-utb-api.onrender.com/health.
+
+## 7.2 Entorno local
+
+`docker-compose.yml` levanta cinco servicios en una sola máquina con un solo comando (RNF-07):
+`redis`, `postgres`, `api`, `worker` y `frontend`, que es el sitio compilado y servido por nginx
+en el puerto 8080. A diferencia de Render, `api` y `worker` son servicios separados, el almacén
+vive en un volumen de Docker que sí persiste entre reinicios, y Postgres está declarado aunque
+ningún módulo lo usa. El pipeline no usa este archivo: `.github/workflows/ci.yml` corre las
+pruebas del backend con Redis como servicio y las del frontend con Flutter 3.44.3.
+
+## 7.3 Lo que no se despliega
+
+- **Postgres (pieza 3).** Ningún módulo lo usa todavía; `infraestructura` sigue sin persistencia
+  estructurada (5.2, R-06).
+- **El proveedor de LLM.** RF-11 no está construido (R-12); Autoría queda sin su adaptador hacia
+  el LLM, y el sistema califica completo sin él (ADR-0005).
+
+## 7.4 Limitaciones de este entorno
+
+- **Disco efímero (pieza 4):** las hojas y la bitácora se pierden en cada despliegue o reinicio;
+  solo se cargan hojas sintéticas (ADR-0012, RNF-12).
+- **Redespliegue condicionado (pieza 6):** solo ocurre si el CI del commit termina en verde
+  (`autoDeployTrigger: checksPass`) y cambió la carpeta correspondiente (`buildFilter`); un commit
+  de documentación no reinicia nada.
+- **Arranque en frío, medido en 12,5 s:** ver R-13.
+- **Un endpoint de carga sin autenticación:** ver R-14.
+- **Dependencia de la capa gratuita, con condiciones que pueden cambiar:** ver R-15. El punto de
+  ruptura por recurso está en [`docs/despliegue/costo-mensual.md`](../despliegue/costo-mensual.md).
+- **Un solo operador de Render:** ver R-16.
 
 ---
 
@@ -1070,6 +1151,10 @@ decisión cambia, se escribe uno nuevo y el anterior pasa a estado *reemplazado 
 | [0006](../adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md) | Registrar la recepción en una bitácora antes de encolar | **aceptado** | 2026-09-06 | [EC-07](#ec-07) |
 | [0007](../adr/0007-declarar-los-contextos-delimitados-y-la-regla-de-dueno-unico.md) | Declarar los contextos delimitados y la regla de dueño único de los datos | **aceptado** | 2026-09-13 | ninguno declarado |
 | [0008](../adr/0008-renombrar-el-sistema-a-quantia.md) | Renombrar el sistema a QuantIA | **aceptado** | 2026-09-22 | ninguno declarado |
+| [0009](../adr/0009-desplegar-la-api-en-el-servicio-web-gratuito-de-render-y-mantenerla-despierta.md) | Desplegar la API en el servicio web gratuito de Render y mantenerla despierta | **aceptado** | 2026-09-27 | [EC-07](#ec-07) |
+| [0010](../adr/0010-servir-el-sitio-como-archivos-estaticos-en-render.md) | Servir el sitio como archivos estáticos en Render | **aceptado** | 2026-09-27 | ninguno declarado |
+| [0011](../adr/0011-consumir-la-cola-desde-la-instancia-de-la-api-con-el-key-value-gratuito.md) | Consumir la cola desde la instancia de la API con el Key Value gratuito | **aceptado** | 2026-09-27 | ninguno declarado |
+| [0012](../adr/0012-mantener-el-almacen-en-el-disco-efimero-de-la-instancia-hasta-cerrar-r-06.md) | Mantener el almacén en el disco efímero de la instancia hasta cerrar R-06 | **aceptado** | 2026-09-27 | [EC-07](#ec-07) |
 
 **Por qué 0002 reemplaza a 0001.** La revisión de coherencia previa al corte 1 encontró que
 EC-03 y EC-04 no se pueden cumplir a la vez con procesamiento síncrono(200 hojas × 5 s son
@@ -1344,7 +1429,7 @@ fallos. Se documentan aparte para no alterar la priorización original.
 | ID | Riesgo / deuda | Impacto | Qué lo dispara | Mitigación prevista |
 |---|---|---|---|---|
 | **R-01** | **No existe todavía el dataset de 300 hojas escaneadas** que EC-01 usa como medida. Sin él, el objetivo de calidad más importante no es verificable. | Alto | Llegar a la semana de medición sin hojas etiquetadas. | Producir el dataset temprano: imprimir plantillas, llenarlas con marcas variadas (incluyendo casos borde deliberados) y etiquetarlas manualmente. Es trabajo de laboratorio, no de programación, y puede repartirse entre los cuatro integrantes (RNF-10). |
-| **R-02** | **Decisión pendiente sobre el proveedor de LLM y su modo de consumo.** Bloquea la vista de despliegue (sección 7), porque cambia si hay o no un sistema externo. *(La elección de stack de RNF-08 quedó resuelta en [ADR-0003](../adr/0003-usar-fastapi-y-flutter.md), y los niveles 1 y 2 del C4 están dibujados.)* | **Bajo**, desde [ADR-0005](../adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md) | Necesitar construir RF-11, que es opcional. | Decidir en un ADR propio cuando alguien tome RF-11 (ver R-12). Ya no urge: el LLM quedó fuera del camino de calificación, así que el sistema califica completo sin proveedor. La opción de referencia es una API alojada con nivel gratuito, porque un modelo local añade requisitos de hardware que el proyecto no puede asumir. |
+| **R-02** | **Decisión pendiente sobre el proveedor de LLM y su modo de consumo**, para cuando se construya RF-11. Ya no bloquea la vista de despliegue (sección 7): el entorno de Render de esta semana no incluye el LLM (ver §7.3) y funciona completo sin él. *(La elección de stack de RNF-08 quedó resuelta en [ADR-0003](../adr/0003-usar-fastapi-y-flutter.md), y los niveles 1 y 2 del C4 están dibujados.)* | **Bajo**, desde [ADR-0005](../adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md) | Necesitar construir RF-11, que es opcional. | Decidir en un ADR propio cuando alguien tome RF-11 (ver R-12). Ya no urge: el LLM quedó fuera del camino de calificación, así que el sistema califica completo sin proveedor. La opción de referencia es una API alojada con nivel gratuito, porque un modelo local añade requisitos de hardware que el proyecto no puede asumir. |
 | **R-03** | **Dependencia de un servicio externo no controlado** si el LLM es una API alojada: cuotas, latencia variable, cambios de modelo, indisponibilidad. | Medio | Superar la cuota gratuita durante una sesión de generación intensiva. | La separación de fases ya mitiga lo esencial: el LLM solo participa en la autoría, así que una caída del proveedor no impide calificar. Añadir reintentos, aislar el consumo tras una interfaz propia de `autoria` y permitir el ingreso manual de preguntas. |
 | **R-04** | **El umbral de confianza del 70% es un valor supuesto, no medido.** Mal calibrado dispara falsos positivos (todo va a revisión manual y el sistema deja de ahorrar tiempo) o falsos negativos (errores silenciosos, se rompe QG-3). | Alto | Fijar el umbral sin evidencia y descubrirlo en producción. | Calibrar sobre el dataset de R-01 y documentar la curva de precisión frente a umbral en un ADR. |
 | **R-05** | **El equipo no tiene experiencia previa medible con OpenCV / OMR**, que es la parte de mayor riesgo técnico del sistema. | Alto | Dejar el módulo `omr` para el final del cronograma. | Construir un prototipo desechable de detección de marcas antes de especificar A-02, aunque sea sobre una sola hoja, para convertir la incertidumbre en información. |
@@ -1355,6 +1440,10 @@ fallos. Se documentan aparte para no alterar la priorización original.
 | **R-10** | **Deuda legal: no está redactada la finalidad del tratamiento de datos ni la política de retención** que exigen RNF-12 y RNF-14. | Medio | Llegar al despliegue con datos reales de estudiantes sin política declarada. | Redactar ambas antes de procesar la primera hoja con datos reales, y consultar la referencia normativa vigente con la coordinación del programa. |
 | **R-11** | **La aprobación manual de la clave puede pasar por alto una equivalencia algebraica no evidente** entre un distractor y la respuesta correcta, ahora que no hay verificación simbólica automática ([ADR-0004](../adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md)). | Alto | Revisar el examen bajo presión de tiempo, sea la clave propia o con distractores propuestos por el modelo, sin apoyo visual para comparar expresiones. | Diseñar la pantalla de aprobación para mostrar las expresiones simplificadas o graficadas una junto a otra, facilitando la comparación visual sin exigir cómputo simbólico obligatorio. Si la tasa de error resulta alta en la práctica, reevaluar con un ADR nuevo. |
 | **R-12** | **RF-11 queda declarado pero nunca se construye**, y el LLM termina siendo una presencia nominal en el stack. | Medio | Que el equipo priorice OMR y calificación hasta el final del semestre y nadie tome RF-11 por ser opcional. | Asignar RF-11 a un integrante desde el reparto por aspectos, con semana de construcción, en lugar de dejarlo sin dueño. Ver [ADR-0005](../adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md). |
+| **R-13** | **Arranque en frío medido en 12,5 s, por encima del techo de 10 s de EC-07** y de los 5 s que espera la pantalla de inicio. Medido el 27-sep en `docs/evidencia/medicion-arranque-en-frio.json`: `GET /health` en frío 12,5 s frente a p95 de 0,13 s en caliente; un lote de 20 hojas de 200 KB, 13,5 s y 24,0 s en frío frente a p95 de 1,3 s en caliente. | Alto si la instancia está dormida | Que pasen más de 15 minutos sin tráfico antes de que llegue una carga. | Mitigado con un monitor gratuito (UptimeRobot) que consulta `/health` cada 5 minutos y mantiene la instancia despierta; eso consume entre 720 y 744 de las 750 horas compartidas del workspace (ver R-15). Detalle completo en el taller ([`docs/despliegue/taller-despliegue-api.md`](../despliegue/taller-despliegue-api.md)). |
+| **R-14** | **Endpoint de carga público sin autenticación.** `POST /examenes/{id}/hojas` está desplegado y accesible por su URL pública; `identidad` sigue sin construir (5.2), así que nada impide que alguien fuera del curso cargue archivos al almacén efímero de la demostración. | Medio | Publicar la URL de la API antes de construir `identidad` (aspecto A-05). | Aceptado para la demostración de la S8 porque solo se cargan hojas sintéticas (ADR-0012) y el disco es efímero. Construir `identidad` antes de cualquier uso con datos reales. |
+| **R-15** | **Dependencia de la capa gratuita de Render, cuyas condiciones pueden cambiar sin aviso.** Las 750 horas de servicio web son compartidas por todo el workspace, y el monitor que mitiga R-13 ya consume entre 720 y 744 de esas 750: quedan entre 6 horas (mes de 31 días) y 30 (mes de 30) de margen. Se suman el límite de 5 GB de ancho de banda y 500 minutos de build. | Alto | Agotar el cupo compartido en la semana de sustentación, con más tráfico del habitual, o que Render cambie las condiciones de su capa gratuita. | Punto de ruptura por recurso documentado en [`docs/despliegue/costo-mensual.md`](../despliegue/costo-mensual.md). Verificar la capa gratuita vigente antes de cada sustentación, como pide la guía del curso. |
+| **R-16** | **Solo una persona puede operar el workspace de Render** (el plan gratuito da un único puesto); si Sebastián no está disponible, nadie más del equipo puede redesplegar, cambiar variables o revisar logs en Render. Es el criterio 7 de la guía del curso: «¿Puede operarlo el equipo entero? Si solo una persona sabe redesplegarlo, eso es un riesgo de la sección 11 de arc42, no un detalle.» | Medio | Que Sebastián no esté disponible cuando el equipo necesite redesplegar o depurar algo en producción. | El entorno completo se recrea desde `render.yaml` (Blueprint) en la cuenta de cualquier integrante; los pasos quedan en el README, «Cómo se despliega». No depende de configuración manual guardada solo en la cuenta de Sebastián. |
 
 ---
 
