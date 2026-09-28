@@ -32,6 +32,32 @@ qué archivo y en qué sección está.
 | Todas | Análisis estático y su *Quality Gate* | [SonarQube Cloud](https://sonarcloud.io/summary/new_code?id=ISCOUTB_AS_202620_Sistema-de-calificacion-automatica) |
 | Todas | Respuesta a la retroalimentación automática | [`correcciones.md`](correcciones.md) |
 
+## Entorno desplegado (S8)
+
+Entorno de demostración: solo se cargan hojas sintéticas, nunca hojas de estudiantes (RNF-12), y
+lo cargado se pierde en cada despliegue ([ADR-0012](docs/adr/0012-mantener-el-almacen-en-el-disco-efimero-de-la-instancia-hasta-cerrar-r-06.md)).
+
+| | |
+|---|---|
+| Sistema | https://quantia-utb.onrender.com |
+| API y *health check* | https://quantia-utb-api.onrender.com/health → `200 {"status":"ok"}`. La raíz de la API responde 404 porque no existe `GET /` |
+| Comprobación desde fuera de la universidad | 2026-09-27, 18:59 (−05:00), internet residencial en Cartagena: sitio `http=200 tiempo=0,37 s` · API `health=200 tiempo=0,20 s` |
+| Infraestructura como código | [`render.yaml`](render.yaml) (producción, Blueprint de Render) · [`docker-compose.yml`](docker-compose.yml) (local) · [`backend/Dockerfile`](backend/Dockerfile) · [`frontend/Dockerfile`](frontend/Dockerfile) · [`ci.yml`](.github/workflows/ci.yml) |
+| Cómo recrearlo | [Cómo se despliega](#cómo-se-despliega) |
+| Pipeline | [Runs de `master`](https://github.com/ISCOUTB/AS_202620_Sistema-de-calificacion-automatica/actions/workflows/ci.yml?query=branch%3Amaster). Render solo despliega un commit cuyo CI terminó en verde |
+| Logs estructurados | Una línea JSON por evento, con `logging.config.dictConfig`, en [`backend/infraestructura/registro.py`](backend/infraestructura/registro.py). Líneas reales abajo |
+| Métrica y escenario | `duracion_confirmacion_ms` del evento `lote_confirmado` ↔ [EC-07](docs/arc42/arc42-template-ES.md#ec-07) (confirmación ≤ 10 s, 0 % de pérdida). En una carga real desde el sitio: 14,1 ms |
+| Secretos | Ninguno en el código: [`.env.example`](.env.example) para lo local; en Render, `REDIS_URL` la inyecta la plataforma desde la cola (`fromService`) |
+| Costo mensual | US$0 al volumen supuesto. Primer punto de ruptura: las 750 h de instancia al mes del workspace, de las que la API despierta gasta 720 a 744; un segundo servicio web despierto lo rompe ([estimación](docs/despliegue/costo-mensual.md)) |
+| arc42 | [§7 Deployment View](docs/arc42/arc42-template-ES.md#7-deployment-view) · [§2.2, RNF-16](docs/arc42/arc42-template-ES.md#22-restricciones-organizativas) |
+| ADR de plataforma | [0009](docs/adr/0009-desplegar-la-api-en-el-servicio-web-gratuito-de-render-y-mantenerla-despierta.md) API · [0010](docs/adr/0010-servir-el-sitio-como-archivos-estaticos-en-render.md) sitio · [0011](docs/adr/0011-consumir-la-cola-desde-la-instancia-de-la-api-con-el-key-value-gratuito.md) cola y worker · [0012](docs/adr/0012-mantener-el-almacen-en-el-disco-efimero-de-la-instancia-hasta-cerrar-r-06.md) ficheros |
+| Taller de despliegue | Condición: **patrón de carga**, definida por el equipo por indicación del docente. Pieza: **la API**. Arranque en frío medido: **12,5 s** frente a los 10 s de EC-07; con el monitor que la mantiene despierta, 0,2 a 0,4 s ([comparación](docs/despliegue/taller-despliegue-api.md) · [medición](docs/evidencia/medicion-arranque-en-frio.json) · [ADR-0009](docs/adr/0009-desplegar-la-api-en-el-servicio-web-gratuito-de-render-y-mantenerla-despierta.md)) |
+
+Líneas reales del log en el entorno desplegado (worker y API):
+
+    {"momento": "2026-09-27T21:58:41.572+00:00", "nivel": "INFO", "registro": "worker", "mensaje": "Hoja recibida", "evento": "hoja_recibida", "trabajo": "a3691012-4b72-45f4-a1a7-9446b2ff5cc6", "examen": "prueba-s8", "archivo": "mapa-del-codigo-omr.png", "referencia": "prueba-s8/f372843d-f673-47ab-8edf-005317e54ffd-mapa-del-codigo-omr.png"}
+    {"momento": "2026-09-27T21:58:41.573+00:00", "nivel": "INFO", "registro": "api", "mensaje": "Lote confirmado", "evento": "lote_confirmado", "examen": "prueba-s8", "hojas_aceptadas": 1, "hojas_pendientes_de_encolar": 0, "hojas_rechazadas": 0, "duracion_confirmacion_ms": 14.1}
+
 ## Cómo se arranca
 
 Requiere Docker (con el plugin Compose). Antes de la primera vez, copiar `.env.example` a `.env`;
@@ -59,6 +85,29 @@ Alternativas para desarrollo, que no reemplazan el comando oficial de arriba:
 - Frontend con recarga en caliente: dentro de `frontend/`,
   `flutter run -d chrome --dart-define=BACKEND_URL=http://localhost:8000`, sin reconstruir la
   imagen en cada cambio.
+
+## Cómo se despliega
+
+El entorno de demostración se recrea desde [`render.yaml`](render.yaml) en cualquier cuenta de
+Render, sin depender de la de un integrante ([ADR-0009](docs/adr/0009-desplegar-la-api-en-el-servicio-web-gratuito-de-render-y-mantenerla-despierta.md)).
+
+1. Crear una cuenta en Render iniciando sesión con GitHub; la capa gratuita no pide tarjeta.
+2. En Render: *New → Blueprint*, conectar GitHub y elegir este repositorio, rama `master`. Render lee
+   `render.yaml` y propone tres servicios: `quantia-utb-api` (servicio web, Docker), `quantia-utb-cola`
+   (Key Value) y `quantia-utb` (sitio estático). Aplicar.
+3. Esperar a que terminen las construcciones: la API construye `backend/Dockerfile`; el sitio descarga
+   Flutter 3.44.3 y compila `frontend/`.
+4. Si Render asignó URL distintas (cuando un nombre ya está tomado le agrega un sufijo), poner las
+   reales en `ALLOWED_ORIGIN` (servicio de la API) y `BACKEND_URL` (sitio) de `render.yaml`, y volver a
+   desplegar el sitio: la URL de la API queda horneada al compilar.
+5. Crear en UptimeRobot, en su plan gratuito, un monitor HTTP(s) a `<URL de la API>/health` cada
+   5 minutos. Mantiene despierta la API, que en frío tarda 12,5 s en responder.
+6. Comprobar desde fuera de la universidad que el sitio y `<URL de la API>/health` responden 200,
+   cargar una hoja sintética desde el sitio y buscar en los logs de `quantia-utb-api` los eventos
+   `lote_confirmado` y `hoja_recibida`.
+
+Desde ahí, cada commit a `master` cuyo CI termina en verde redespliega solo el servicio cuya
+carpeta cambió (`backend/` o `frontend/`).
 
 ## Corte vertical: carga de examen (aspecto A-01)
 
@@ -299,14 +348,15 @@ Los ADR aceptados no se editan ni se borran: si una decisión cambia, se escribe
 - [x] arc42: objetivos de calidad, restricciones clasificadas y contexto
 - [x] arc42: estrategia de solución, decisiones de arquitectura y riesgos
 - [x] arc42: Building Block View, Runtime View y Cross-cutting Concepts (secciones 5, 6 y 8)
-- [ ] arc42: Deployment View (sección 7)
+- [x] arc42: Deployment View (sección 7)
 - [x] Escenarios de calidad: 5 priorizados y 2 complementarios; EC-07 medido
 - [x] C4 Niveles 1, 2 y 3
-- [x] ADR 0001 a 0008
+- [x] ADR 0001 a 0012
 - [x] Elección de stack: FastAPI en el backend, Flutter en el frontend
 - [x] Esqueleto ejecutable
 - [x] Corte vertical de A-01: `ingesta`, almacén, bitácora, encolado y pantalla de carga
 - [x] Contrato de la API (OpenAPI) versionado y su prueba en el pipeline
+- [x] Despliegue en Render con URL pública, logs estructurados y métrica de EC-07
 - [ ] ADR de persistencia y almacenamiento (riesgo R-06); el adaptador actual es provisional
 - [ ] Modelo de datos compartido más allá de lo que A-01 necesitó
 - [ ] Elección de proveedor de LLM
@@ -318,12 +368,13 @@ Los ADR aceptados no se editan ni se borran: si una decisión cambia, se escribe
 docs/
 ├── arc42/
 │   └── arc42-template-ES.md                            # documento de arquitectura (arc42)
-├── adr/                                                # 0001 a 0008; el 0001, reemplazado por el 0002
+├── adr/                                                # 0001 a 0012; el 0001, reemplazado por el 0002
 ├── c4/
 │   └── doc-c4.md                                       # modelo C4 (Niveles 1, 2 y 3)
 ├── contrato/
 │   └── openapi.json                                    # contrato HTTP (OpenAPI 3.1), generado
-├── evidencia/                                          # medición de EC-07, prueba de contrato, SonarQube
+├── despliegue/                                        # estimación de costo y taller de despliegue
+├── evidencia/                                          # EC-07, arranque en frío, prueba de contrato, SonarQube
 ├── ficha-problema.md                                   # el problema, usuarios y alcance
 ├── aspectos.md                                         # aspectos y tabla de trazabilidad
 └── ia.md                                               # registro de uso de IA
