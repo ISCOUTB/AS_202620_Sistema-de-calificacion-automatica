@@ -38,7 +38,8 @@ def test_cada_evento_es_una_linea_json_con_sus_campos() -> None:
     assert linea["trabajo"] == "t-1"
     assert linea["examen"] == "parcial-1"
     # Los atributos internos de `logging` no se cuelan como campos del evento.
-    assert "levelno" not in linea and "args" not in linea
+    assert "levelno" not in linea
+    assert "args" not in linea
 
 
 def test_un_valor_que_no_es_json_sale_como_texto_en_vez_de_romper_el_registro() -> None:
