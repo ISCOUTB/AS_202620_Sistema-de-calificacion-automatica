@@ -149,14 +149,6 @@ def filtrar_propuestas(
                 )
             )
             continue
-        if forma == correcta:
-            descartados.append(
-                PropuestaDescartada(
-                    propuesta.expresion,
-                    "Repite la respuesta correcta: la pregunta quedaría con dos respuestas.",
-                )
-            )
-            continue
         if forma in vistas:
             descartados.append(
                 PropuestaDescartada(propuesta.expresion, "Repite otra propuesta.")
