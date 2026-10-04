@@ -24,6 +24,13 @@ MODULOS = [
     "infraestructura",
 ]
 
+# Los puntos de entrada: traducen HTTP y la cola a llamadas de dominio, y por eso importan a los
+# módulos. Al revés no puede pasar: un módulo de dominio que importe `api` o `worker` queda atado
+# a la puerta por la que entra la petición. La prueba de abajo solo miraba los siete módulos, así
+# que un `from api.settings import ...` dentro de `autoria` pasaba sin que nada fallara. Es el
+# flanco de V-1 (arc42 §8.3) visto desde el dominio.
+PUNTOS_DE_ENTRADA = ["api", "worker"]
+
 
 def _importados_permitidos(nombre_modulo: str) -> set[str]:
     """Lee la línea 'Importa:' del docstring de <modulo>/__init__.py."""
@@ -45,9 +52,12 @@ def _importados_permitidos(nombre_modulo: str) -> set[str]:
     return {m.strip() for m in valor.split(",")}
 
 
-def _imports_reales(nombre_modulo: str) -> list[tuple[str, int, str]]:
+def _imports_reales(
+    nombre_modulo: str, destinos: list[str] = MODULOS
+) -> list[tuple[str, int, str]]:
     """Recorre cada .py del paquete y devuelve (archivo_relativo, línea, módulo_importado)
-    para cada import absoluto que apunte a otro de los siete módulos del dominio."""
+    para cada import absoluto que apunte a uno de `destinos`: por omisión, los otros seis
+    módulos del dominio."""
     violaciones_candidatas = []
     directorio_modulo = RAIZ_BACKEND / nombre_modulo
 
@@ -62,7 +72,7 @@ def _imports_reales(nombre_modulo: str) -> list[tuple[str, int, str]]:
                 continue
 
             for importado in nombres_importados:
-                if importado in MODULOS and importado != nombre_modulo:
+                if importado in destinos and importado != nombre_modulo:
                     violaciones_candidatas.append(
                         (str(archivo.relative_to(RAIZ_BACKEND)), nodo.lineno, importado)
                     )
@@ -92,4 +102,22 @@ def test_modulo_no_importa_fuera_de_lo_declarado(nombre_modulo):
             f"permitidos (declarado en 'Importa:': {declarados_txt}):\n{detalle}\n"
             "Corrige el import, o si la frontera debe cambiar, actualiza primero el docstring "
             "con una razón explícita (ver docs/adr/0002-procesar-calificacion-de-forma-asincrona.md)."
+        )
+
+
+@pytest.mark.parametrize("nombre_modulo", MODULOS)
+def test_ningun_modulo_del_dominio_importa_un_punto_de_entrada(nombre_modulo):
+    """Se validó provocando la falla: con `from api.settings import LLM_MODELO` dentro de
+    `autoria/proveedor_llm.py`, esta prueba se pone en rojo y la de arriba sigue en verde,
+    porque `api` no es uno de los siete módulos que aquella recorre."""
+    reales = _imports_reales(nombre_modulo, destinos=PUNTOS_DE_ENTRADA)
+
+    if reales:
+        detalle = "\n".join(
+            f"  - {archivo}:{linea} importa '{importado}'" for archivo, linea, importado in reales
+        )
+        raise AssertionError(
+            f"El módulo '{nombre_modulo}' importa un punto de entrada del sistema:\n{detalle}\n"
+            "El dominio no puede depender de la puerta por la que entra la petición. Si necesita "
+            "un dato de configuración, que se lo pase quien lo llama."
         )
