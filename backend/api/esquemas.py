@@ -21,7 +21,11 @@ from infraestructura.modelo import ENCOLADA, PENDIENTE_DE_ENCOLAR
 
 # Version del contrato, no del proyecto. Se declara aqui, junto a los esquemas que versiona,
 # para que cambiar uno sin tocar la otra sea visible en el mismo diff.
-VERSION_DEL_CONTRATO = "1.0.0"
+#
+# 1.1.0 agrega la ruta de distractores (RF-11). Sube la version menor y no la mayor porque solo
+# agrega: las dos rutas de 1.0.0 y sus esquemas siguen identicos, asi que nadie que ya consuma la
+# API tiene que cambiar nada.
+VERSION_DEL_CONTRATO = "1.1.0"
 
 EstadoDeHoja = Literal["encolada", "pendiente_de_encolar"]
 
@@ -101,3 +105,60 @@ class RespuestaDeCarga(BaseModel):
     )
     aceptadas: list[HojaAceptadaEnRespuesta]
     rechazados: list[ArchivoRechazadoEnRespuesta]
+
+
+class SolicitudDeDistractores(BaseModel):
+    """Lo que el profesor envia para pedir distractores diagnosticos (RF-11).
+
+    Son los mismos tres campos de `PreguntaParaDistractores` y ninguno mas: es lo unico que puede
+    llegar al proveedor de LLM, y por eso RNF-13 se cumple desde la puerta. Los limites de largo
+    acotan lo que cuesta cada solicitud en tokens."""
+
+    enunciado: str = Field(
+        min_length=1, max_length=1000, description="Enunciado de la pregunta, en texto plano."
+    )
+    respuesta_correcta: str = Field(
+        min_length=1, max_length=300, description="La respuesta correcta de la clave."
+    )
+    cantidad: int = Field(
+        default=3, ge=1, le=5, description="Cuantos distractores se piden. Entre 1 y 5."
+    )
+
+
+class DistractorEnRespuesta(BaseModel):
+    """Una opcion incorrecta propuesta, con el error de procedimiento que representa. Es una
+    propuesta: no entra a ningun examen hasta que el profesor la acepte y lo habilite (RF-07)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    expresion: str = Field(description="La opcion incorrecta, en texto plano.")
+    error: str = Field(description="El error de procedimiento que la produce.")
+
+
+class DescartadoEnRespuesta(BaseModel):
+    """Una propuesta del modelo que no llego al profesor, con el motivo."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    expresion: str = Field(description="Lo que propuso el modelo.")
+    motivo: str = Field(description="Por que no se muestra, redactado para el profesor.")
+
+
+class RespuestaDeDistractores(BaseModel):
+    """Lo que responde la solicitud de distractores: lo que paso la regla y lo que no.
+
+    Ninguna propuesta de `distractores` repite la respuesta correcta (medida M1 de EC-08). Las
+    descartadas se devuelven con su motivo para que el profesor sepa por que recibio menos de lo
+    que pidio."""
+
+    distractores: list[DistractorEnRespuesta]
+    descartados: list[DescartadoEnRespuesta]
+
+
+class ProveedorNoDisponibleEnRespuesta(BaseModel):
+    """Cuerpo del 503: el proveedor no esta configurado, no respondio a tiempo o fallo.
+
+    Usa el campo `detail` de los errores de FastAPI para que un cliente lea igual este error y
+    los demas."""
+
+    detail: str = Field(description="Que paso, redactado para el profesor.")

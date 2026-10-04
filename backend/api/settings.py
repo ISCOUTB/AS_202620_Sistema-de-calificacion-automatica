@@ -18,3 +18,11 @@ NOMBRE_COLA = os.environ.get("NOMBRE_COLA", "procesamiento")
 RUTA_BITACORA = os.environ.get(
     "RUTA_BITACORA", os.path.join(RUTA_ALMACEN, "bitacora-de-recepcion.jsonl")
 )
+
+# Proveedor de LLM que propone distractores diagnósticos (RF-11, ADR-0013). Habla el protocolo de
+# chat de OpenAI, así que cambiar de proveedor es cambiar estas tres variables y no el código. Sin
+# clave, la ruta de distractores responde 503 y el resto de la API funciona igual, porque RF-11 es
+# opcional (ADR-0005). La clave nunca va en el repositorio (RNF-11): llega por el entorno.
+LLM_URL_BASE = os.environ.get("LLM_URL_BASE", "https://api.groq.com/openai/v1")
+LLM_MODELO = os.environ.get("LLM_MODELO", "openai/gpt-oss-120b")
+LLM_API_KEY = os.environ.get("LLM_API_KEY", "")

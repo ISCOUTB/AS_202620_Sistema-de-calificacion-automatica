@@ -1,27 +1,42 @@
 """Entrada HTTP del sistema. No es dominio: traduce peticiones a llamadas de módulo y de
 vuelta, y ese es todo su trabajo. La validación, el almacenamiento y el encolado viven en
-`ingesta` e `infraestructura`."""
+`ingesta` e `infraestructura`; la regla de los distractores, en `autoria`."""
 
 import logging
 import time
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, File, Response, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.esquemas import (
     VERSION_DEL_CONTRATO,
     ArchivoRechazadoEnRespuesta,
+    DescartadoEnRespuesta,
+    DistractorEnRespuesta,
     HojaAceptadaEnRespuesta,
+    ProveedorNoDisponibleEnRespuesta,
     RespuestaDeCarga,
+    RespuestaDeDistractores,
     RespuestaDeSalud,
+    SolicitudDeDistractores,
 )
 from api.settings import (
     ALLOWED_ORIGIN,
+    LLM_API_KEY,
+    LLM_MODELO,
+    LLM_URL_BASE,
     NOMBRE_COLA,
     REDIS_URL,
     RUTA_ALMACEN,
     RUTA_BITACORA,
+)
+from autoria import (
+    GeneradorCompatibleConOpenAI,
+    GeneradorDeDistractores,
+    PreguntaParaDistractores,
+    ProveedorNoDisponible,
+    proponer_distractores,
 )
 from infraestructura.almacen import AlmacenDeImagenes, AlmacenEnDisco
 from infraestructura.bitacora import BitacoraDeRecepcion, BitacoraEnDisco
@@ -41,7 +56,8 @@ app = FastAPI(
     version=VERSION_DEL_CONTRATO,
     description=(
         "Interfaz HTTP de QuantIA, sistema de calificación de exámenes de opción múltiple. "
-        "Hoy cubre el aspecto A-01 (carga de hojas escaneadas para calificación)."
+        "Hoy cubre el aspecto A-01 (carga de hojas escaneadas para calificación) y el A-06 "
+        "(propuesta opcional de distractores diagnósticos)."
     ),
 )
 
@@ -70,6 +86,15 @@ def obtener_cliente_cola():
     """Dependencia de la cola. Misma razón que arriba: si el cliente se creara al importar,
     ninguna prueba de la API podría correr sin un Redis levantado."""
     return cliente_redis(REDIS_URL)
+
+
+def obtener_generador() -> GeneradorDeDistractores | None:
+    """Dependencia del proveedor de LLM (ADR-0013). Devuelve `None` si no hay clave configurada:
+    la ruta de distractores responde 503 y nada más se entera, porque RF-11 es opcional. Por
+    petición y sustituible, como las otras, para que ninguna prueba salga a la red."""
+    if not LLM_API_KEY:
+        return None
+    return GeneradorCompatibleConOpenAI(LLM_URL_BASE, LLM_MODELO, LLM_API_KEY)
 
 
 @app.get("/health", summary="Sonda de vida", response_description="La API responde.")
@@ -171,5 +196,68 @@ async def cargar_hojas(
         rechazados=[
             ArchivoRechazadoEnRespuesta.model_validate(rechazado)
             for rechazado in resultado.rechazados
+        ],
+    )
+
+
+@app.post(
+    "/distractores",
+    summary="Proponer distractores diagnósticos para una pregunta",
+    response_description="Las propuestas que pasaron la regla y las que no, con su motivo.",
+    responses={
+        503: {
+            "model": ProveedorNoDisponibleEnRespuesta,
+            "description": (
+                "El proveedor de LLM no está configurado, no respondió a tiempo o falló. El "
+                "profesor puede volver a pedirlo o escribir los distractores a mano."
+            ),
+        }
+    },
+)
+def proponer_distractores_para_una_pregunta(
+    solicitud: SolicitudDeDistractores,
+    generador: GeneradorDeDistractores | None = Depends(obtener_generador),
+) -> RespuestaDeDistractores:
+    """Pide al proveedor de LLM distractores diagnósticos para una pregunta (RF-11, EC-08).
+
+    **Es opcional y se degrada sin arrastrar a nadie.** Si el proveedor no está configurado,
+    tarda más de lo que el adaptador espera o falla, la respuesta es 503 con el motivo, y el
+    resto de la API sigue igual: la calificación no usa el LLM (ADR-0005) y el registro manual
+    de preguntas no depende de él (ADR-0013).
+
+    **Ninguna propuesta que repita la respuesta correcta llega al profesor** (M1 de EC-08). Lo
+    que la regla descarta vuelve en `descartados`, con su motivo.
+
+    Es una ruta `def` y no `async def` a propósito: la llamada al proveedor bloquea mientras
+    espera, y FastAPI corre estas rutas en su grupo de hilos, así que la espera no detiene a las
+    demás peticiones.
+    """
+    if generador is None:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "El proveedor de LLM no está configurado en este entorno. Los distractores se "
+                "pueden escribir a mano."
+            ),
+        )
+    try:
+        resultado = proponer_distractores(
+            PreguntaParaDistractores(
+                enunciado=solicitud.enunciado,
+                respuesta_correcta=solicitud.respuesta_correcta,
+                cantidad=solicitud.cantidad,
+            ),
+            generador,
+        )
+    except ProveedorNoDisponible as falla:
+        raise HTTPException(status_code=503, detail=falla.motivo) from falla
+
+    return RespuestaDeDistractores(
+        distractores=[
+            DistractorEnRespuesta.model_validate(propuesto) for propuesto in resultado.propuestos
+        ],
+        descartados=[
+            DescartadoEnRespuesta.model_validate(descartado)
+            for descartado in resultado.descartados
         ],
     )

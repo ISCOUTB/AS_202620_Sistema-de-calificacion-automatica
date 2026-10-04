@@ -39,6 +39,48 @@
         "title": "Body_cargar_hojas_examenes__examen_id__hojas_post",
         "type": "object"
       },
+      "DescartadoEnRespuesta": {
+        "description": "Una propuesta del modelo que no llego al profesor, con el motivo.",
+        "properties": {
+          "expresion": {
+            "description": "Lo que propuso el modelo.",
+            "title": "Expresion",
+            "type": "string"
+          },
+          "motivo": {
+            "description": "Por que no se muestra, redactado para el profesor.",
+            "title": "Motivo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expresion",
+          "motivo"
+        ],
+        "title": "DescartadoEnRespuesta",
+        "type": "object"
+      },
+      "DistractorEnRespuesta": {
+        "description": "Una opcion incorrecta propuesta, con el error de procedimiento que representa. Es una\npropuesta: no entra a ningun examen hasta que el profesor la acepte y lo habilite (RF-07).",
+        "properties": {
+          "error": {
+            "description": "El error de procedimiento que la produce.",
+            "title": "Error",
+            "type": "string"
+          },
+          "expresion": {
+            "description": "La opcion incorrecta, en texto plano.",
+            "title": "Expresion",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expresion",
+          "error"
+        ],
+        "title": "DistractorEnRespuesta",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -96,6 +138,21 @@
         "title": "HojaAceptadaEnRespuesta",
         "type": "object"
       },
+      "ProveedorNoDisponibleEnRespuesta": {
+        "description": "Cuerpo del 503: el proveedor no esta configurado, no respondio a tiempo o fallo.\n\nUsa el campo `detail` de los errores de FastAPI para que un cliente lea igual este error y\nlos demas.",
+        "properties": {
+          "detail": {
+            "description": "Que paso, redactado para el profesor.",
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "ProveedorNoDisponibleEnRespuesta",
+        "type": "object"
+      },
       "RespuestaDeCarga": {
         "description": "Lo que responde la carga de hojas: que entro y que no.\n\nLa invariante que promete es la de EC-07: `total_procesados` es igual al numero de\nelementos de `aceptadas` mas los de `rechazados`, y ese numero es el de archivos que el\ndocente envio. Ningun archivo se pierde en silencio.",
         "properties": {
@@ -133,6 +190,31 @@
         "title": "RespuestaDeCarga",
         "type": "object"
       },
+      "RespuestaDeDistractores": {
+        "description": "Lo que responde la solicitud de distractores: lo que paso la regla y lo que no.\n\nNinguna propuesta de `distractores` repite la respuesta correcta (medida M1 de EC-08). Las\ndescartadas se devuelven con su motivo para que el profesor sepa por que recibio menos de lo\nque pidio.",
+        "properties": {
+          "descartados": {
+            "items": {
+              "$ref": "#/components/schemas/DescartadoEnRespuesta"
+            },
+            "title": "Descartados",
+            "type": "array"
+          },
+          "distractores": {
+            "items": {
+              "$ref": "#/components/schemas/DistractorEnRespuesta"
+            },
+            "title": "Distractores",
+            "type": "array"
+          }
+        },
+        "required": [
+          "distractores",
+          "descartados"
+        ],
+        "title": "RespuestaDeDistractores",
+        "type": "object"
+      },
       "RespuestaDeSalud": {
         "description": "Lo que devuelve la sonda de vida. Hoy tiene un unico valor posible y el esquema lo dice\nasi: declararlo como texto libre prometeria una variedad que la ruta no tiene.",
         "properties": {
@@ -147,6 +229,39 @@
           "status"
         ],
         "title": "RespuestaDeSalud",
+        "type": "object"
+      },
+      "SolicitudDeDistractores": {
+        "description": "Lo que el profesor envia para pedir distractores diagnosticos (RF-11).\n\nSon los mismos tres campos de `PreguntaParaDistractores` y ninguno mas: es lo unico que puede\nllegar al proveedor de LLM, y por eso RNF-13 se cumple desde la puerta. Los limites de largo\nacotan lo que cuesta cada solicitud en tokens.",
+        "properties": {
+          "cantidad": {
+            "default": 3,
+            "description": "Cuantos distractores se piden. Entre 1 y 5.",
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Cantidad",
+            "type": "integer"
+          },
+          "enunciado": {
+            "description": "Enunciado de la pregunta, en texto plano.",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Enunciado",
+            "type": "string"
+          },
+          "respuesta_correcta": {
+            "description": "La respuesta correcta de la clave.",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Respuesta Correcta",
+            "type": "string"
+          }
+        },
+        "required": [
+          "enunciado",
+          "respuesta_correcta"
+        ],
+        "title": "SolicitudDeDistractores",
         "type": "object"
       },
       "ValidationError": {
@@ -192,12 +307,61 @@
     }
   },
   "info": {
-    "description": "Interfaz HTTP de QuantIA, sistema de calificación de exámenes de opción múltiple. Hoy cubre el aspecto A-01 (carga de hojas escaneadas para calificación).",
+    "description": "Interfaz HTTP de QuantIA, sistema de calificación de exámenes de opción múltiple. Hoy cubre el aspecto A-01 (carga de hojas escaneadas para calificación) y el A-06 (propuesta opcional de distractores diagnósticos).",
     "title": "QuantIA",
-    "version": "1.0.0"
+    "version": "1.1.0"
   },
   "openapi": "3.1.0",
   "paths": {
+    "/distractores": {
+      "post": {
+        "description": "Pide al proveedor de LLM distractores diagnósticos para una pregunta (RF-11, EC-08).\n\n**Es opcional y se degrada sin arrastrar a nadie.** Si el proveedor no está configurado,\ntarda más de lo que el adaptador espera o falla, la respuesta es 503 con el motivo, y el\nresto de la API sigue igual: la calificación no usa el LLM (ADR-0005) y el registro manual\nde preguntas no depende de él (ADR-0013).\n\n**Ninguna propuesta que repita la respuesta correcta llega al profesor** (M1 de EC-08). Lo\nque la regla descarta vuelve en `descartados`, con su motivo.\n\nEs una ruta `def` y no `async def` a propósito: la llamada al proveedor bloquea mientras\nespera, y FastAPI corre estas rutas en su grupo de hilos, así que la espera no detiene a las\ndemás peticiones.",
+        "operationId": "proponer_distractores_para_una_pregunta_distractores_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SolicitudDeDistractores"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespuestaDeDistractores"
+                }
+              }
+            },
+            "description": "Las propuestas que pasaron la regla y las que no, con su motivo."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProveedorNoDisponibleEnRespuesta"
+                }
+              }
+            },
+            "description": "El proveedor de LLM no está configurado, no respondió a tiempo o falló. El profesor puede volver a pedirlo o escribir los distractores a mano."
+          }
+        },
+        "summary": "Proponer distractores diagnósticos para una pregunta"
+      }
+    },
     "/examenes/{examen_id}/hojas": {
       "post": {
         "description": "Recibe una o varias hojas escaneadas de un examen y confirma qué entró y qué no (RF-01).\n\n**Responde 200 aunque haya archivos rechazados, y eso es deliberado.** La petición se\natendió por completo: el 200 confirma que el sistema procesó el lote entero, y el cuerpo\ndice archivo por archivo qué pasó. Devolver un error por un rechazo obligaría al cliente a\nreenviar el lote completo, que es justo lo que EC-07 quiere evitar.\n\n**Una hoja puede volver como aceptada y todavía pendiente de encolar.** Desde ADR-0006 el\ncampo `estado` de cada aceptada vale `encolada` o `pendiente_de_encolar`: la segunda es una\nhoja almacenada y registrada en la bitácora cuyo trabajo no llegó a la cola. Se reporta en\nvez de omitirse porque EC-07 exige que ningún archivo cargado desaparezca sin traza, y\nreintentarla es asunto del sistema, no del docente: el archivo ya está adentro.\n\n**El `examen_id` todavía no se verifica contra nada, y es un hueco conocido, no un olvido.**\nEl módulo `autoria` (aspecto A-04) es el que registrará los exámenes, y aún no existe;\n`identidad` (A-05) es el que comprobará que el docente puede cargar en ese curso, y\ntampoco. La ruta ya tiene la forma definitiva para que cuando esos módulos lleguen solo\nhaya que sumar la comprobación, sin migrar el frontend.",
