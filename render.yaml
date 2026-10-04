@@ -45,6 +45,15 @@ services:
         value: /app/almacen_imagenes/bitacora-de-recepcion.jsonl
       - key: ALLOWED_ORIGIN
         value: https://quantia-utb.onrender.com
+      # Proveedor de LLM para los distractores (ADR-0013). La clave no está aquí: `sync: false`
+      # hace que Render la pida en el panel, y nunca pasa por el repositorio (RNF-11). Sin ella,
+      # la ruta /distractores responde 503 y el resto de la API sigue igual.
+      - key: LLM_URL_BASE
+        value: https://api.groq.com/openai/v1
+      - key: LLM_MODELO
+        value: openai/gpt-oss-120b
+      - key: LLM_API_KEY
+        sync: false
 
   # La cola. Solo es accesible por la red privada de Render (lista de IP vacía), y con
   # `noeviction` no descarta trabajos para hacer espacio: si se llena, el encolado falla y la
