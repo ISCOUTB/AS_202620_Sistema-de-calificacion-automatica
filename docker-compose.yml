@@ -35,6 +35,11 @@ services:
       # Bitácora de recepción (ADR-0006). Solo `api` la escribe. El código deriva esta ruta
       # de RUTA_ALMACEN; aquí son dos literales, así que se cambian juntas.
       RUTA_BITACORA: ${RUTA_BITACORA:-/app/almacen_imagenes/bitacora-de-recepcion.jsonl}
+      # Proveedor de LLM para los distractores (ADR-0013). Solo `api` lo usa: el worker no
+      # participa en la autoría. Sin clave en el `.env`, la ruta responde 503 y nada más cambia.
+      LLM_URL_BASE: ${LLM_URL_BASE:-https://api.groq.com/openai/v1}
+      LLM_MODELO: ${LLM_MODELO:-openai/gpt-oss-120b}
+      LLM_API_KEY: ${LLM_API_KEY:-}
     volumes:
       - almacen_imagenes:/app/almacen_imagenes
     depends_on:
