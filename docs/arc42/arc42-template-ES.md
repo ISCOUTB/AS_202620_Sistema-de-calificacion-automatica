@@ -44,6 +44,7 @@ su frontera.
   - [6.1 Arranque y verificación de salud](#61-arranque-y-verificación-de-salud)
   - [6.2 Carga de una hoja escaneada (RF-01 · aspecto A-01 · EC-07)](#62-carga-de-una-hoja-escaneada-rf-01--aspecto-a-01--ec-07)
   - [6.3 Escenarios pendientes](#63-escenarios-pendientes)
+  - [6.4 Solicitud de distractores (RF-11 · aspecto A-06 · EC-08)](#64-solicitud-de-distractores-rf-11--aspecto-a-06--ec-08)
 - [7. Deployment View](#7-deployment-view)
   - [7.1 Las seis piezas del despliegue](#71-las-seis-piezas-del-despliegue)
   - [7.2 Entorno local](#72-entorno-local)
@@ -121,7 +122,7 @@ no funcionalidades, y cada uno se hace verificable a través de los escenarios d
 
 | # | Objetivo de calidad | A quién le importa | Por qué es prioritario | Escenarios que lo verifican |
 |---|---|---|---|---|
-| **QG-1** | **Precisión y validez matemática.** Lectura OMR confiable, y ningún examen calificado con una clave que el profesor no haya revisado y habilitado explícitamente. | Comité Académico, profesores, estudiantes | Una nota mal calculada tiene consecuencias académicas directas y erosiona la confianza en el sistema de forma irreversible. | [EC-01](#ec-01), [EC-05](#ec-05) |
+| **QG-1** | **Precisión y validez matemática.** Lectura OMR confiable, y ningún examen calificado con una clave que el profesor no haya revisado y habilitado explícitamente. | Comité Académico, profesores, estudiantes | Una nota mal calculada tiene consecuencias académicas directas y erosiona la confianza en el sistema de forma irreversible. | [EC-01](#ec-01), [EC-05](#ec-05), [EC-08](#ec-08) |
 | **QG-2** | **Rendimiento y eficiencia de procesamiento.** Calificar exámenes individuales en segundos y lotes masivos en minutos. | Profesores, TAs | Si calificar con el sistema no es más rápido que calificar a mano, el sistema no tiene razón de existir. | [EC-03](#ec-03), [EC-04](#ec-04) |
 | **QG-3** | **Manejabilidad de casos borde (degradación controlada).** Ninguna marca dudosa se convierte en una calificación silenciosamente errónea. | Estudiantes, profesores | Es la contraparte necesaria de QG-1: la precisión perfecta no existe, así que el sistema debe *saber* cuándo no sabe. | [EC-02](#ec-02) |
 | **QG-4** | **Seguridad y aislamiento por rol.** Cada docente accede únicamente a los datos y calificaciones de sus cursos autorizados. | Comité Académico, Administradores de TI | Las calificaciones son datos académicos sensibles y su manipulación indebida es un riesgo institucional y legal, no solo técnico. | [EC-06](#ec-06) |
@@ -198,7 +199,7 @@ convierte en calificaciones y métricas analíticas para los usuarios docentes.
 | Socio de comunicación | Entradas al sistema | Salidas desde el sistema |
 |---|---|---|
 | **Profesor / TA** | Creación y edición de bancos de preguntas; claves de respuesta; parámetros de evaluación; archivos escaneados (imágenes o PDF); resolución manual de casos ambiguos. | Vistas del dashboard interactivo; reportes consolidados por curso; analítica de ítems por pregunta; alertas de casos dudosos, y la estadística por pregunta, que deja ver un distractor que compite con la respuesta correcta (ver la [ficha del problema](../ficha-problema.md)). |
-| **Proveedor de LLM** *(sistema externo, pendiente de decisión — ver R-02)* | La pregunta para la que el profesor pide distractores. **Nunca datos personales** (RNF-13). | Distractores diagnósticos candidatos, cada uno con la etiqueta del error que representa. El profesor decide cuáles acepta, y ninguno entra a un examen sin su habilitación (RF-07, [ADR-0005](../adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md)). |
+| **Proveedor de LLM** *(sistema externo: Groq, [ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md))* | La pregunta para la que el profesor pide distractores. **Nunca datos personales** (RNF-13). | Distractores diagnósticos candidatos, cada uno con la etiqueta del error que representa. El profesor decide cuáles acepta, y ninguno entra a un examen sin su habilitación (RF-07, [ADR-0005](../adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md)). |
 
 > **Nota de modelado.** La *hoja de respuestas física* no se representa como socio de
 > comunicación. Un documento en papel no es un actor ni un sistema: es el **artefacto de
@@ -215,7 +216,7 @@ diagrama C4 de contexto en [`../c4/doc-c4.md`](../c4/doc-c4.md).
 |---|---|---|---|---|
 | **Interfaz Web (Dashboard)** | Autenticación, gestión de cursos y bancos de preguntas, carga de escaneos, resolución de marcas ambiguas | Notas, gráficos, alertas de ambigüedad y estadística por pregunta | HTTPS · JSON en las respuestas; multipart/form-data en la carga de escaneos. Frontend en Flutter compilado a web. Interfaz descrita campo por campo en [../contrato/openapi.json](../contrato/openapi.json) | Profesor / TA |
 | **Canal de ingesta OMR** | Lote de imágenes o PDF de hojas escaneadas | Matriz de respuestas detectadas con nivel de confianza (%) por pregunta | Carga HTTP multipart. Procesamiento previsto con OpenCV sobre PNG, JPG o PDF a 300 DPI; **aún no está implementado** (ver A-02) | Profesor / TA |
-| **Proveedor de LLM** *(pendiente y opcional)* | Especificación de la pregunta para la que se piden distractores | Distractores candidatos, cada uno con la etiqueta del error de procedimiento que representa, sujetos a la decisión del profesor (RF-11) | **Pendiente de decidir.** Si se usa una API alojada, es HTTPS/JSON contra un sistema externo; si se usa un modelo local, es in-process. Ver R-02. | Proveedor de LLM |
+| **Proveedor de LLM** *(opcional)* | Especificación de la pregunta para la que se piden distractores | Distractores candidatos, cada uno con la etiqueta del error de procedimiento que representa, sujetos a la decisión del profesor (RF-11) | HTTPS · JSON, `POST /chat/completions` compatible con OpenAI, contra Groq; clave en la variable `LLM_API_KEY`; 20 s de espera, sin reintentos ([ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)) | Proveedor de LLM |
 
 ## 3.3 Fuera de alcance
 
@@ -299,13 +300,13 @@ los dos documentos juntos:
 
 | Contenedor | Responsabilidad (C4 Nivel 2) | Tecnología | Estado de implementación |
 |---|---|---|---|
-| **Aplicación web** *(lado servidor)* | Autenticación, cursos, preguntas, exámenes, carga de escaneos y consulta de resultados; inicia los trabajos de procesamiento. | FastAPI (`backend/api/main.py`), Uvicorn (servicio `api`). | Expone `GET /health` y `POST /examenes/{examen_id}/hojas` (RF-01, aspecto A-01). El resto de responsabilidades del contenedor (cursos, preguntas, resultados) siguen sin ruta. |
+| **Aplicación web** *(lado servidor)* | Autenticación, cursos, preguntas, exámenes, carga de escaneos y consulta de resultados; inicia los trabajos de procesamiento. | FastAPI (`backend/api/main.py`), Uvicorn (servicio `api`). | Expone `GET /health`, `POST /examenes/{examen_id}/hojas` (RF-01, aspecto A-01) y `POST /distractores` (RF-11, aspecto A-06). El resto de responsabilidades del contenedor (cursos, preguntas, resultados) siguen sin ruta. |
 | **Interfaz web** *(parte de «Aplicación web» en el C4)* | Presenta al docente el dashboard, la carga de escaneos y la resolución de marcas ambiguas. | Flutter compilado a web, servido por nginx (servicio `frontend`). | Construida la pantalla de carga del aspecto A-01 (`pantalla_carga.dart`, `servicio_carga.dart`, `selector_archivos.dart`) y la de inicio con el estado de conexión. El dashboard de RNF-04 y la resolución de marcas ambiguas siguen sin construir. |
 | **Worker de procesamiento** | Ejecuta el OMR, calcula calificaciones y genera alertas de revisión. | Proceso Python (`backend/worker/main.py`), misma imagen que la aplicación web. | Consume la cola y confirma que la hoja encolada por `ingesta` le llegó, registrando en log su identificador, examen, archivo y referencia. **No ejecuta todavía** el pipeline `omr → calificacion`: ese es el aspecto A-02, aún declarado. |
 | **Cola de trabajos** | Desacopla la aplicación web del procesamiento OMR. | Redis 7, adaptador FIFO en `infraestructura/cola.py` (RPUSH/BLPOP). | Implementado y probado contra un Redis real (`backend/tests/test_encolado.py`); sigue siendo, según su propio docstring, «el germen» de lo que EC-07 exige, no una cola de producción con reintentos o acuses de recibo. |
 | **Base de datos** | Almacena usuarios, cursos, preguntas, claves, exámenes y resultados. | PostgreSQL 16, volumen `datos_postgres`. | Declarada en `docker-compose.yml` y `.env.example`; **ningún módulo la usa todavía** — sin esquema ni migraciones. |
 | **Almacén de imágenes** | Conserva las hojas escaneadas, la bitácora de recepción y archivos asociados. | Volumen Docker `almacen_imagenes`, montado en `api` y `worker`. | **Implementado como dos puertos con adaptadores provisionales**: `infraestructura/almacen.py` define el puerto `AlmacenDeImagenes` y el adaptador `AlmacenEnDisco`, que escribe en el volumen con nombres saneados (`nombre_seguro`) para evitar escapes de directorio; `infraestructura/bitacora.py` define `BitacoraDeRecepcion` y `BitacoraEnDisco`, de solo agregado y con `fsync` por línea ([ADR-0006](../adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md)). Los dos son deliberadamente provisionales: el riesgo R-06 (decisión de persistencia) sigue abierto, y cuando se resuelva solo cambian los adaptadores, no los puertos ni quien los consume. La política de retención de RNF-14 aterrizará aquí y hoy no está implementada. |
-| **Proveedor de LLM** *(externo, opcional y pendiente)* | Propone distractores diagnósticos durante la autoría. | Por decidir (riesgo R-02). | Sin código; se conecta solo desde la aplicación web, nunca desde el worker (RNF-13). |
+| **Proveedor de LLM** *(externo y opcional)* | Propone distractores diagnósticos durante la autoría. | Groq, modelo `openai/gpt-oss-120b`, con el protocolo de chat de OpenAI ([ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)). | Lo llama `autoria/proveedor_llm.py` desde la aplicación web, nunca desde el worker (RNF-13). Sin clave, la ruta de distractores responde 503 y nada más cambia. |
 
 ## 5.2 Level 2
 
@@ -318,7 +319,7 @@ importación que declara el docstring de cada `__init__.py` y que hace cumplir
 |---|---|---|---|---|
 | **ingesta** | Recepción y validación de archivos escaneados (individual o en lote) y encolado del procesamiento. | RF-01 | `infraestructura`, `identidad` | **Implementado** (`recepcion.py`): valida extensión *y* firma de bytes por archivo, no aborta el lote ante un archivo inválido ni ante un fallo de la cola (ADR-0006), y por cada hoja almacena, acuña el trabajo, registra en la bitácora y solo entonces publica. Expone `recibir_lote`, `motivo_de_rechazo` y `EXTENSIONES_ACEPTADAS` como interfaz pública vía `__all__`. Aún no verifica el `examen_id` contra nada (hueco conocido: depende de `autoria`, A-04) ni la autorización del docente (depende de `identidad`, A-05). |
 | **infraestructura** | Persistencia, almacenamiento de imágenes, bitácora de recepción y adaptador de la cola de trabajos. | Transversal | ninguno | **Parcialmente implementado.** `cola.py` (acuñar, publicar y desencolar sobre Redis, con `ColaNoDisponible` como traducción de los errores de redis-py al dominio), `almacen.py` (puerto `AlmacenDeImagenes` + adaptador `AlmacenEnDisco`), `bitacora.py` (puerto `BitacoraDeRecepcion` + adaptadores `BitacoraEnDisco` y `BitacoraEnMemoria`, ADR-0006) y `modelo.py` (el modelo de datos compartido: `ArchivoCargado`, `HojaAceptada`, `ArchivoRechazado`, `ResultadoRecepcion`, `EntradaDeBitacora`) ya tienen código. Sigue sin persistencia estructurada (Postgres sin esquema) y sin política de retención (R-06, RNF-14 abiertos). |
-| **autoria** | Bancos de preguntas y clave de respuestas, generación opcional de distractores diagnósticos con LLM, y habilitación del examen. | RF-06, RF-07, RF-11 | `infraestructura`, `identidad` | Paquete vacío (aspecto A-04, declarado). |
+| **autoria** | Bancos de preguntas y clave de respuestas, generación opcional de distractores diagnósticos con LLM, y habilitación del examen. | RF-06, RF-07, RF-11 | `infraestructura`, `identidad` | **Implementado en parte** (aspecto A-06): `distractores.py` (los tipos, el puerto `GeneradorDeDistractores` y la regla de qué propuestas llegan al profesor) y `proveedor_llm.py` (el adaptador al proveedor, [ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)). El banco, la clave y la habilitación siguen sin código (aspecto A-04). |
 | **omr** | Detección de marcas y cálculo del nivel de confianza; clasificación de ambigüedad. | RF-02, RF-03 | `infraestructura`, `identidad` | Paquete vacío (aspecto A-02, declarado). |
 | **calificacion** | Comparación contra la clave habilitada por el profesor y cálculo de notas; recálculo tras revisión manual. | RF-04, RF-08 | `infraestructura`, `identidad`, `omr` | Paquete vacío (aspecto A-03, declarado). |
 | **dashboard** | Presentación de resultados y agregaciones por curso, examen y pregunta. | RF-05 | `infraestructura`, `identidad`, `calificacion` | Paquete vacío (aspecto A-03, declarado). |
@@ -448,7 +449,43 @@ de verdad ante un cambio incompatible está comprobado en
 | Detección de marcas sobre la hoja ya recibida | RF-02, RF-03 | EC-01, EC-02 | `omr` vacío (aspecto A-02); depende del dataset de 300 hojas (R-01) y del umbral de confianza (R-04) |
 | Calificación de un lote de exámenes | RF-04 → RF-05, RF-08 | EC-03, EC-04 | `calificacion`, `dashboard` vacíos (aspecto A-03); depende de A-02 |
 | Resolución manual de una marca ambigua | RF-08, RF-10 | EC-02 | `calificacion`, `identidad` vacíos |
-| Registro y habilitación de un examen | RF-06 → RF-07 | EC-05 | `autoria` vacío (aspecto A-04); proveedor de LLM sin decidir (R-02) |
+| Registro y habilitación de un examen | RF-06 → RF-07 | EC-05 | `autoria` sin el banco ni la habilitación (aspecto A-04); los distractores ya están construidos (6.4) |
+
+## 6.4 Solicitud de distractores (RF-11 · aspecto A-06 · EC-08)
+
+El profesor pide distractores diagnósticos para una pregunta. La llamada pasa por `api`, `autoria`
+y el proveedor externo; ninguna parte de la calificación interviene (ADR-0005).
+
+```mermaid
+sequenceDiagram
+    actor P as Profesor o TA
+    participant API as api, POST /distractores
+    participant A as autoria, regla
+    participant G as autoria, adaptador
+    participant L as Groq, externo
+    P->>API: enunciado, respuesta correcta y cantidad
+    API->>API: valida la solicitud, 422 si está mal formada
+    API->>A: proponer_distractores(pregunta, generador)
+    A->>G: proponer(pregunta)
+    G->>L: POST /chat/completions, solo con la pregunta (RNF-13)
+    L-->>G: JSON con las propuestas
+    G-->>A: DistractorPropuesto, sin juzgarlos
+    A->>A: descarta la que repite la respuesta correcta, las repetidas, las sin etiqueta y las que sobran
+    A-->>API: propuestas y descartadas, cada una con su motivo
+    API-->>P: 200
+```
+
+**El camino degradado** ([ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)):
+- **Sin clave configurada**, la ruta responde 503 sin salir a la red.
+- **Si el proveedor no responde en 20 s, rechaza la solicitud** (cuota agotada, clave rechazada) **o
+  devuelve algo ilegible**, el adaptador levanta `ProveedorNoDisponible`, y la ruta responde 503
+  con el motivo para el profesor.
+- **No hay reintentos.** El registro manual de preguntas y la calificación no dependen de este
+  camino.
+
+Cada solicitud deja un evento JSON, `distractores_propuestos` o `proveedor_no_disponible`, con la
+duración y los tokens: es la métrica de [EC-08](#ec-08).
+
 ---
 
 # 7. Deployment View
@@ -485,6 +522,7 @@ flowchart TB
     end
 
     postgres["Postgres<br/>Pieza 3: la base de datos<br/>no se despliega"]
+    groq["Groq<br/>proveedor de LLM externo"]
 
     profesor -->|HTTPS: descarga el sitio| sitio
     profesor -->|HTTPS: carga de hojas desde el sitio| api
@@ -492,6 +530,7 @@ flowchart TB
     api -->|guarda hojas y bitácora| disco
     api -->|RPUSH, red privada| cola
     cola -->|BLPOP, red privada| worker
+    api -->|HTTPS: distractores, opcional| groq
     github -->|despliega si el CI queda en verde| render
 ```
 
@@ -500,11 +539,11 @@ flowchart TB
 | Servicio | Tipo (plan) | Recursos | Notas |
 |---|---|---|---|
 | `quantia-utb` | Sitio estático | Siempre gratis | Flutter 3.44.3 compilado por Render, con la URL de la API horneada al compilar (ADR-0010); si la URL cambia, hay que recompilar. |
-| `quantia-utb-api` | Servicio web Free | 0,1 CPU, 512 MB | Docker con `backend/Dockerfile`. API y worker en la misma instancia (`backend/arrancar-api-y-worker.sh`), porque Render no ofrece plan gratuito para *background workers*. Se apagaría a los 15 min sin tráfico; el monitor externo lo evita (ADR-0009, R-13). |
+| `quantia-utb-api` | Servicio web Free | 0,1 CPU, 512 MB | Docker con `backend/Dockerfile`. API y worker en la misma instancia (`backend/arrancar-api-y-worker.sh`), porque Render no ofrece plan gratuito para *background workers*. Se apagaría a los 15 min sin tráfico; el monitor externo lo evita (ADR-0009, R-13). Lee `LLM_URL_BASE`, `LLM_MODELO` y `LLM_API_KEY` para el proveedor de LLM; la clave se escribe en el panel de Render (`sync: false`, [ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)). |
 | `quantia-utb-cola` | Key Value Free | 25 MB, 50 conexiones | Sin persistencia, solo red privada (`ipAllowList: []`), política `noeviction` (ADR-0011). |
 
-`REDIS_URL` la inyecta Render desde `quantia-utb-cola` hacia `quantia-utb-api` con `fromService`;
-no hay secretos versionados en el código.
+`REDIS_URL` la inyecta Render desde `quantia-utb-cola` hacia `quantia-utb-api` con `fromService`, y
+`LLM_API_KEY` se escribe a mano en el panel de Render; no hay secretos versionados en el código.
 
 **URL declarada del sistema:** https://quantia-utb.onrender.com. La raíz de la API
 (https://quantia-utb-api.onrender.com) responde 404 porque no existe `GET /`; eso es normal y no
@@ -524,8 +563,8 @@ pruebas del backend con Redis como servicio y las del frontend con Flutter 3.44.
 
 - **Postgres (pieza 3).** Ningún módulo lo usa todavía; `infraestructura` sigue sin persistencia
   estructurada (5.2, R-06).
-- **El proveedor de LLM.** RF-11 no está construido (R-12); Autoría queda sin su adaptador hacia
-  el LLM, y el sistema califica completo sin él (ADR-0005).
+- **El proveedor de LLM.** No es una pieza nuestra: es Groq, un servicio externo al que la API
+  llama por HTTPS ([ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)). No se despliega nada para él; solo se configura su clave.
 
 ## 7.4 Limitaciones de este entorno
 
@@ -539,6 +578,7 @@ pruebas del backend con Redis como servicio y las del frontend con Flutter 3.44.
 - **Dependencia de la capa gratuita, con condiciones que pueden cambiar:** ver R-15. El punto de
   ruptura por recurso está en [`docs/despliegue/costo-mensual.md`](../despliegue/costo-mensual.md).
 - **Un solo operador de Render:** ver R-16.
+- **Una ruta de distractores sin autenticación, que gasta cuota del proveedor:** ver R-17.
 
 ---
 
@@ -604,7 +644,8 @@ flowchart TB
     [Contexto]
 
     Registra el banco y la clave,
-    y habilita el examen."]
+    habilita el examen y
+    propone distractores."]
 
     dashboard["<b>Dashboard</b>
     [Contexto]
@@ -618,7 +659,7 @@ flowchart TB
     Persistencia y servicios técnicos
     compartidos por los otros seis."]
 
-    llm["<b>Proveedor de LLM</b>
+    llm["<b>Proveedor de LLM · Groq</b>
     [Sistema externo]"]
 
     infraestructura <-.->|"<b>Núcleo compartido</b>
@@ -644,7 +685,7 @@ flowchart TB
     calificacion -->|"<b>Cliente/Proveedor</b>"| dashboard
 
     autoria -.->|"<b>Capa anticorrupción</b>
-    adaptador propio, pendiente"| llm
+    GeneradorCompatibleConOpenAI"| llm
 
     classDef contexto fill:#1168BD,stroke:#3379B7,color:#ffffff
     classDef soporte fill:#5B3A8E,stroke:#42295F,color:#ffffff
@@ -677,7 +718,7 @@ flowchart TB
 | Autoría | Dominio | Registro del banco de preguntas y de la clave, y habilitación explícita del examen (RF-06, RF-07). Opcionalmente propone distractores diagnósticos con apoyo de un LLM (RF-11). |
 | Dashboard | Dominio | Presentación de notas, estadísticas y alertas de revisión manual. |
 | Infraestructura | Soporte | Persistencia y servicios técnicos compartidos por los seis contextos de dominio. |
-| Proveedor de LLM | Externo | Modelo de lenguaje de terceros usado solo desde Autoría, opcional (ADR-0005). |
+| Proveedor de LLM | Externo | Modelo de lenguaje de terceros (Groq, [ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)) usado solo desde Autoría, opcional (ADR-0005). |
 
 ### Relaciones y su tipo
 
@@ -687,7 +728,7 @@ flowchart TB
 | 2 | Identidad → {Ingesta, OMR, Calificación, Autoría, Dashboard} | Cliente/Proveedor | Línea 4 de los cinco `__init__.py`, todas con `identidad` en su `Importa:`: [`ingesta`](../../backend/ingesta/__init__.py), [`omr`](../../backend/omr/__init__.py), [`calificacion`](../../backend/calificacion/__init__.py), [`autoria`](../../backend/autoria/__init__.py), [`dashboard`](../../backend/dashboard/__init__.py) |
 | 3 | OMR → Calificación | Cliente/Proveedor | [`backend/calificacion/__init__.py`](../../backend/calificacion/__init__.py) línea 4: `Importa: infraestructura, identidad, omr` |
 | 4 | Calificación → Dashboard | Cliente/Proveedor | [`backend/dashboard/__init__.py`](../../backend/dashboard/__init__.py) línea 4: `Importa: infraestructura, identidad, calificacion` |
-| 5 | Autoría → Proveedor de LLM | Capa anticorrupción | Adaptador propio, todavía sin construir (RF-11), que aislará al dominio del modelo externo. El nodo sigue punteado en el C4 por dos razones: el proveedor no está decidido (R-02) y su uso es opcional ([ADR-0005](../adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md)) |
+| 5 | Autoría → Proveedor de LLM | Capa anticorrupción | `GeneradorCompatibleConOpenAI` en [`backend/autoria/proveedor_llm.py`](../../backend/autoria/proveedor_llm.py) línea 65: traduce la pregunta a una solicitud y el JSON del modelo a `DistractorPropuesto`, y el formato del proveedor no sale de ese archivo. Construido en la S9 ([ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)); el uso sigue siendo opcional ([ADR-0005](../adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md)) |
 | 6 | {Ingesta} → Infraestructura, vía puertos | Capa anticorrupción interna | `AlmacenDeImagenes` en [`almacen.py`](../../backend/infraestructura/almacen.py) línea 47 y `BitacoraDeRecepcion` en [`bitacora.py`](../../backend/infraestructura/bitacora.py) línea 39, los dos declarados como `Protocol`: `ingesta` conoce el contrato, no el disco ni Redis |
 
 La fila 6 es una capa anticorrupción **interna**: no aísla al dominio de un sistema externo sino
@@ -745,7 +786,7 @@ de su significado, que es lo que convierte un glosario en lenguaje ubicuo.
 | **Nivel de confianza** | OMR | Sin código todavía (A-02) |
 | **Umbral de confianza** | OMR | Sin código todavía; su valor se fija con evidencia (R-04) |
 | **Clave de respuestas** | Autoría | Sin código todavía (A-04) |
-| **Distractor diagnóstico** | Autoría | Sin código todavía (RF-11, opcional) |
+| **Distractor diagnóstico** | Autoría | `DistractorPropuesto` en [`autoria/distractores.py`](../../backend/autoria/distractores.py), con la etiqueta del error en su campo `error` (A-06) |
 | **Habilitación del examen** | Autoría | Sin código todavía; su invariante es que ningún examen se califica sin ella (RF-07) |
 | **Nota** | Calificación | Sin código todavía (A-03) |
 | **Curso** | Identidad | Sin código todavía (A-05) |
@@ -816,6 +857,10 @@ eso se trata aparte, en [«Entidades previstas»](#entidades-previstas-sin-const
 | `ResultadoRecepcion` | `ingesta` | [`backend/infraestructura/modelo.py`](../../backend/infraestructura/modelo.py) | 80 |
 | `EntradaDeBitacora` | `ingesta` | [`backend/infraestructura/modelo.py`](../../backend/infraestructura/modelo.py) | 96 |
 | `Trabajo` | `infraestructura` | [`backend/infraestructura/cola.py`](../../backend/infraestructura/cola.py) | 26 |
+| `PreguntaParaDistractores` | `autoria` | [`backend/autoria/distractores.py`](../../backend/autoria/distractores.py) | 42 |
+| `DistractorPropuesto` | `autoria` | [`backend/autoria/distractores.py`](../../backend/autoria/distractores.py) | 54 |
+| `PropuestaDescartada` | `autoria` | [`backend/autoria/distractores.py`](../../backend/autoria/distractores.py) | 63 |
+| `ResultadoDePropuesta` | `autoria` | [`backend/autoria/distractores.py`](../../backend/autoria/distractores.py) | 71 |
 
 **Por qué el dueño de las cinco es `ingesta` y no `infraestructura`, si las cinco clases están
 declaradas en `infraestructura/modelo.py`.** La ruta y la línea son de dónde vive la
@@ -853,6 +898,13 @@ confiaron, pero no le añade ni le cambia ningún campo. Si algún día `Bitacor
 inferir o corregir un campo al releerlo —por ejemplo, a decidir un `estado` que `ingesta` no le
 dio— ahí sí pasaría a tener dos dueños, y esta tabla es la que lo haría visible.
 
+**Por qué las cuatro de `autoria` son de `autoria`.** Las cuatro están declaradas en
+`autoria/distractores.py`, y su contenido lo decide la regla de ese mismo archivo
+(`filtrar_propuestas`): qué propuesta llega al profesor y con qué motivo se descarta otra.
+`api/main.py` construye una `PreguntaParaDistractores` con lo que envía el profesor, pero solo
+como el adaptador HTTP que traduce la petición, igual que hace con `ArchivoCargado`. `autoria` las
+declara además en la línea `Posee:` de su `__init__.py`: es el primer módulo que lo hace.
+
 ### Entidades previstas (sin construir)
 
 Los aspectos A-02 a A-05 todavía no tienen código ([`docs/aspectos.md`](../aspectos.md)), así que
@@ -865,7 +917,7 @@ complete por adición y no se reescriba cuando esos aspectos se especifiquen.
 | Marca detectada y su nivel de confianza | `omr` | A-02 | Pendiente |
 | Nota / resultado de calificación | `calificacion` | A-03 | Pendiente |
 | Banco de preguntas y clave de respuestas | `autoria` | A-04 | Pendiente |
-| Distractor diagnóstico (RF-11, opcional) | `autoria` | A-04 | Pendiente |
+| Distractor diagnóstico (RF-11, opcional) | `autoria` | A-06 | **Construido en la S9**: pasó a la tabla de arriba (`DistractorPropuesto` y las otras tres de `autoria`) |
 | Usuario, rol y curso | `identidad` | A-05 | Pendiente |
 
 Que el dueño previsto de la nota sea `calificacion` y no `omr` ni `dashboard` es deliberado:
@@ -920,7 +972,13 @@ una lleva su acción correctiva y aquello de lo que depende para poder hacerse.
 | V-2 | El nombre de la cola está declarado dos veces y ninguna declaración es la fuente de verdad | `backend/api/settings.py:13`, `backend/worker/main.py:25` | Una sola declaración en `infraestructura/cola.py` y la prueba que falla si los dos procesos resuelven nombres distintos | Nada |
 | V-3 | El estado de una hoja existe en la bitácora y en la `HojaAceptada` que viajó al frontend, sin nada que los concilie | `backend/infraestructura/modelo.py:65`, `backend/ingesta/recepcion.py:165` | Que la bitácora sea la única fuente de verdad del estado al construir el reintento | Que exista A-02 |
 | V-4 | `BitacoraEnDisco` supone un único proceso escritor, y nada lo declara ni lo impide | `backend/infraestructura/bitacora.py:70` | Declarar el supuesto en el adaptador y cerrarlo en el ADR de persistencia definitiva | El ADR que cierra R-06 |
-| V-5 | La regla de dueño único vive solo en esta sección: ninguna prueba la verifica | `backend/infraestructura/modelo.py`, `backend/tests/test_fronteras.py` | Línea `Posee:` en el docstring de cada módulo y extender la prueba de fronteras a la propiedad | Nada |
+| V-5 | La regla de dueño único vive solo en esta sección: ninguna prueba la verifica (desde la S9, `autoria` ya la declara con `Posee:`) | `backend/infraestructura/modelo.py`, `backend/tests/test_fronteras.py` | Línea `Posee:` en el docstring de cada módulo y extender la prueba de fronteras a la propiedad | Nada |
+
+**Lo que cambió en la S9.** La auditoría de la porción de la S9 (`docs/evidencia/auditoria-s9.md`)
+agregó a `test_fronteras.py` la prueba de que ningún módulo del dominio importa `api` ni `worker`,
+que es la dirección contraria de V-1, y `autoria` es el primer módulo con línea `Posee:`, que es
+la primera mitad de V-5. Las cinco siguen abiertas: a V-1 le falta que `api` y `worker` declaren
+su frontera, y a V-5, la prueba.
 
 #### V-1 · `api` y `worker` importan el dominio sin declarar frontera
 
@@ -1070,7 +1128,8 @@ C4**, que describen cómo el sistema se comunica con actores externos, no cómo 
 | [A-01](../aspectos.md#a-01) | **Ingesta** | `ingesta` | `ArchivoCargado`, `HojaAceptada`, `ArchivoRechazado`, `ResultadoRecepcion`, `EntradaDeBitacora` | [Rel. 1](../c4/doc-c4.md#relaciones): Profesor/TA → Sistema |
 | [A-02](../aspectos.md#a-02) | **OMR** | `omr` (previsto) | Marca detectada y confianza (previsto) | Ninguna: proceso interno |
 | [A-03](../aspectos.md#a-03) | **Calificación** y **Dashboard** | `calificacion` (previsto) | Nota / resultado (previsto) | [Rel. 2](../c4/doc-c4.md#relaciones): Sistema → Profesor/TA |
-| [A-04](../aspectos.md#a-04) | **Autoría** | `autoria` (previsto) | Banco, clave, distractor (previsto) | [Rel. 1 y 3](../c4/doc-c4.md#relaciones): Profesor/TA → Sistema · Sistema → Proveedor de LLM |
+| [A-04](../aspectos.md#a-04) | **Autoría** | `autoria` (previsto) | Banco y clave (previstos) | [Rel. 1](../c4/doc-c4.md#relaciones): Profesor/TA → Sistema |
+| [A-06](../aspectos.md#a-06) | **Autoría** | `autoria` | `PreguntaParaDistractores`, `DistractorPropuesto`, `PropuestaDescartada`, `ResultadoDePropuesta` | [Rel. 3](../c4/doc-c4.md#relaciones): Sistema → Proveedor de LLM |
 | [A-05](../aspectos.md#a-05) | **Identidad** | `identidad` (previsto) | Usuario, rol, curso (previsto) | [Rel. 1 y 2](../c4/doc-c4.md#relaciones): transversal a ambas |
 
 **Por qué A-03 abarca dos contextos.** Su enunciado es «calificación contra la clave y
@@ -1088,7 +1147,7 @@ estadísticas y las alertas de revisión es la responsabilidad que §8.1 le asig
 | **OMR** | [A-02](../aspectos.md#a-02) | Declarado |
 | **Calificación** | [A-03](../aspectos.md#a-03) | Declarado |
 | **Dashboard** | [A-03](../aspectos.md#a-03), en su mitad de publicación (RF-05) | Declarado |
-| **Autoría** | [A-04](../aspectos.md#a-04) | Declarado |
+| **Autoría** | [A-04](../aspectos.md#a-04) y [A-06](../aspectos.md#a-06) | A-04 declarado; A-06 construido |
 | **Identidad** | [A-05](../aspectos.md#a-05) | Declarado |
 | **Infraestructura** | Ninguno, y es correcto que así sea | Interviene en A-01 |
 
@@ -1126,8 +1185,10 @@ reescribirlas contra el código. Cada uno queda con la condición que debe cumpl
   [ADR-0004](../adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md)).
 - **Ciclo de vida de los datos personales:** retención y eliminación de escaneos conforme a
   RNF-14. Hoy nada borra lo que se guarda; lo cierra el ADR de persistencia que resuelve R-06.
-- **Manejo de errores del proveedor de LLM:** política de reintento y degradación cuando la
-  generación falla, sin bloquear la fase de calificación. Depende de decidir el proveedor (R-02).
+
+**Salió de esta lista en la S9: el manejo de errores del proveedor de LLM.** [ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md) lo decidió (20 s
+de espera, sin reintentos, 503 con el motivo) y [6.4](#64-solicitud-de-distractores-rf-11--aspecto-a-06--ec-08)
+lo describe. Todavía no atraviesa más de un módulo, así que no se desarrolla aquí como concepto.
 
 **El registro de recepción** que [ADR-0006](../adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md)
 introdujo, y que hoy vive en `infraestructura`, es el siguiente candidato a subir a esta lista:
@@ -1139,7 +1200,9 @@ cuando A-02 lo consuma para reintentar las hojas pendientes, pasará a atravesar
 
 Las decisiones se registran una por archivo en [`../adr/`](../adr/), siguiendo la convención
 del curso `NNNN-titulo-en-kebab-case.md`. Un ADR aceptado no se edita ni se borra: si la
-decisión cambia, se escribe uno nuevo y el anterior pasa a estado *reemplazado por*.
+decisión cambia, se escribe uno nuevo y el anterior pasa a estado *reemplazado por*. Los ajustes
+menores que no son de arquitectura, como un enlace roto o una errata, se permiten dejando
+constancia en el commit y en esta sección ([0014](../adr/0014-dejar-constancia-del-ajuste-de-enlaces-en-adr-0007.md)).
 
 | ADR | Título | Estado | Fecha | Escenarios relacionados |
 |---|---|---|---|---|
@@ -1155,6 +1218,8 @@ decisión cambia, se escribe uno nuevo y el anterior pasa a estado *reemplazado 
 | [0010](../adr/0010-servir-el-sitio-como-archivos-estaticos-en-render.md) | Servir el sitio como archivos estáticos en Render | **aceptado** | 2026-09-27 | ninguno declarado |
 | [0011](../adr/0011-consumir-la-cola-desde-la-instancia-de-la-api-con-el-key-value-gratuito.md) | Consumir la cola desde la instancia de la API con el Key Value gratuito | **aceptado** | 2026-09-27 | ninguno declarado |
 | [0012](../adr/0012-mantener-el-almacen-en-el-disco-efimero-de-la-instancia-hasta-cerrar-r-06.md) | Mantener el almacén en el disco efímero de la instancia hasta cerrar R-06 | **aceptado** | 2026-09-27 | [EC-07](#ec-07) |
+| [0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md) | Consumir Groq detrás de un puerto y degradar sin bloquear la autoría | **aceptado** | 2026-10-04 | [EC-08](#ec-08) |
+| [0014](../adr/0014-dejar-constancia-del-ajuste-de-enlaces-en-adr-0007.md) | Dejar constancia del ajuste de enlaces en ADR-0007 | **aceptado** | 2026-10-04 | ninguno declarado |
 
 **Por qué 0002 reemplaza a 0001.** La revisión de coherencia previa al corte 1 encontró que
 EC-03 y EC-04 no se pueden cumplir a la vez con procesamiento síncrono(200 hojas × 5 s son
@@ -1220,10 +1285,21 @@ cada docstring y una prueba análoga a la de fronteras) queda registrada como la
 fronteras, contratos ni escenarios, así que no reemplaza ni precisa a ningún ADR anterior. Los
 ADR 0001 a 0007 conservan el nombre anterior, porque un ADR aceptado no se edita.
 
+**Por qué 0013 no reemplaza a 0005.** 0005 decidió *dónde* participa el LLM: solo en la autoría, a
+pedido del profesor y fuera de la calificación. 0013 decide *cómo* se consume: Groq, detrás del
+puerto de `autoria`, con 20 s de espera, sin reintentos y 503 ante cualquier falla. No contradice
+nada de 0005; lo precisa, y cierra el riesgo R-02.
+
+**Qué decide 0014.** Deja constancia de que ADR-0007 se editó después de aceptarse (`1c8bcfb`)
+solo para mover cuatro referencias a un archivo retirado, y fija qué se puede tocar en un ADR
+aceptado: sus decisiones nunca; los ajustes menores que no son de arquitectura (un enlace, una
+errata), solo dejando constancia en el commit y en esta sección. Precisa a 0007 sin reemplazarlo.
+
 **Decisiones previstas (aún no tomadas):**
 
-- Proveedor de LLM y su modo de consumo, externo o local — ver R-02. (La elección de stack de
-  RNF-08 quedó resuelta en ADR-0003.)
+- La verificación automática de equivalencias en las propuestas de distractores, con SymPy, que
+  ADR-0004 retiró del proyecto. El equipo prevé retomarla la próxima semana con su propio ADR;
+  [ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md) deja el prototipo, sus cifras y las condiciones que la vuelven obligatoria (ver R-11).
 - Mecanismo de persistencia y almacenamiento de las imágenes, con su política de retención
   (RNF-14). **Sigue abierta después de ADR-0006**, que cubrió solo el registro de la recepción y
   dejó el medio definitivo sin elegir, detrás del mismo puerto que ya aislaba el almacén.
@@ -1257,6 +1333,9 @@ riesgo técnico. Las hojas marcadas con `EC-nn` están formalizadas como escenar
   calificación *Alto* se conserva sin cambios porque bajarla es una decisión del equipo sobre
   el árbol de utilidad, no una consecuencia automática de ADR-0004; queda pendiente en la
   sección 9.
+- **[EC-08](#ec-08) · Propuesta de distractores diagnósticos:** ninguna propuesta que repita la
+  respuesta correcta llega al profesor; p95 de 15 s o menos; 503 en 21 s o menos con el proveedor
+  caído o lento. *(Impacto: Medio | Riesgo técnico: Medio)*
 
 **Rendimiento** *(→ QG-2)*
 
@@ -1387,7 +1466,8 @@ de carga.
 
 Escenarios formalizados posteriormente para cubrir dos atributos que el árbol de utilidad
 recoge pero que los cinco priorizados no medían: la seguridad (QG-4) y la recuperación ante
-fallos. Se documentan aparte para no alterar la priorización original.
+fallos. Desde la S9 se suma EC-08, el de la propuesta opcional de distractores. Se documentan
+aparte para no alterar la priorización original.
 
 <a id="ec-06"></a>
 
@@ -1422,6 +1502,25 @@ fallos. Se documentan aparte para no alterar la priorización original.
 > promete que nada se pierde, mientras que
 > la promesa de calificar en tiempo la sostienen EC-03 y EC-04.
 
+<a id="ec-08"></a>
+
+### EC-08 · Propuesta de distractores diagnósticos
+
+| Atributo | Detalle |
+|---|---|
+| **Fuente** | Profesor, en la fase de autoría. |
+| **Estímulo** | Pide distractores diagnósticos para una pregunta: el enunciado y la respuesta correcta. |
+| **Artefacto** | Módulo `autoria` (la regla, el puerto y el adaptador) y la ruta `POST /distractores`. |
+| **Entorno** | Operación normal; y degradada: proveedor caído, cuota agotada o proveedor lento. |
+| **Respuesta** | El sistema devuelve propuestas, cada una con la etiqueta del error que representa, y descarta, con su motivo, las que repiten la respuesta correcta o a otra propuesta. Si el proveedor falla, avisa que no está disponible sin afectar el registro manual ni el resto del sistema. |
+| **Medida de respuesta** | **M1:** 0 % de propuestas que repiten textualmente la respuesta correcta llegan al profesor. **M2:** p95 de la latencia de la ruta de 15 s o menos, sobre el conjunto de evaluación. **M3:** con el proveedor caído o lento, la ruta responde 503 en 21 s o menos (20 s de espera más 1 s). |
+| **Relacionado** | QG-1 · RF-11 · RNF-13 · [ADR-0005](../adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md) · [ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md) · Aspecto [A-06](../aspectos.md#a-06) · R-11 |
+
+> **Nota.** La calidad pedagógica de las propuestas se informa como resultado de la evaluación, sin
+> umbral: decide el profesor (ADR-0005). M1 solo cubre la repetición textual; una equivalencia
+> algebraica no la detecta el sistema (ADR-0004), y por eso la evaluación mide cuántas veces la
+> propone el modelo.
+
 ---
 
 # 11. Risks and Technical Debts
@@ -1429,8 +1528,8 @@ fallos. Se documentan aparte para no alterar la priorización original.
 | ID | Riesgo / deuda | Impacto | Qué lo dispara | Mitigación prevista |
 |---|---|---|---|---|
 | **R-01** | **No existe todavía el dataset de 300 hojas escaneadas** que EC-01 usa como medida. Sin él, el objetivo de calidad más importante no es verificable. | Alto | Llegar a la semana de medición sin hojas etiquetadas. | Producir el dataset temprano: imprimir plantillas, llenarlas con marcas variadas (incluyendo casos borde deliberados) y etiquetarlas manualmente. Es trabajo de laboratorio, no de programación, y puede repartirse entre los cuatro integrantes (RNF-10). |
-| **R-02** | **Decisión pendiente sobre el proveedor de LLM y su modo de consumo**, para cuando se construya RF-11. Ya no bloquea la vista de despliegue (sección 7): el entorno de Render de esta semana no incluye el LLM (ver §7.3) y funciona completo sin él. *(La elección de stack de RNF-08 quedó resuelta en [ADR-0003](../adr/0003-usar-fastapi-y-flutter.md), y los niveles 1 y 2 del C4 están dibujados.)* | **Bajo**, desde [ADR-0005](../adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md) | Necesitar construir RF-11, que es opcional. | Decidir en un ADR propio cuando alguien tome RF-11 (ver R-12). Ya no urge: el LLM quedó fuera del camino de calificación, así que el sistema califica completo sin proveedor. La opción de referencia es una API alojada con nivel gratuito, porque un modelo local añade requisitos de hardware que el proyecto no puede asumir. |
-| **R-03** | **Dependencia de un servicio externo no controlado** si el LLM es una API alojada: cuotas, latencia variable, cambios de modelo, indisponibilidad. | Medio | Superar la cuota gratuita durante una sesión de generación intensiva. | La separación de fases ya mitiga lo esencial: el LLM solo participa en la autoría, así que una caída del proveedor no impide calificar. Añadir reintentos, aislar el consumo tras una interfaz propia de `autoria` y permitir el ingreso manual de preguntas. |
+| **R-02** | **Cerrado en la S9 por [ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md):** el proveedor de LLM es Groq, con `openai/gpt-oss-120b`, consumido por HTTPS con el protocolo de chat compatible con OpenAI desde un adaptador de `autoria`. | Cerrado | Que la capa gratuita de Groq cambie o deje de alcanzar. | Cambiar de proveedor es cambiar la URL base, el modelo y la clave, no el código. |
+| **R-03** | **Dependencia de un servicio externo no controlado** si el LLM es una API alojada: cuotas, latencia variable, cambios de modelo, indisponibilidad. | Medio | Superar la cuota gratuita durante una sesión de generación intensiva. | **Mitigado en la S9** ([ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)): el adaptador espera 20 s y no reintenta, y cualquier falla del proveedor se convierte en 503 con un motivo; nada más del sistema depende de él. Medido en EC-08: con el proveedor caído, 503 en 2,2 s; lento, en 20,25 s. |
 | **R-04** | **El umbral de confianza del 70% es un valor supuesto, no medido.** Mal calibrado dispara falsos positivos (todo va a revisión manual y el sistema deja de ahorrar tiempo) o falsos negativos (errores silenciosos, se rompe QG-3). | Alto | Fijar el umbral sin evidencia y descubrirlo en producción. | Calibrar sobre el dataset de R-01 y documentar la curva de precisión frente a umbral en un ADR. |
 | **R-05** | **El equipo no tiene experiencia previa medible con OpenCV / OMR**, que es la parte de mayor riesgo técnico del sistema. | Alto | Dejar el módulo `omr` para el final del cronograma. | Construir un prototipo desechable de detección de marcas antes de especificar A-02, aunque sea sobre una sola hoja, para convertir la incertidumbre en información. |
 | **R-06** | **Deuda: no hay decisión de persistencia ni de almacenamiento de imágenes**, ni política de retención (RNF-14). **Dejó de bloquear la construcción** y **dejó de bloquear la medición**: A-01 se construyó con el almacenamiento detrás del puerto `AlmacenDeImagenes` y un adaptador en disco declarado provisional (ver 5.1 y 5.3), y [ADR-0006](../adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md) cubrió la parte de recepción que impedía medir [EC-07](#ec-07), con el mismo mecanismo de puerto y adaptador provisional. Las dos cifras del escenario ya están medidas ([evidencia](../evidencia/medicion-ec07.md)). Lo que sigue abierto es el medio definitivo, la persistencia estructurada y la retención, y ninguno de los tres se tomó por omisión. | **Medio** (bajó de *Alto*: ya no bloquea ni la construcción ni la medición) | Llegar al despliegue sin política de retención, o escalar la API a más de una instancia, que es el día en que `BitacoraEnDisco` deja de ser correcto. | ADR propio, que debe cubrir el ciclo de vida de los escaneos y de la bitácora, no solo el guardado. Cuando exista, lo que cambia son los adaptadores: `ingesta`, el modelo de datos y las pruebas del aspecto no se tocan. |
@@ -1438,12 +1537,13 @@ fallos. Se documentan aparte para no alterar la priorización original.
 | **R-08** | **Riesgo de erosión de los límites entre módulos** («big ball of mud»), inherente al monolito modular. **Mitigado en lo esencial.** | Bajo | Cambiar la línea `Importa:` de un docstring para acomodar un import, en lugar de corregir el import. | Ya en marcha, no prevista: `backend/tests/test_fronteras.py` corre en cada push y compara los imports reales de cada módulo, leídos con `ast`, contra la línea `Importa:` de su docstring. **Queda un flanco:** verifica el módulo importado, no el símbolo. Cerrarlo exige un `__all__` por módulo (hoy solo lo declara `ingesta`) y extender la prueba para comprobarlo. |
 | **R-09** | **Deuda organizativa: la contribución al repositorio está concentrada en pocas cuentas**, lo que incumple RNF-10. | Alto | Que el reparto por módulos no se traduzca en commits de las cuatro personas. | Asignar módulos por integrante y trabajar con ramas y *pull requests* revisados, de modo que la contribución individual sea verificable en el historial. |
 | **R-10** | **Deuda legal: no está redactada la finalidad del tratamiento de datos ni la política de retención** que exigen RNF-12 y RNF-14. | Medio | Llegar al despliegue con datos reales de estudiantes sin política declarada. | Redactar ambas antes de procesar la primera hoja con datos reales, y consultar la referencia normativa vigente con la coordinación del programa. |
-| **R-11** | **La aprobación manual de la clave puede pasar por alto una equivalencia algebraica no evidente** entre un distractor y la respuesta correcta, ahora que no hay verificación simbólica automática ([ADR-0004](../adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md)). | Alto | Revisar el examen bajo presión de tiempo, sea la clave propia o con distractores propuestos por el modelo, sin apoyo visual para comparar expresiones. | Diseñar la pantalla de aprobación para mostrar las expresiones simplificadas o graficadas una junto a otra, facilitando la comparación visual sin exigir cómputo simbólico obligatorio. Si la tasa de error resulta alta en la práctica, reevaluar con un ADR nuevo. |
-| **R-12** | **RF-11 queda declarado pero nunca se construye**, y el LLM termina siendo una presencia nominal en el stack. | Medio | Que el equipo priorice OMR y calificación hasta el final del semestre y nadie tome RF-11 por ser opcional. | Asignar RF-11 a un integrante desde el reparto por aspectos, con semana de construcción, en lugar de dejarlo sin dueño. Ver [ADR-0005](../adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md). |
+| **R-11** | **La aprobación manual de la clave puede pasar por alto una equivalencia algebraica no evidente** entre un distractor y la respuesta correcta, ahora que no hay verificación simbólica automática ([ADR-0004](../adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md)). | Alto | Revisar el examen bajo presión de tiempo, sea la clave propia o con distractores propuestos por el modelo, sin apoyo visual para comparar expresiones. | Diseñar la pantalla de aprobación para mostrar las expresiones simplificadas o graficadas una junto a otra, facilitando la comparación visual sin exigir cómputo simbólico obligatorio. Si la tasa de error resulta alta en la práctica, reevaluar con un ADR nuevo. **Medido en la S9:** La evaluación de EC-08 no encontró ninguna propuesta equivalente a la respuesta correcta en 120 (calificación del equipo, confirmada con un prototipo fuera del sistema); la corrida de prueba previa sí mostró una: `sin(2x)` para `2·sin(x)·cos(x)`. El filtro de las propuestas solo detecta repeticiones textuales; el criterio para reabrir la verificación automática está en [ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md). |
+| **R-12** | **Cerrado en la S9:** RF-11 se construyó como el aspecto A-06 (`autoria` y `POST /distractores`), con su escenario EC-08 medido. | Cerrado | No aplica. | Ver [A-06](../aspectos.md#a-06) y [ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md). |
 | **R-13** | **Arranque en frío medido en 12,5 s, por encima del techo de 10 s de EC-07** y de los 5 s que espera la pantalla de inicio. Medido el 27-sep en `docs/evidencia/medicion-arranque-en-frio.json`: `GET /health` en frío 12,5 s frente a p95 de 0,13 s en caliente; un lote de 20 hojas de 200 KB, 13,5 s y 24,0 s en frío frente a p95 de 1,3 s en caliente. | Alto si la instancia está dormida | Que pasen más de 15 minutos sin tráfico antes de que llegue una carga. | Mitigado con un monitor gratuito (UptimeRobot) que consulta `/health` cada 5 minutos y mantiene la instancia despierta; eso consume entre 720 y 744 de las 750 horas compartidas del workspace (ver R-15). Detalle completo en el taller ([`docs/despliegue/taller-despliegue-api.md`](../despliegue/taller-despliegue-api.md)). |
 | **R-14** | **Endpoint de carga público sin autenticación.** `POST /examenes/{id}/hojas` está desplegado y accesible por su URL pública; `identidad` sigue sin construir (5.2), así que nada impide que alguien fuera del curso cargue archivos al almacén efímero de la demostración. | Medio | Publicar la URL de la API antes de construir `identidad` (aspecto A-05). | Aceptado para la demostración de la S8 porque solo se cargan hojas sintéticas (ADR-0012) y el disco es efímero. Construir `identidad` antes de cualquier uso con datos reales. |
 | **R-15** | **Dependencia de la capa gratuita de Render, cuyas condiciones pueden cambiar sin aviso.** Las 750 horas de servicio web son compartidas por todo el workspace, y el monitor que mitiga R-13 ya consume entre 720 y 744 de esas 750: quedan entre 6 horas (mes de 31 días) y 30 (mes de 30) de margen. Se suman el límite de 5 GB de ancho de banda y 500 minutos de build. | Alto | Agotar el cupo compartido en la semana de sustentación, con más tráfico del habitual, o que Render cambie las condiciones de su capa gratuita. | Punto de ruptura por recurso documentado en [`docs/despliegue/costo-mensual.md`](../despliegue/costo-mensual.md). Verificar la capa gratuita vigente antes de cada sustentación, como pide la guía del curso. |
 | **R-16** | **Solo una persona puede operar el workspace de Render** (el plan gratuito da un único puesto); si Sebastián no está disponible, nadie más del equipo puede redesplegar, cambiar variables o revisar logs en Render. Es el criterio 7 de la guía del curso: «¿Puede operarlo el equipo entero? Si solo una persona sabe redesplegarlo, eso es un riesgo de la sección 11 de arc42, no un detalle.» | Medio | Que Sebastián no esté disponible cuando el equipo necesite redesplegar o depurar algo en producción. | El entorno completo se recrea desde `render.yaml` (Blueprint) en la cuenta de cualquier integrante; los pasos quedan en el README, «Cómo se despliega». No depende de configuración manual guardada solo en la cuenta de Sebastián. |
+| **R-17** | **La ruta `POST /distractores` es pública y sin autenticación** en el entorno desplegado, y cada solicitud gasta cuota del proveedor de LLM. | Bajo | Que alguien fuera del curso la use en bucle y agote la cuota diaria de la capa gratuita de Groq (1 000 solicitudes y 200 000 tokens por día para el modelo, consultado el 4-oct-2026 en https://console.groq.com/docs/rate-limits). | Sin tarjeta, el peor caso es agotar la cuota y nunca una factura (RNF-16): la ruta responde 503 y nada más se afecta (EC-08). Se cierra con `identidad` (A-05), igual que R-14. |
 
 ---
 
