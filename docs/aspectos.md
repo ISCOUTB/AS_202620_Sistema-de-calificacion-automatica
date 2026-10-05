@@ -25,6 +25,8 @@ verificar y evidenciar.
 
 ## Tabla de trazabilidad
 
+**La porción de la S9 es [A-06](#a-06)** (RF-11, escenario [EC-08](arc42/arc42-template-ES.md#ec-08), [ADR-0013](adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)). Medida: M1, 0 de 120 propuestas repiten la respuesta correcta; M2, p95 de 2,91 s contra 15 s; M3, 503 en 20,25 s contra 21 s ([evaluación](evidencia/evaluacion-distractores.md)). La prueba falla ante el defecto en el [PR #1](https://github.com/ISCOUTB/AS_202620_Sistema-de-calificacion-automatica/pull/1) ([procedimiento](evidencia/prueba-distractores-falla.md)), y la [auditoría](evidencia/auditoria-s9.md) recorre contextos, propiedad, dependencias y credenciales.
+
 Cada fila enlaza a su escenario de calidad en el arc42. Los ocho escenarios documentados son
 alcanzables desde la fila del aspecto que los realiza.
 

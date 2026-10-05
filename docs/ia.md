@@ -4,7 +4,9 @@ Este documento registra el uso de herramientas de IA durante el desarrollo del p
 
 **La IA propone; el equipo decide y verifica.** Ninguna salida generada por una herramienta de IA entra al proyecto sin revisión, validación y, si hace falta, corrección por parte del equipo.
 
-Este registro documenta IA como herramienta de construcción (apoyo para redactar, diseñar y documentar). El modelo de lenguaje que el sistema pueda usar en producción para proponer distractores diagnósticos (RF-11, función opcional que no interviene en la calificación) es IA como componente del sistema, y se documentará dentro del aspecto correspondiente, no aquí.
+Este registro documenta IA como herramienta de construcción (apoyo para redactar, diseñar y documentar). El modelo de lenguaje que el sistema usa para proponer distractores diagnósticos (RF-11, función opcional que no interviene en la calificación) es IA como componente del sistema: se documenta en el aspecto A-06 y en su evaluación (`docs/evidencia/evaluacion-distractores.md`), no aquí.
+
+**La entrada más reciente es la [12](#entrada-12), de la S9** (2026-10-03 y 2026-10-04): la porción RF-11 construida con Claude. **Lo rechazado, con su motivo técnico:** el SDK `openai`, porque obliga a regenerar el lock en Linux y su llamada aparece en el grep de erosión; `urllib.request`, porque `httpx` ya es dependencia directa del backend; y reintentar ante una falla del proveedor, porque duplica la cuota gastada y la espera del profesor. **Lo corregido:** seis errores de tipos que encontró `mypy`, la prueba de contrato que exigía dos rutas, y el filtro que trataba `x²` y `x^2` como distintos. **Lo aceptado:** Groq detrás de un puerto de `autoria` (ADR-0013) y la prueba del defecto en un PR que no se fusiona. La calidad de las propuestas del modelo la calificó el equipo a mano, sin IA.
 
 ## Campos de cada entrada
 

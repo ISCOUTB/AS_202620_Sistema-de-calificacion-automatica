@@ -1,21 +1,39 @@
 # QuantIA
 
-QuantIA es el sistema que automatiza la calificación de exámenes de opción múltiple de cálculo diferencial ([ADR-0008](docs/adr/0008-renombrar-el-sistema-a-quantia.md) explica el nombre). El profesor carga su banco de preguntas y su clave de respuestas, aplica el examen en papel y sube los escaneos; el sistema los lee mediante reconocimiento óptico de marcas (OMR), califica contra esa clave y publica los resultados en un dashboard, devolviendo a revisión manual toda marca que no supere el umbral de confianza. Como apoyo opcional durante la preparación, puede proponer **distractores diagnósticos** con ayuda de un modelo de lenguaje. El sistema es una herramienta de apoyo al criterio del profesor, no un reemplazo de su decisión final.
+QuantIA califica exámenes de opción múltiple de cálculo diferencial: el profesor registra su
+banco y su clave, aplica el examen en papel y sube los escaneos; el sistema lee las marcas (OMR),
+califica contra esa clave y devuelve a revisión manual toda marca dudosa. Como apoyo opcional,
+propone **distractores diagnósticos** con un modelo de lenguaje. Apoya el criterio del profesor,
+no lo reemplaza.
 
 ## Equipo
 
-| Integrante | Cuenta de GitHub |
-|---|---|
-| Sebastián Cañas Plata | `scp1109` |
-| Josué David Ortega De Arco | `josueacademico17-source` |
-| María Del Mar Restrepo Licona | `Mariadelmar-restrepo` |
-| Susana Marcela Rosales Castellar | `SusanaRosales` |
+Sebastián Cañas Plata (`scp1109`) · Josué David Ortega De Arco (`josueacademico17-source`) ·
+María Del Mar Restrepo Licona (`Mariadelmar-restrepo`) · Susana Marcela Rosales Castellar
+(`SusanaRosales`).
 
 ## Evidencia S9
 
-La porción construida con apoyo de IA es **RF-11, la propuesta de distractores diagnósticos**
-(aspecto [A-06](docs/aspectos.md#a-06)): el módulo [`backend/autoria/`](backend/autoria/) y la ruta
-`POST /distractores` de la API, con el contrato en la versión 1.1.0.
+Porción construida con IA: **RF-11, distractores diagnósticos** (aspecto A-06), en
+`backend/autoria/` y la ruta `POST /distractores` (contrato 1.1.0).
+
+- **Código:** `autoria/distractores.py` (la regla), `autoria/proveedor_llm.py` (el adaptador) y
+  `api/main.py`, en los commits `e81dbce` a `12ba9d6`.
+- **Cadena:** fila A-06 de `docs/aspectos.md`, de RF-11 a EC-08, C4, ADR, código, pruebas y evidencia.
+- **ADR-0013:** Groq detrás de un puerto de `autoria`, sin dependencias nuevas, 20 s sin
+  reintentos y 503 si falla.
+- **Prueba que falla:** PR #1, cerrado sin fusionar; runs 37243370215 y 37244214146 en rojo, con
+  4 pruebas.
+- **EC-08 medido:** M1, 0 de 120 propuestas repiten la correcta; M2, p95 de 2,91 s (≤ 15 s); M3,
+  503 en 20,25 s (≤ 21 s).
+- **`docs/ia.md`, entrada 12:** rechazados el SDK `openai`, `urllib` y los reintentos, con su motivo.
+- **`docs/evidencia/auditoria-s9.md`:** sin cruces de contexto ni de propiedad (un flanco de
+  `test_fronteras.py`, corregido); sin dependencias nuevas, las directas verificadas en PyPI; sin
+  credenciales.
+- **Componente generativo:** 20 preguntas; 44 de 60 propuestas válidas y 0 equivalentes; US$0 en
+  la capa gratuita y US$0,0004 por solicitud; C4 Nivel 2, relación 8.
+
+Los enlaces, fila por fila:
 
 | Fila de la ficha | Dónde está |
 |---|---|
@@ -25,7 +43,7 @@ La porción construida con apoyo de IA es **RF-11, la propuesta de distractores 
 | Medición de EC-08 | [Evaluación](docs/evidencia/evaluacion-distractores.md): M1, ninguna de las 120 propuestas entregadas repite la respuesta correcta (0 %) · M2, p95 de la latencia de 2,91 s contra un techo de 15 s, en 40 solicitudes · M3, con el proveedor caído o lento la ruta responde 503 en 20,25 s como máximo, contra 21 s |
 | Componente generativo evaluado | Conjunto de 20 preguntas ([`conjunto-evaluacion-distractores.json`](docs/evidencia/conjunto-evaluacion-distractores.json)), resultados ([`evaluacion-distractores.json`](docs/evidencia/evaluacion-distractores.json)), calidad: 44 de 60 propuestas diagnósticas válidas (73 %), ninguna equivalente a la respuesta correcta, y el error más común es la etiqueta (8 incorrectas y 4 a medias); costo: US$0 en la capa gratuita (al precio de pago serían US$0,0004 por solicitud y US$0,008 por examen de 20 preguntas); el proveedor en el [C4 Nivel 2, relación 8](docs/c4/doc-c4.md#relaciones-1) |
 | `ia.md` con lo aceptado, lo corregido y lo rechazado | [Entrada 12](docs/ia.md#entrada-12) |
-| Auditoría de erosión, dependencias y credenciales | [`auditoria-s9.md`](docs/evidencia/auditoria-s9.md): sin cruces de contexto ni de propiedad; un flanco de la prueba de fronteras, corregido; sin dependencias nuevas; sin credenciales |
+| Auditoría de erosión, dependencias y credenciales | [`auditoria-s9.md`](docs/evidencia/auditoria-s9.md): sin cruces de contexto ni de propiedad; un flanco de la prueba de fronteras, corregido; sin dependencias nuevas; sin credenciales. Los dos `git log -S` del CONTRATO §9 devuelven un solo commit, `49ae0c0`: es esa auditoría, que cita los comandos textualmente, no una clave |
 | ADR aceptados no reescritos | [ADR-0014](docs/adr/0014-dejar-constancia-del-ajuste-de-enlaces-en-adr-0007.md) deja constancia del ajuste de enlaces de ADR-0007 |
 
 ## Dónde está la evidencia de cada entrega
@@ -65,7 +83,7 @@ lo cargado se pierde en cada despliegue ([ADR-0012](docs/adr/0012-mantener-el-al
 | Pipeline | [Runs de `master`](https://github.com/ISCOUTB/AS_202620_Sistema-de-calificacion-automatica/actions/workflows/ci.yml?query=branch%3Amaster). Render solo despliega un commit cuyo CI terminó en verde |
 | Logs estructurados | Una línea JSON por evento, con `logging.config.dictConfig`, en [`backend/infraestructura/registro.py`](backend/infraestructura/registro.py). Líneas reales abajo |
 | Métrica y escenario | `duracion_confirmacion_ms` del evento `lote_confirmado` ↔ [EC-07](docs/arc42/arc42-template-ES.md#ec-07) (confirmación ≤ 10 s, 0 % de pérdida). En una carga real desde el sitio: 14,1 ms |
-| Secretos | Ninguno en el código: [`.env.example`](.env.example) para lo local; en Render, `REDIS_URL` la inyecta la plataforma desde la cola (`fromService`) |
+| Secretos | Ninguno en el código: [`.env.example`](.env.example) para lo local; en Render, `REDIS_URL` la inyecta la plataforma desde la cola (`fromService`) y `LLM_API_KEY` se escribe en el panel (`sync: false`) |
 | Costo mensual | US$0 al volumen supuesto. Primer punto de ruptura: las 750 h de instancia al mes del workspace, de las que la API despierta gasta 720 a 744; un segundo servicio web despierto lo rompe ([estimación](docs/despliegue/costo-mensual.md)) |
 | arc42 | [§7 Deployment View](docs/arc42/arc42-template-ES.md#7-deployment-view) · [§2.2, RNF-16](docs/arc42/arc42-template-ES.md#22-restricciones-organizativas) |
 | ADR de plataforma | [0009](docs/adr/0009-desplegar-la-api-en-el-servicio-web-gratuito-de-render-y-mantenerla-despierta.md) API · [0010](docs/adr/0010-servir-el-sitio-como-archivos-estaticos-en-render.md) sitio · [0011](docs/adr/0011-consumir-la-cola-desde-la-instancia-de-la-api-con-el-key-value-gratuito.md) cola y worker · [0012](docs/adr/0012-mantener-el-almacen-en-el-disco-efimero-de-la-instancia-hasta-cerrar-r-06.md) ficheros |
@@ -130,7 +148,8 @@ carpeta cambió (`backend/` o `frontend/`).
 
 ## Corte vertical: carga de examen (aspecto A-01)
 
-Del sistema hay **un aspecto construido de punta a punta** y los demás solo declarados. Ese es
+Del sistema hay **dos aspectos construidos de punta a punta**, y los demás solo declarados. El
+otro es A-06, la porción de la [Evidencia S9](#evidencia-s9). Este es
 [A-01, la carga de examen para calificación](docs/aspectos.md#a-01), que realiza RF-01: el
 docente sube las hojas escaneadas de un examen y el sistema le confirma cuáles recibió y cuáles
 no, con el motivo de cada rechazo.
@@ -242,7 +261,8 @@ módulo del dominio importa `api` ni `worker`. Ninguna sale a la red.
 Seis son la **prueba de contrato** ([`backend/tests/test_contrato.py`](backend/tests/test_contrato.py)),
 y verifican que el documento de `docs/contrato/openapi.json` y la API que corre no se puedan
 separar: que el archivo versionado sea exactamente el que genera la aplicación de hoy, que su
-número de versión sea el declarado en el código, que sigan estando las dos rutas, que la
+número de versión sea el declarado en el código, que sigan estando las tres rutas (y que la de
+distractores publique su 503), que la
 respuesta de carga exija sus cuatro campos, que los estados publicados sean los dos del dominio,
 y que una respuesta real traiga exactamente los campos que el contrato anuncia, ni uno más ni
 uno menos.
@@ -401,13 +421,13 @@ Las decisiones de un ADR aceptado no se editan ni se borran: si una decisión ca
 docs/
 ├── arc42/
 │   └── arc42-template-ES.md                            # documento de arquitectura (arc42)
-├── adr/                                                # 0001 a 0012; el 0001, reemplazado por el 0002
+├── adr/                                                # 0001 a 0014; el 0001, reemplazado por el 0002
 ├── c4/
 │   └── doc-c4.md                                       # modelo C4 (Niveles 1, 2 y 3)
 ├── contrato/
 │   └── openapi.json                                    # contrato HTTP (OpenAPI 3.1), generado
 ├── despliegue/                                        # estimación de costo y taller de despliegue
-├── evidencia/                                          # EC-07, arranque en frío, prueba de contrato, SonarQube
+├── evidencia/                                          # EC-07, arranque en frío, prueba de contrato, SonarQube, y de la S9: EC-08, prueba del defecto y auditoría
 ├── ficha-problema.md                                   # el problema, usuarios y alcance
 ├── aspectos.md                                         # aspectos y tabla de trazabilidad
 └── ia.md                                               # registro de uso de IA

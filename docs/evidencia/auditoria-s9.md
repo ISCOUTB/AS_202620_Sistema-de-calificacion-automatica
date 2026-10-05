@@ -135,7 +135,7 @@ Los tres comandos del CONTRATO §9, sobre el código de la porción y su documen
 |---|---|
 | `git grep -nIE '(AKIA[0-9A-Z]{16}\|-----BEGIN [A-Z ]*PRIVATE KEY\|ghp_[A-Za-z0-9]{36}\|xox[baprs]-\|sk-[A-Za-z0-9]{20,}\|(password\|passwd\|secret\|token\|api_?key)\s*[:=]\s*.{6,})'` | Sin coincidencias (código de salida 1, que aquí es el resultado bueno) |
 | `git ls-files \| grep -E '(^\|/)\.env$'` | Sin coincidencias: no hay `.env` versionado |
-| `git log --oneline -S'BEGIN PRIVATE KEY'` | Sin coincidencias en el historial |
+| `git log --oneline -S'BEGIN PRIVATE KEY'` | Antes de este documento, sin coincidencias. Desde que se subió, devuelve un solo commit, `49ae0c0`, que es el que lo agregó: lo encuentra porque esta tabla cita los comandos textualmente. El mismo commit es el único que devuelve `git log -S` con el prefijo de las claves de AWS, por la misma razón. Ninguno es una clave |
 
 **Dónde vive la clave del proveedor:**
 - en el entorno, nunca en el código: `api/settings.py:28` la lee de `LLM_API_KEY`;

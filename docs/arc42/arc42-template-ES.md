@@ -955,7 +955,8 @@ escrituras con `INSERT INTO`, `.save(` o `repository.`, y aquí las escrituras p
 nombres del dominio, `almacen.guardar` y `bitacora.registrar`. Por eso cada hallazgo de esta
 sección se cita con ruta y línea explícitas.
 
-**Alcance.** Cubre el backend en el estado en que está el aspecto A-01, que es el único construido.
+**Alcance.** Cubre el backend en el estado en que estaba en la S6, cuando A-01 era el único aspecto
+construido. La porción de la S9 (A-06) la recorre [`auditoria-s9.md`](../evidencia/auditoria-s9.md).
 Las entidades de A-02 a A-05 no tienen código, así que todavía no pueden tener violaciones: lo que
 les corresponde es la tabla de dueños previstos de la sección anterior. La lista crece por adición
 con cada aspecto que se construya.
