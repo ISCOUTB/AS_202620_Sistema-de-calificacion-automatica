@@ -1,0 +1,1093 @@
+{
+  "escenario": "EC-08 - Propuesta de distractores diagnosticos (RF-11)",
+  "inicio": {
+    "utc": "2026-10-05T00:22:08+00:00",
+    "cartagena": "2026-10-04T19:22:08-05:00"
+  },
+  "fin": {
+    "utc": "2026-10-05T00:29:28+00:00",
+    "cartagena": "2026-10-04T19:29:28-05:00"
+  },
+  "entorno": {
+    "url_base_del_proveedor": "https://api.groq.com/openai/v1",
+    "modelo": "openai/gpt-oss-120b",
+    "tiempo_de_espera_del_adaptador_segundos": 20.0,
+    "pasadas": 2,
+    "pausa_entre_solicitudes_segundos": 8.0,
+    "python": "3.13.1",
+    "httpx": "0.28.1",
+    "medido": "dentro del proceso, con TestClient: sin la red del profesor"
+  },
+  "umbrales": {
+    "m1_entregados_que_repiten_la_respuesta_correcta": 0,
+    "m2_p95_segundos": 15.0,
+    "m3_segundos": 21.0
+  },
+  "normal": {
+    "muestras": [
+      {
+        "pasada": 1,
+        "id": 1,
+        "enunciado": "Derivada de x·sin(x)",
+        "respuesta_correcta": "sin(x) + x·cos(x)",
+        "codigo": 200,
+        "segundos": 2.424,
+        "tokens_entrada": 242,
+        "tokens_salida": 770,
+        "distractores": [
+          {
+            "expresion": "x·cos(x)",
+            "error": "Se aplicó la regla del producto pero se olvidó derivar el factor x (se tomó como constante)"
+          },
+          {
+            "expresion": "cos(x)+x·cos(x)",
+            "error": "Se derivó x como cos(x) en lugar de 1, intercambiando los derivados de los factores"
+          },
+          {
+            "expresion": "sin(x)·cos(x)+x",
+            "error": "Se multiplicaron las derivadas de cada factor (f'·g') y se sumó incorrectamente, en lugar de usar la suma de f·g' y f'·g"
+          }
+        ],
+        "descartados": []
+      },
+      {
+        "pasada": 1,
+        "id": 2,
+        "enunciado": "Derivada de x⁵",
+        "respuesta_correcta": "5x⁴",
+        "codigo": 200,
+        "segundos": 2.046,
+        "tokens_entrada": 238,
+        "tokens_salida": 497,
+        "distractores": [
+          {
+            "expresion": "5x^5",
+            "error": "Se multiplicó por 5 pero no se redujo el exponente"
+          },
+          {
+            "expresion": "x^4",
+            "error": "Se omitió el factor 5 del coeficiente"
+          },
+          {
+            "expresion": "5x^3",
+            "error": "Se restó 2 al exponente en lugar de 1 al aplicar la regla de potencias"
+          }
+        ],
+        "descartados": []
+      },
+      {
+        "pasada": 1,
+        "id": 3,
+        "enunciado": "Derivada de 3x² − 4x + 7",
+        "respuesta_correcta": "6x − 4",
+        "codigo": 200,
+        "segundos": 1.15,
+        "tokens_entrada": 247,
+        "tokens_salida": 266,
+        "distractores": [
+          {
+            "expresion": "3x^2-4",
+            "error": "Olvidó derivar el término lineal -4x, manteniéndolo sin cambios"
+          },
+          {
+            "expresion": "6x+4",
+            "error": "Cambió incorrectamente el signo del término constante al derivar"
+          },
+          {
+            "expresion": "6x",
+            "error": "No derivó el término constante -4, lo omitió completamente"
+          }
+        ],
+        "descartados": []
+      },
+      {
+        "pasada": 1,
+        "id": 4,
+        "enunciado": "Derivada de x²·eˣ",
+        "respuesta_correcta": "2x·eˣ + x²·eˣ",
+        "codigo": 200,
+        "segundos": 2.221,
+        "tokens_entrada": 250,
+        "tokens_salida": 776,
+        "distractores": [
+          {
+            "expresion": "2x·e^x",
+            "error": "Se trató e^x como constante y se omitió su derivada"
+          },
+          {
+            "expresion": "x^2·e^x",
+            "error": "Se trató x^2 como constante y se omitió su derivada"
+          },
+          {
+            "expresion": "2x·e^x + x^3·e^x",
+            "error": "Se calculó erróneamente la derivada de e^x como x·e^x"
+          }
+        ],
+        "descartados": []
+      },
+      {
+        "pasada": 1,
+        "id": 5,
+        "enunciado": "Derivada de sin(x)/x",
+        "respuesta_correcta": "(x·cos(x) − sin(x))/x²",
+        "codigo": 200,
+        "segundos": 1.636,
+        "tokens_entrada": 246,
+        "tokens_salida": 412,
+        "distractores": [
+          {
+            "expresion": "(x·cos(x) + sin(x))/x²",
+            "error": "Error de signo: se sumó sin(x) en lugar de restarlo al aplicar la regla del cociente."
+          },
+          {
+            "expresion": "cos(x)/x",
+            "error": "Se derivó solo el numerador y se canceló x, omitiendo la derivada del denominador en la regla del cociente."
+          },
+          {
+            "expresion": "(x·cos(x) - sin(x))/x",
+            "error": "Se olvidó elevar al cuadrado el denominador al aplicar la regla del cociente."
+          }
+        ],
+        "descartados": []
+      },
+      {
+        "pasada": 1,
+        "id": 6,
+        "enunciado": "Derivada de (x² + 1)/(x − 1)",
+        "respuesta_correcta": "(x² − 2x − 1)/(x − 1)²",
+        "codigo": 200,
+        "segundos": 2.622,
+        "tokens_entrada": 258,
+        "tokens_salida": 1003,
+        "distractores": [
+          {
+            "expresion": "(x^2 - 2x - 1)/(x - 1)",
+            "error": "Olvidó elevar al cuadrado el denominador al aplicar la regla del cociente."
+          },
+          {
+            "expresion": "(3x^2 - 2x + 1)/(x - 1)^2",
+            "error": "Usó signo incorrecto en la resta del numerador al aplicar la regla del cociente (debería ser resta, no suma)."
+          },
+          {
+            "expresion": "2x",
+            "error": "Aplicó la regla del cociente como cociente de derivadas (derivada del numerador sobre derivada del denominador)."
+          }
+        ],
+        "descartados": []
+      },
+      {
+        "pasada": 1,
+        "id": 7,
+        "enunciado": "Derivada de sin(3x)",
+        "respuesta_correcta": "3·cos(3x)",
+        "codigo": 200,
+        "segundos": 1.797,
+        "tokens_entrada": 241,
+        "tokens_salida": 517,
+        "distractores": [
+          {
+            "expresion": "cos(3x)",
+            "error": "Se olvidó aplicar la regla de la cadena y omitió el factor 3"
+          },
+          {
+            "expresion": "3*sin(3x)",
+            "error": "Confundió la derivada de sin con la de cos"
+          },
+          {
+            "expresion": "9*cos(3x)",
+            "error": "Aplicó la regla de la cadena pero multiplicó por 3 dos veces"
+          }
+        ],
+        "descartados": []
+      },
+      {
+        "pasada": 1,
+        "id": 8,
+        "enunciado": "Derivada de (2x + 1)⁵",
+        "respuesta_correcta": "10(2x + 1)⁴",
+        "codigo": 200,
+        "segundos": 2.357,
+        "tokens_entrada": 250,
+        "tokens_salida": 651,
+        "distractores": [
+          {
+            "expresion": "5(2x + 1)^4",
+            "error": "Olvidó multiplicar por la derivada interna (2) al aplicar la regla de la cadena"
+          },
+          {
+            "expresion": "10(2x + 1)^5",
+            "error": "Mantuvo el exponente original en lugar de restarle 1 al aplicar la regla de potencias"
+          },
+          {
+            "expresion": "2(2x + 1)^4",
+            "error": "Aplicó la regla de la cadena pero omitió el factor del exponente (5)"
+          }
+        ],
+        "descartados": []
+      },
+      {
+        "pasada": 1,
+        "id": 9,
+        "enunciado": "Derivada de e^(x²)",
+        "respuesta_correcta": "2x·e^(x²)",
+        "codigo": 200,
+        "segundos": 1.686,
+        "tokens_entrada": 242,
+        "tokens_salida": 440,
+        "distractores": [
+          {
+            "expresion": "e^(2x)",
+            "error": "Se derivó e^(x^2) como si el exponente se derivara y se sustituyera directamente en el exponente, omitiendo la regla de la cadena."
+          },
+          {
+            "expresion": "2x·e^x",
+            "error": "Se trató e^(x^2) como (e^x)^2 y se aplicó la regla del producto en lugar de la regla de la cadena correcta."
+          },
+          {
+            "expresion": "2·e^(x^2)",
+            "error": "Se aplicó la regla de la cadena pero se olvidó multiplicar por la derivada del exponente x, quedando solo el factor 2."
+          }
+        ],
+        "descartados": []
+      },
+      {
+        "pasada": 1,
+        "id": 10,
+        "enunciado": "Derivada de ln(x² + 1)",
+        "respuesta_correcta": "2x/(x² + 1)",
+        "codigo": 200,
+        "segundos": 3.135,
+        "tokens_entrada": 245,
+        "tokens_salida": 539,
+        "distractores": [
+          {
+            "expresion": "2x",
+            "error": "Se olvidó el factor 1/(x²+1) al derivar ln(u), aplicando sólo la derivada del interior"
+          },
+          {
+            "expresion": "2/x",
+            "error": "Se utilizó erróneamente la propiedad ln(a·b)=ln a+ln b y simplificó ln(x²+1) como 2·ln x"
+          },
+          {
+            "expresion": "(x²+1)/(2x)",
+            "error": "Se invirtió la fracción resultante de la regla de la cadena, colocando el denominador en el numerador"
+          }
+        ],
+        "descartados": []
+      },
+      {
+        "pasada": 1,
+        "id": 11,
+        "enunciado": "Derivada de sin²(x)",
+        "respuesta_correcta": "2·sin(x)·cos(x)",
+        "codigo": 200,
+        "segundos": 2.364,
+        "tokens_entrada": 242,
+        "tokens_salida": 515,
+        "distractores": [
+          {
+            "expresion": "sin(x)·cos(x)",
+            "error": "Olvidó el factor 2 al aplicar la regla de la cadena"
+          },
+          {
+            "expresion": "2·cos(x)",
+            "error": "Derivó como si fuera (sin x)^2 → 2·(sin x)' = 2·cos(x), omitiendo el factor sin(x)"
+          },
+          {
+            "expresion": "2·x·cos(x)",
+            "error": "Confundió sin²(x) con sin(x^2) y aplicó la regla de la cadena a x^2"
+          }
+        ],
+        "descartados": []
+      },
+      {
+        "pasada": 1,
+        "id": 12,
+        "enunciado": "Derivada de cos²(x)",
+        "respuesta_correcta": "−2·sin(x)·cos(x)",
+        "codigo": 200,
+        "segundos": 2.831,
+        "tokens_entrada": 242,
+        "tokens_salida": 886,
+        "distractores": [
+          {
+            "expresion": "2·sin(x)·cos(x)",
+            "error": "Se omitió el signo negativo al derivar cos(x)"
+          },
+          {
+            "expresion": "-sin(x)·cos(x)",
+            "error": "Se olvidó multiplicar por 2 al aplicar la regla de potencia"
+          },
+          {
+            "expresion": "sin^2(x)",
+            "error": "Se tomó el cuadrado de la derivada de cos(x) en lugar de derivar el cuadrado"
+          }
+        ],
+        "descartados": []
+      },
+      {
+        "pasada": 1,
+        "id": 13,
+        "enunciado": "Derivada de 1/x",
+        "respuesta_correcta": "−1/x²",
+        "codigo": 200,
+        "segundos": 2.439,
+        "tokens_entrada": 237,
+        "tokens_salida": 738,
+        "distractores": [
+          {
+            "expresion": "1/x^2",
+            "error": "Se omitió el signo negativo al aplicar la regla de potencia"
+          },
+          {
+            "expresion": "-1/x",
+            "error": "Se aplicó la regla de potencia pero se olvidó disminuir el exponente, obteniendo -1·x^{-1} en lugar de -1·x^{-2}"
+          },
+          {
+            "expresion": "0",
+            "error": "Se consideró que 1 es constante y su derivada es 0, ignorando que 1/x es una función variable"
+          }
+        ],
+        "descartados": []
+      },
+      {
+        "pasada": 1,
+        "id": 14,
+        "enunciado": "Derivada de √x",
+        "respuesta_correcta": "1/(2√x)",
+        "codigo": 200,
+        "segundos": 2.464,
+        "tokens_entrada": 238,
+        "tokens_salida": 555,
+        "distractores": [
+          {
+            "expresion": "(1/2)√x",
+            "error": "Aplicó la regla de potencias pero olvidó restar 1 al exponente"
+          },
+          {
+            "expresion": "1/(2x)",
+            "error": "Sustituyó √x por x en el denominador, confundiendo radicando con la raíz"
+          },
+          {
+            "expresion": "2√x",
+            "error": "Multiplicó por 2 en lugar de dividir, error típico al derivar una raíz"
+          }
+        ],
+        "descartados": []
+      },
+      {
+        "pasada": 1,
+        "id": 15,
+        "enunciado": "Derivada de tan(x)",
+        "respuesta_correcta": "sec²(x)",
+        "codigo": 200,
+        "segundos": 2.914,
+        "tokens_entrada": 235,
+        "tokens_salida": 871,
+        "distractores": [
+          {
+            "expresion": "sec(x)*tan(x)",
+            "error": "Confundió la derivada de tan con la de secante"
+          },
+          {
+            "expresion": "cos^2(x)",
+            "error": "Aplicó incorrectamente la regla de la cadena, pensando que la derivada es el coseno al cuadrado"
+          },
+          {
+            "expresion": "tan(x)",
+            "error": "Asumió que la derivada de tan(x) es la misma función"
+          }
+        ],
+        "descartados": []
+      },
+      {
+        "pasada": 1,
+        "id": 16,
+        "enunciado": "Derivada de x·ln(x)",
+        "respuesta_correcta": "ln(x) + 1",
+        "codigo": 200,
+        "segundos": 2.253,
+        "tokens_entrada": 240,
+        "tokens_salida": 555,
+        "distractores": [
+          {
+            "expresion": "ln(x)",
+            "error": "Se olvidó derivar el factor x y se tomó ln(x) como constante"
+          },
+          {
+            "expresion": "1",
+            "error": "Se derivó sólo ln(x) como 1/x y se multiplicó por x, omitiendo la derivada del factor x"
+          },
+          {
+            "expresion": "1 - ln(x)",
+            "error": "Se aplicó la regla del producto pero se restó en lugar de sumar la derivada de ln(x)"
+          }
+        ],
+        "descartados": []
+      },
+      {
+        "pasada": 1,
+        "id": 17,
+        "enunciado": "Derivada de eˣ·cos(x)",
+        "respuesta_correcta": "eˣ·cos(x) − eˣ·sin(x)",
+        "codigo": 200,
+        "segundos": 2.288,
+        "tokens_entrada": 250,
+        "tokens_salida": 591,
+        "distractores": [
+          {
+            "expresion": "e^x·cos(x)+e^x·sin(x)",
+            "error": "se tomó un signo positivo en lugar del negativo al aplicar la regla del producto"
+          },
+          {
+            "expresion": "e^x·cos(x)",
+            "error": "se omitió derivar el factor cos(x) y solo se consideró la derivada de e^x"
+          },
+          {
+            "expresion": "-e^x·sin(x)",
+            "error": "se omitió derivar el factor e^x y solo se tomó la derivada de cos(x)"
+          }
+        ],
+        "descartados": []
+      },
+      {
+        "pasada": 1,
+        "id": 18,
+        "enunciado": "Derivada de ln(sin(x))",
+        "respuesta_correcta": "cos(x)/sin(x)",
+        "codigo": 200,
+        "segundos": 1.677,
+        "tokens_entrada": 239,
+        "tokens_salida": 525,
+        "distractores": [
+          {
+            "expresion": "1/sin(x)",
+            "error": "Olvidó la regla de la cadena; tomó la derivada de ln(u) como 1/u pero no multiplicó por u'."
+          },
+          {
+            "expresion": "cos(x)",
+            "error": "Ignoró la regla de la cadena y derivó como si ln fuera la función identidad, tomando solo la derivada de sin(x)."
+          },
+          {
+            "expresion": "1/cos(x)",
+            "error": "Aplicó incorrectamente la regla de la cadena invirtiendo la derivada interna: usó 1/ cos(x) en lugar de cos(x)/sin(x)."
+          }
+        ],
+        "descartados": []
+      },
+      {
+        "pasada": 1,
+        "id": 19,
+        "enunciado": "Derivada de 2ˣ",
+        "respuesta_correcta": "2ˣ·ln(2)",
+        "codigo": 200,
+        "segundos": 1.845,
+        "tokens_entrada": 242,
+        "tokens_salida": 628,
+        "distractores": [
+          {
+            "expresion": "2^x",
+            "error": "Olvida el factor ln(2) al derivar una función exponencial de base constante."
+          },
+          {
+            "expresion": "x·2^{x-1}",
+            "error": "Aplica la regla de potencia a 2^x, confundiendo la variable en la base."
+          },
+          {
+            "expresion": "2·ln(2)",
+            "error": "Deriva solo la base y multiplica por ln(2), omitiendo la función 2^x."
+          }
+        ],
+        "descartados": []
+      },
+      {
+        "pasada": 1,
+        "id": 20,
+        "enunciado": "Derivada de cos(x²)",
+        "respuesta_correcta": "−2x·sin(x²)",
+        "codigo": 200,
+        "segundos": 1.456,
+        "tokens_entrada": 240,
+        "tokens_salida": 439,
+        "distractores": [
+          {
+            "expresion": "-sin(x²)",
+            "error": "Se olvidó aplicar la regla de la cadena y multiplicar por la derivada de x² (2x)."
+          },
+          {
+            "expresion": "2x·sin(x²)",
+            "error": "Se omitió el signo negativo al derivar cos(u), resultando en +2x·sin(x²) en lugar de -2x·sin(x²)."
+          },
+          {
+            "expresion": "-2·sin(x²)",
+            "error": "Se aplicó la regla de la cadena pero se perdió el factor x, usando 2 en vez de 2x."
+          }
+        ],
+        "descartados": []
+      },
+      {
+        "pasada": 2,
+        "id": 1,
+        "enunciado": "Derivada de x·sin(x)",
+        "respuesta_correcta": "sin(x) + x·cos(x)",
+        "codigo": 200,
+        "segundos": 1.733,
+        "tokens_entrada": 242,
+        "tokens_salida": 545,
+        "distractores": [
+          {
+            "expresion": "x·cos(x)",
+            "error": "Se olvidó derivar el factor sin(x)"
+          },
+          {
+            "expresion": "sin(x)",
+            "error": "Se olvidó derivar el factor x"
+          },
+          {
+            "expresion": "sin(x)-x·sin(x)",
+            "error": "Se aplicó la regla del producto pero se usó la derivada de cos en lugar de la de sin"
+          }
+        ],
+        "descartados": []
+      },
+      {
+        "pasada": 2,
+        "id": 2,
+        "enunciado": "Derivada de x⁵",
+        "respuesta_correcta": "5x⁴",
+        "codigo": 200,
+        "segundos": 1.289,
+        "tokens_entrada": 238,
+        "tokens_salida": 316,
+        "distractores": [
+          {
+            "expresion": "5x^5",
+            "error": "Aplicó la regla de potencia pero mantuvo el exponente original en lugar de restarle 1"
+          },
+          {
+            "expresion": "5x",
+            "error": "Redució el exponente a 1 después de multiplicar por la constante, confundiendo la regla de potencia con la derivada de x"
+          },
+          {
+            "expresion": "x^4",
+            "error": "Olvidó multiplicar por el exponente, quedándose solo con la disminución del exponente"
+          }
+        ],
+        "descartados": []
+      },
+      {
+        "pasada": 2,
+        "id": 3,
+        "enunciado": "Derivada de 3x² − 4x + 7",
+        "respuesta_correcta": "6x − 4",
+        "codigo": 200,
+        "segundos": 1.707,
+        "tokens_entrada": 247,
+        "tokens_salida": 475,
+        "distractores": [
+          {
+            "expresion": "3x - 4",
+            "error": "Aplicó la regla de potencia incorrectamente, usando d/dx[x^2]=x en lugar de 2x"
+          },
+          {
+            "expresion": "6x",
+            "error": "Olvidó derivar el término lineal -4x"
+          },
+          {
+            "expresion": "6x + 4",
+            "error": "Cambió el signo del término lineal al derivar -4x como +4"
+          }
+        ],
+        "descartados": []
+      },
+      {
+        "pasada": 2,
+        "id": 4,
+        "enunciado": "Derivada de x²·eˣ",
+        "respuesta_correcta": "2x·eˣ + x²·eˣ",
+        "codigo": 200,
+        "segundos": 2.979,
+        "tokens_entrada": 250,
+        "tokens_salida": 1073,
+        "distractores": [
+          {
+            "expresion": "2x·e^x",
+            "error": "Se omitió la derivada del factor e^x"
+          },
+          {
+            "expresion": "x^2·e^x",
+            "error": "Se omitió la derivada del factor x^2"
+          },
+          {
+            "expresion": "2x·e^x + x^2",
+            "error": "Se consideró que la derivada de e^x es 1"
+          }
+        ],
+        "descartados": []
+      },
+      {
+        "pasada": 2,
+        "id": 5,
+        "enunciado": "Derivada de sin(x)/x",
+        "respuesta_correcta": "(x·cos(x) − sin(x))/x²",
+        "codigo": 200,
+        "segundos": 1.916,
+        "tokens_entrada": 246,
+        "tokens_salida": 670,
+        "distractores": [
+          {
+            "expresion": "cos(x)/x",
+            "error": "Se derivó solo el numerador y se tomó el denominador como constante, omitiendo la regla del cociente."
+          },
+          {
+            "expresion": "(x·cos(x)+sin(x))/x²",
+            "error": "Se aplicó la regla del cociente pero se cambió el signo del segundo término, sumando en lugar de restar."
+          },
+          {
+            "expresion": "(cos(x)-sin(x))/x²",
+            "error": "Se omitió el factor x en el término que contiene cos(x), simplificando incorrectamente el numerador."
+          }
+        ],
+        "descartados": []
+      },
+      {
+        "pasada": 2,
+        "id": 6,
+        "enunciado": "Derivada de (x² + 1)/(x − 1)",
+        "respuesta_correcta": "(x² − 2x − 1)/(x − 1)²",
+        "codigo": 200,
+        "segundos": 2.184,
+        "tokens_entrada": 258,
+        "tokens_salida": 716,
+        "distractores": [
+          {
+            "expresion": "(x^2 - 2x - 1)/(x - 1)",
+            "error": "Se olvidó elevar al cuadrado el denominador al aplicar la regla del cociente"
+          },
+          {
+            "expresion": "2x/(x - 1)",
+            "error": "Se derivó solo el numerador y se trató al denominador como constante"
+          },
+          {
+            "expresion": "(3x^2 - 2x + 1)/(x - 1)^2",
+            "error": "Se usó un signo incorrecto al restar el término del denominador en la regla del cociente"
+          }
+        ],
+        "descartados": []
+      },
+      {
+        "pasada": 2,
+        "id": 7,
+        "enunciado": "Derivada de sin(3x)",
+        "respuesta_correcta": "3·cos(3x)",
+        "codigo": 200,
+        "segundos": 1.409,
+        "tokens_entrada": 241,
+        "tokens_salida": 314,
+        "distractores": [
+          {
+            "expresion": "cos(3x)",
+            "error": "Olvidó aplicar la regla de la cadena y no multiplicó por el coeficiente interno 3"
+          },
+          {
+            "expresion": "9·cos(3x)",
+            "error": "Aplicó la regla de la cadena pero elevó el factor interno al cuadrado en lugar de multiplicarlo una sola vez"
+          },
+          {
+            "expresion": "3·sin(3x)",
+            "error": "Confundió la derivada de sin con la de cos; tomó la derivada como si fuera de cos(3x)"
+          }
+        ],
+        "descartados": []
+      },
+      {
+        "pasada": 2,
+        "id": 8,
+        "enunciado": "Derivada de (2x + 1)⁵",
+        "respuesta_correcta": "10(2x + 1)⁴",
+        "codigo": 200,
+        "segundos": 1.682,
+        "tokens_entrada": 250,
+        "tokens_salida": 536,
+        "distractores": [
+          {
+            "expresion": "5(2x + 1)^4",
+            "error": "Se omitió aplicar la regla de la cadena; falta el factor 2 de la derivada del interior."
+          },
+          {
+            "expresion": "10(2x + 1)^5",
+            "error": "Se aplicó la regla del poder pero se mantuvo el exponente original en lugar de restarle 1."
+          },
+          {
+            "expresion": "2(2x + 1)^5",
+            "error": "Se multiplicó solo por la derivada del interior (2) y se conservó el exponente, olvidando el factor del exponente 5."
+          }
+        ],
+        "descartados": []
+      },
+      {
+        "pasada": 2,
+        "id": 9,
+        "enunciado": "Derivada de e^(x²)",
+        "respuesta_correcta": "2x·e^(x²)",
+        "codigo": 200,
+        "segundos": 1.604,
+        "tokens_entrada": 242,
+        "tokens_salida": 412,
+        "distractores": [
+          {
+            "expresion": "e^(x^2)",
+            "error": "Olvida aplicar la regla de la cadena y sólo deriva la parte exponencial como si fuera una constante multiplicativa"
+          },
+          {
+            "expresion": "2·e^(x^2)",
+            "error": "Aplica la regla de la cadena pero omite el factor x al derivar x^2, usando sólo la constante 2"
+          },
+          {
+            "expresion": "e^(2x)",
+            "error": "Interpreta erróneamente la derivada del exponente, sustituyendo x^2' por 2x dentro del exponente en lugar de multiplicar por la función original"
+          }
+        ],
+        "descartados": []
+      },
+      {
+        "pasada": 2,
+        "id": 10,
+        "enunciado": "Derivada de ln(x² + 1)",
+        "respuesta_correcta": "2x/(x² + 1)",
+        "codigo": 200,
+        "segundos": 2.133,
+        "tokens_entrada": 245,
+        "tokens_salida": 731,
+        "distractores": [
+          {
+            "expresion": "2x",
+            "error": "Se olvidó dividir por (x²+1), aplicando solo la derivada del argumento interno."
+          },
+          {
+            "expresion": "2/x",
+            "error": "Usó la propiedad ln(a·b)=ln a+ln b con a=x² y b=1, y derivó ln(x²) como 2/x."
+          },
+          {
+            "expresion": "2x·ln(x²+1)",
+            "error": "Aplicó la regla de la cadena como multiplicación u'·ln(u) en lugar de la forma correcta u'/u."
+          }
+        ],
+        "descartados": []
+      },
+      {
+        "pasada": 2,
+        "id": 11,
+        "enunciado": "Derivada de sin²(x)",
+        "respuesta_correcta": "2·sin(x)·cos(x)",
+        "codigo": 200,
+        "segundos": 2.534,
+        "tokens_entrada": 242,
+        "tokens_salida": 896,
+        "distractores": [
+          {
+            "expresion": "2·sin(x)",
+            "error": "Olvidó derivar la función interna y omitió el factor cos(x)"
+          },
+          {
+            "expresion": "cos^2(x)",
+            "error": "Aplicó la regla de potencia directamente a sin(x) sin usar la regla de cadena"
+          },
+          {
+            "expresion": "2·cos(x)",
+            "error": "Multiplicó por 2 y por la derivada de sin(x) pero omitió el factor sin(x)"
+          }
+        ],
+        "descartados": []
+      },
+      {
+        "pasada": 2,
+        "id": 12,
+        "enunciado": "Derivada de cos²(x)",
+        "respuesta_correcta": "−2·sin(x)·cos(x)",
+        "codigo": 200,
+        "segundos": 2.382,
+        "tokens_entrada": 242,
+        "tokens_salida": 611,
+        "distractores": [
+          {
+            "expresion": "-2·sin(x)",
+            "error": "Olvidó multiplicar por cos(x) al aplicar la regla de la cadena"
+          },
+          {
+            "expresion": "-2·cos(x)",
+            "error": "Derivó cos^2(x) como 2·cos(x)·(-sin(x)) y canceló erróneamente el factor sin(x)"
+          },
+          {
+            "expresion": "2·sin(x)·cos(x)",
+            "error": "Confundió el signo; la derivada de cos(x) es -sin(x) y el signo negativo se perdió"
+          }
+        ],
+        "descartados": []
+      },
+      {
+        "pasada": 2,
+        "id": 13,
+        "enunciado": "Derivada de 1/x",
+        "respuesta_correcta": "−1/x²",
+        "codigo": 200,
+        "segundos": 1.98,
+        "tokens_entrada": 237,
+        "tokens_salida": 455,
+        "distractores": [
+          {
+            "expresion": "1/x^2",
+            "error": "Se omitió el signo negativo al aplicar la regla de potencia"
+          },
+          {
+            "expresion": "-1/x",
+            "error": "Se redujo el exponente pero no se elevó al cuadrado, aplicando mal la regla de potencia"
+          },
+          {
+            "expresion": "0",
+            "error": "Se tomó 1/x como una constante, ignorando que depende de x"
+          }
+        ],
+        "descartados": []
+      },
+      {
+        "pasada": 2,
+        "id": 14,
+        "enunciado": "Derivada de √x",
+        "respuesta_correcta": "1/(2√x)",
+        "codigo": 200,
+        "segundos": 2.262,
+        "tokens_entrada": 238,
+        "tokens_salida": 759,
+        "distractores": [
+          {
+            "expresion": "1/(2x)",
+            "error": "Aplicó la regla de potencias con exponente -1 en lugar de -1/2"
+          },
+          {
+            "expresion": "1/2·√x",
+            "error": "Olvidó el exponente negativo y tomó la derivada como (1/2) veces la función original"
+          },
+          {
+            "expresion": "2√x",
+            "error": "Confundió el exponente 1/2 con 2 y usó la derivada de x^2 en lugar de la de √x"
+          }
+        ],
+        "descartados": []
+      },
+      {
+        "pasada": 2,
+        "id": 15,
+        "enunciado": "Derivada de tan(x)",
+        "respuesta_correcta": "sec²(x)",
+        "codigo": 200,
+        "segundos": 2.568,
+        "tokens_entrada": 235,
+        "tokens_salida": 925,
+        "distractores": [
+          {
+            "expresion": "sec(x)",
+            "error": "Se olvidó elevar al cuadrado; confunde la derivada de tan(x) con la de sec(x) y omite la regla del cociente adecuada"
+          },
+          {
+            "expresion": "sec(x)·tan(x)",
+            "error": "Se tomó la derivada de sec(x) en lugar de tan(x), aplicando la regla del producto para sec en vez de la regla correcta para tan"
+          },
+          {
+            "expresion": "cos^2(x)",
+            "error": "Al aplicar la regla del cociente se simplificó incorrectamente y se obtuvo cos^2(x) en lugar de sec^2(x)"
+          }
+        ],
+        "descartados": []
+      },
+      {
+        "pasada": 2,
+        "id": 16,
+        "enunciado": "Derivada de x·ln(x)",
+        "respuesta_correcta": "ln(x) + 1",
+        "codigo": 200,
+        "segundos": 2.022,
+        "tokens_entrada": 240,
+        "tokens_salida": 599,
+        "distractores": [
+          {
+            "expresion": "ln(x)",
+            "error": "Se olvidó derivar el factor x, tratándolo como constante en la regla del producto"
+          },
+          {
+            "expresion": "x + 1",
+            "error": "Se derivó ln(x) como si fuera x (confusión al derivar el logaritmo)"
+          },
+          {
+            "expresion": "ln(x) + x",
+            "error": "Se tomó la derivada de ln(x) como 1 en lugar de 1/x, aplicando mal la regla del producto"
+          }
+        ],
+        "descartados": []
+      },
+      {
+        "pasada": 2,
+        "id": 17,
+        "enunciado": "Derivada de eˣ·cos(x)",
+        "respuesta_correcta": "eˣ·cos(x) − eˣ·sin(x)",
+        "codigo": 200,
+        "segundos": 2.375,
+        "tokens_entrada": 250,
+        "tokens_salida": 834,
+        "distractores": [
+          {
+            "expresion": "e^x·cos(x)",
+            "error": "Olvidó aplicar la regla del producto y derivó solo el factor e^x, dejando cos(x) sin derivar"
+          },
+          {
+            "expresion": "e^x·cos(x)+e^x·sin(x)",
+            "error": "Aplicó la regla del producto pero cambió el signo al derivar cos(x), usando +sin(x) en lugar de -sin(x)"
+          },
+          {
+            "expresion": "-e^x·sin(x)",
+            "error": "Multiplicó los derivados de los factores (e^x)'·(cos x)' y omitió el término e^x·cos(x) que proviene de la regla del producto"
+          }
+        ],
+        "descartados": []
+      },
+      {
+        "pasada": 2,
+        "id": 18,
+        "enunciado": "Derivada de ln(sin(x))",
+        "respuesta_correcta": "cos(x)/sin(x)",
+        "codigo": 200,
+        "segundos": 1.884,
+        "tokens_entrada": 239,
+        "tokens_salida": 636,
+        "distractores": [
+          {
+            "expresion": "1/sin(x)",
+            "error": "Olvidó aplicar la regla de la cadena; sólo tomó la derivada de ln(u) como 1/u sin multiplicar por u' (cos x)."
+          },
+          {
+            "expresion": "cos(x)",
+            "error": "Omitió el factor 1/sin(x) al derivar ln(sin x), trató la derivada como si fuera sólo la de sin x."
+          },
+          {
+            "expresion": "-cos(x)/sin(x)",
+            "error": "Error de signo; confundió la derivada de ln(sin x) con la de ln(cos x) o aplicó incorrectamente la regla del signo."
+          }
+        ],
+        "descartados": []
+      },
+      {
+        "pasada": 2,
+        "id": 19,
+        "enunciado": "Derivada de 2ˣ",
+        "respuesta_correcta": "2ˣ·ln(2)",
+        "codigo": 200,
+        "segundos": 1.596,
+        "tokens_entrada": 242,
+        "tokens_salida": 484,
+        "distractores": [
+          {
+            "expresion": "2^x",
+            "error": "Se olvidó multiplicar por ln(2), pensando que la derivada de a^x es a^x"
+          },
+          {
+            "expresion": "x·2^(x-1)",
+            "error": "Aplicó la regla de potencia d/dx[x^n]=n·x^{n-1} al caso 2^x, tratando la base como variable"
+          },
+          {
+            "expresion": "e^x",
+            "error": "Confundió 2^x con e^x y usó la derivada de la función exponencial natural"
+          }
+        ],
+        "descartados": []
+      },
+      {
+        "pasada": 2,
+        "id": 20,
+        "enunciado": "Derivada de cos(x²)",
+        "respuesta_correcta": "−2x·sin(x²)",
+        "codigo": 200,
+        "segundos": 1.434,
+        "tokens_entrada": 240,
+        "tokens_salida": 352,
+        "distractores": [
+          {
+            "expresion": "-sin(x^2)",
+            "error": "Olvido del factor de la regla de la cadena (2x) al derivar cos(x^2)."
+          },
+          {
+            "expresion": "2x·sin(x^2)",
+            "error": "Error de signo: se mantuvo el signo positivo en lugar del negativo al derivar cos(x^2)."
+          },
+          {
+            "expresion": "-2·cos(x)·sin(x)",
+            "error": "Interpretación errónea de la función como [cos(x)]^2 en lugar de cos(x^2), aplicando la regla del producto/derivada de cos^2(x)."
+          }
+        ],
+        "descartados": []
+      }
+    ],
+    "resumen": {
+      "solicitudes": 40,
+      "codigos": {
+        "200": 40
+      },
+      "latencia_de_las_respondidas": {
+        "muestras": 40,
+        "mediana_segundos": 2.09,
+        "p95_segundos": 2.914,
+        "peor_segundos": 3.135
+      },
+      "distractores_entregados": 120,
+      "descartados_por_motivo": {},
+      "entregados_que_repiten_la_respuesta_correcta": 0,
+      "tokens_entrada_promedio": 243.2,
+      "tokens_salida_promedio": 612.8
+    }
+  },
+  "degradado": {
+    "proveedor_caido": [
+      {
+        "muestra": 1,
+        "codigo": 503,
+        "segundos": 2.228,
+        "detalle": "No se pudo contactar al proveedor. Puede volver a pedirlo más tarde o escribir los distractores a mano.",
+        "salud_durante_la_falla": 200
+      },
+      {
+        "muestra": 2,
+        "codigo": 503,
+        "segundos": 2.257,
+        "detalle": "No se pudo contactar al proveedor. Puede volver a pedirlo más tarde o escribir los distractores a mano.",
+        "salud_durante_la_falla": 200
+      }
+    ],
+    "proveedor_lento": [
+      {
+        "muestra": 1,
+        "codigo": 503,
+        "segundos": 20.25,
+        "detalle": "El proveedor no respondió en 20 s. Puede volver a pedirlo o escribir los distractores a mano.",
+        "salud_durante_la_falla": 200
+      },
+      {
+        "muestra": 2,
+        "codigo": 503,
+        "segundos": 20.238,
+        "detalle": "El proveedor no respondió en 20 s. Puede volver a pedirlo o escribir los distractores a mano.",
+        "salud_durante_la_falla": 200
+      }
+    ],
+    "resumen": {
+      "todas_responden_503": true,
+      "peor_segundos": 20.25,
+      "la_salud_siguio_en_200": true
+    }
+  },
+  "resultado": {
+    "m1_cumple": true,
+    "m2_p95_segundos": 2.914,
+    "m2_cumple": true,
+    "m3_peor_segundos": 20.25,
+    "m3_cumple": true
+  }
+}
