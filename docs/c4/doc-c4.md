@@ -7,7 +7,7 @@ cambios y no se desincronicen en silencio.
 | | |
 |---|---|
 | **Sistema** | QuantIA, sistema de calificación de exámenes de opción múltiple mediante OMR ([ADR-0008](../adr/0008-renombrar-el-sistema-a-quantia.md)) |
-| **Última actualización** | 2026-09-22 |
+| **Última actualización** | 2026-10-04 |
 | **Niveles completos** | Nivel 1 (Contexto), Nivel 2 (Contenedores) y Nivel 3 (Componentes) |
 | **Notación** | C4 model — [c4model.com](https://c4model.com) · Renderizado con Mermaid `flowchart` |
 | **Documentos relacionados** | [`../arc42/arc42-template-ES.md`](../arc42/arc42-template-ES.md) · [`../adr/`](../adr/) · [`../aspectos.md`](../aspectos.md) |
@@ -42,15 +42,15 @@ flowchart TB
     califica contra la clave y presenta
     los resultados."]
 
-    llm["<b>Proveedor de LLM</b>
-    "]
+    llm["<b>Proveedor de LLM · Groq</b>
+    [Sistema externo]"]
 
     profesor -->|"Registra exámenes y sube escaneos
     <b>[HTTPS · Web UI]</b>"| sistema
     sistema -->|"Devuelve notas y alertas
     <b>[HTTPS · HTML/JSON]</b>"| profesor
-    sistema -.->|"Pide distractores
-    <b>[HTTPS/JSON]</b>"| llm
+    sistema -->|"Pide distractores (opcional)
+    <b>[HTTPS · JSON]</b>"| llm
 
     classDef person fill:#08427B,stroke:#073B6F,color:#ffffff
     classDef system fill:#1168BD,stroke:#3379B7,color:#ffffff
@@ -77,7 +77,7 @@ flowchart TB
 |---|---|---|
 | **Profesor / TA** | Persona | Docente autorizado que registra los bancos de preguntas y la clave, sube los escaneos de las hojas de respuesta, resuelve las marcas ambiguas y consulta los resultados. Es el **único** usuario humano del sistema (restricción RNF-05). |
 | **QuantIA** | Sistema en alcance | Recibe el banco de preguntas y la clave que registra el profesor, procesa las hojas escaneadas mediante reconocimiento óptico de marcas, calcula las calificaciones y las presenta en un dashboard interactivo. |
-| **Proveedor de LLM** | Sistema externo *(opcional y pendiente)* | Servicio de modelo de lenguaje que el profesor puede invocar en la **fase de autoría** para que le proponga distractores diagnósticos (RF-11). No participa en la calificación, y el sistema opera completo sin invocarlo nunca. Su salida nunca se acepta sola: el profesor decide qué acepta y habilita el examen (RF-07). |
+| **Proveedor de LLM** | Sistema externo *(opcional)* | Groq, con el modelo `openai/gpt-oss-120b` ([ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)). Servicio de modelo de lenguaje que el profesor puede invocar en la **fase de autoría** para que le proponga distractores diagnósticos (RF-11). No participa en la calificación, y el sistema opera completo sin invocarlo nunca. Su salida nunca se acepta sola: el profesor decide qué acepta y habilita el examen (RF-07). |
 
 ### Relaciones
 
@@ -85,7 +85,7 @@ flowchart TB
 |---|---|---|---|
 | 1 | Profesor / TA → Sistema | Registra el banco de preguntas y la clave, habilita el examen, sube las hojas escaneadas, gestiona sus cursos y resuelve las marcas ambiguas. | HTTPS · Web UI |
 | 2 | Sistema → Profesor / TA | Presenta notas, estadísticas por pregunta y alertas de revisión manual. | HTTPS · HTML/JSON |
-| 3 | Sistema → Proveedor de LLM *(opcional, pendiente)* | Solicita distractores diagnósticos para una pregunta, a petición del profesor. | HTTPS/JSON, por confirmar |
+| 3 | Sistema → Proveedor de LLM *(opcional)* | Solicita distractores diagnósticos para una pregunta, a petición del profesor. | HTTPS · JSON, con el protocolo de chat compatible con OpenAI ([ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)) |
 
 ---
 
@@ -109,27 +109,18 @@ sube manualmente.
 el sistema ni tiene cuenta en él (RNF-05). Es un stakeholder afectado —está registrado como
 tal en la sección 1.3 del [arc42](../arc42/arc42-template-ES.md)— pero no un actor del diagrama de contexto.
 
-**Por qué el proveedor de LLM aparece punteado.** Por dos razones, no una. La primera: su uso
-es **opcional** (RF-11), así que la relación existe pero no se recorre en todos los casos. La
-segunda: el equipo aún no ha decidido cómo se consume el modelo (riesgo R-02 del arc42). Esa
-segunda decisión cambia el diagrama:
-
-- **Si se consume una API alojada** (Google AI Studio, Groq, GitHub Models u otra), el nodo se
-  confirma como sistema externo, la flecha 3 pasa a continua y hay que documentar sus modos de
-  fallo.
-- **Si se aloja un modelo local**, el nodo **desaparece** de este nivel y el modelo pasa a ser
-  un contenedor del Nivel 2.
-
-El nodo no lleva esas dos condiciones escritas en su etiqueta. Un elemento de Nivel 1 se rotula
-con su tipo —«Sistema externo»— y nada más; que el uso sea opcional y el proveedor esté sin
-decidir lo comunican el trazo discontinuo, la leyenda y esta nota, y el Nivel 3 lo detallará
-cuando se dibuje. Cargar la caja de calificativos la vuelve ilegible sin agregar información
-que no esté ya en el documento.
+**Por qué la flecha hacia el proveedor de LLM ya es continua.** Hasta la S9 iba punteada por
+dos razones: su uso es opcional (RF-11) y no estaba decidido cómo se consume el modelo (riesgo
+R-02). [ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md) cerró la segunda: una API alojada, Groq, llamada desde `autoria` por un
+adaptador propio. Con eso el nodo se confirma como sistema externo y la flecha 3 pasa a
+continua, como esta misma nota anticipaba. Que el uso siga siendo opcional lo dice la etiqueta
+de la flecha, y sus modos de fallo (20 s de espera, sin reintentos, 503 con el motivo) están en
+ADR-0013.
 
 Se dibuja en lugar de omitirlo porque el sistema sí ofrece esa capacidad, aunque no dependa de
 ella: omitirlo daría a entender que la función no existe. Desde [ADR-0005](../adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md)
-el LLM ya no es un componente obligatorio de RNF-01, sino una capacidad de apoyo, y el trazo
-discontinuo es justamente lo que comunica esa diferencia.
+el LLM ya no es un componente obligatorio de RNF-01, sino una capacidad de apoyo, y la palabra
+«opcional» en la flecha 3 es lo que comunica esa diferencia.
 
 **Por qué las etiquetas de las flechas son cortas.** Cada una nombra el propósito en unas pocas
 palabras y la tecnología entre corchetes, que es lo que pide la notación. La descripción completa
@@ -209,8 +200,11 @@ flowchart TB
         escaneadas y archivos asociados."]
     end
 
-    llm["<b>Proveedor de LLM</b>
-    [Sistema externo]"]
+    llm["<b>Proveedor de LLM · Groq</b>
+    [Sistema externo]
+
+    openai/gpt-oss-120b.
+    US$0 en la capa gratuita."]
 
     profesor -->|"Gestiona y consulta
     <b>[HTTPS · JSON · multipart/form-data en la carga]</b>"| web
@@ -233,8 +227,8 @@ flowchart TB
     worker -.->|"Lee hojas escaneadas
     <b>[Lectura de imagen (prevista)]</b>"| imagenes
 
-    web -.->|"Solicita distractores
-    <b>[HTTPS/JSON]</b>"| llm
+    web -->|"Solicita distractores (opcional)
+    <b>[HTTPS · JSON · chat compatible con OpenAI]</b>"| llm
 
     classDef person fill:#08427B,stroke:#073B6F,color:#ffffff
     classDef container fill:#1168BD,stroke:#3379B7,color:#ffffff
@@ -264,7 +258,7 @@ flowchart TB
 | **Cola de trabajos** | Contenedor | Mantiene los trabajos de procesamiento pendientes y permite desacoplar la aplicación web del procesamiento OMR. |
 | **Base de datos** | Contenedor | Almacena la información estructurada de QuantIA, incluyendo usuarios, cursos, preguntas, claves de respuesta, exámenes y resultados de las calificaciones. |
 | **Almacén de imágenes** | Contenedor | Conserva las hojas de respuesta escaneadas y los archivos necesarios para su procesamiento. |
-| **Proveedor de LLM** | Sistema externo *(opcional y pendiente)* | Servicio externo utilizado durante la fase de autoría para proponer distractores diagnósticos. No participa en el procesamiento OMR ni en el cálculo de las calificaciones. |
+| **Proveedor de LLM** | Sistema externo *(opcional)* | Groq, con el modelo `openai/gpt-oss-120b` ([ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)). Servicio externo utilizado durante la fase de autoría para proponer distractores diagnósticos. No participa en el procesamiento OMR ni en el cálculo de las calificaciones. **Costo:** US$0 en la capa gratuita, sin tarjeta; US$0,0004 por solicitud al precio de pago ([evaluación](../evidencia/evaluacion-distractores.md)). |
 
 ### Relaciones
 
@@ -277,7 +271,7 @@ flowchart TB
 | 5 | Cola de trabajos → Worker de procesamiento | Entrega los trabajos pendientes para su procesamiento. | Redis · `BLPOP`, bloqueante con timeout de 5 s · el mismo JSON | **Construido** |
 | 6 | Worker de procesamiento → Base de datos | Consulta información necesaria y persiste las calificaciones y resultados del procesamiento. | SQL sobre PostgreSQL | **Previsto**, por la misma razón que la relación 2. |
 | 7 | Worker de procesamiento → Almacén de imágenes | Recupera las hojas escaneadas que debe procesar. | Lectura de la imagen desde el worker | **Previsto.** Depende del aspecto A-02; hoy el worker solo registra el trabajo en su log. |
-| 8 | Aplicación web → Proveedor de LLM *(opcional)* | Solicita distractores diagnósticos para una pregunta durante la autoría. | HTTPS/JSON | **Previsto.** Depende de la decisión de proveedor (riesgo R-02). |
+| 8 | Aplicación web → Proveedor de LLM *(opcional)* | Solicita distractores diagnósticos para una pregunta durante la autoría. | HTTPS · JSON · `POST /chat/completions` compatible con OpenAI; clave en la variable de entorno `LLM_API_KEY`; 20 s de espera, sin reintentos | **Construido** ([ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)). Opcional: sin clave o con el proveedor caído, la ruta `/distractores` responde 503 |
 
 ---
 
@@ -301,9 +295,9 @@ Estas notas explican **por qué** se han separado los diferentes contenedores y 
 
 **Por qué el proveedor de LLM se conecta con la aplicación web.** El LLM únicamente participa en la fase de autoría, cuando el profesor solicita propuestas de distractores diagnósticos (RF-11). No participa en el flujo de procesamiento de las hojas ni en el cálculo de las calificaciones. Por ello, la interacción se realiza desde la aplicación web.
 
-**Por qué la relación con el proveedor de LLM aparece punteada.** Al igual que en el Nivel 1, el uso del LLM es opcional y la decisión sobre cómo consumir el modelo todavía está pendiente. Si se utiliza una API alojada, continuará representándose como un sistema externo. Si se decide alojar un modelo local, el proveedor externo desaparecerá del Nivel 1 y el modelo o servicio correspondiente deberá representarse como un contenedor de QuantIA.
+**Por qué la relación con el proveedor de LLM ya es continua.** [ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md) decidió consumir una API alojada (Groq), así que el proveedor sigue siendo un sistema externo y la relación 8 está construida: la aplicación web lo llama desde el adaptador de `autoria`. Sigue siendo opcional (RF-11): sin clave, o con el proveedor caído o lento, la ruta responde 503 y el resto de la aplicación no se entera.
 
-**Qué información se envía al LLM.** De acuerdo con RNF-13, la interacción con el proveedor de LLM se limita a especificaciones de preguntas matemáticas necesarias para generar distractores. No deben enviarse nombres de estudiantes, calificaciones ni hojas escaneadas.
+**Qué información se envía al LLM.** De acuerdo con RNF-13, la interacción con el proveedor de LLM se limita a especificaciones de preguntas matemáticas necesarias para generar distractores. No deben enviarse nombres de estudiantes, calificaciones ni hojas escaneadas. Lo verifica [`test_proveedor_llm.py`](../../backend/tests/test_proveedor_llm.py), que compara el cuerpo entero de la solicitud.
 
 **Por qué no aparece el sistema académico institucional.** Actualmente no existe una integración con el sistema académico institucional. QuantIA presenta los resultados directamente al profesor, por lo que no se incorpora un contenedor o sistema externo adicional en este nivel.
 
@@ -379,10 +373,10 @@ flowchart TB
         y encola cada hoja."]
 
         autoria["<b>autoria</b>
-        [Componente · previsto]
+        [Componente]
 
-        Banco, clave, habilitación
-        y distractores opcionales."]
+        Distractores diagnósticos (construido);
+        banco, clave y habilitación (previstos)."]
 
         dashboard["<b>dashboard</b>
         [Componente · previsto]
@@ -420,7 +414,7 @@ flowchart TB
     api -->|"recibir_lote()"| ingesta
     api -->|"Construye almacén, bitácora
     y cliente de cola"| infraestructura
-    api -.->|"Rutas previstas"| autoria
+    api -->|"proponer_distractores()"| autoria
     api -.->|"Rutas previstas"| dashboard
 
     ingesta -->|"Puertos AlmacenDeImagenes
@@ -433,8 +427,9 @@ flowchart TB
     infraestructura -->|"<b>[Redis · RPUSH · JSON]</b>"| cola
     infraestructura -.->|"<b>[SQL]</b>"| db
 
-    autoria -.->|"<b>Capa anticorrupción</b>
-    adaptador propio, previsto"| llm
+    autoria -->|"<b>Capa anticorrupción</b>
+    GeneradorCompatibleConOpenAI
+    <b>[HTTPS · JSON]</b>"| llm
 
     classDef person fill:#08427B,stroke:#073B6F,color:#ffffff
     classDef component fill:#1168BD,stroke:#3379B7,color:#ffffff
@@ -443,8 +438,8 @@ flowchart TB
     classDef external fill:#999999,stroke:#6B6B6B,color:#ffffff,stroke-dasharray: 5 5
 
     class profesor person
-    class api,ingesta component
-    class autoria,dashboard,identidad previsto
+    class api,ingesta,autoria component
+    class dashboard,identidad previsto
     class infraestructura soporte
     class imagenes,cola,db,llm external
 ```
@@ -531,9 +526,9 @@ flowchart TB
 
 | Componente | Contenedor | Responsabilidad | Requisitos | Estado |
 |---|---|---|---|---|
-| `api` | Web | Entrada HTTP: `GET /health` y `POST /examenes/{examen_id}/hojas`. Construye por petición el almacén, la bitácora y el cliente de cola, y publica el contrato ([`openapi.json`](../contrato/openapi.json)). | RF-01 | Construido: [`backend/api/main.py`](../../backend/api/main.py) |
+| `api` | Web | Entrada HTTP: `GET /health`, `POST /examenes/{examen_id}/hojas` y `POST /distractores`. Construye por petición el almacén, la bitácora y el cliente de cola, y publica el contrato ([`openapi.json`](../contrato/openapi.json)). | RF-01, RF-11 | Construido: [`backend/api/main.py`](../../backend/api/main.py) |
 | `ingesta` | Web | Valida extensión y firma de bytes, almacena, acuña el trabajo, lo registra en la bitácora y lo publica ([ADR-0006](../adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md)). | RF-01 | Construido: [`backend/ingesta/recepcion.py`](../../backend/ingesta/recepcion.py) |
-| `autoria` | Web | Banco de preguntas y clave, habilitación explícita del examen y, opcionalmente, distractores diagnósticos con apoyo de un LLM ([ADR-0004](../adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md), [ADR-0005](../adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md)). | RF-06, RF-07, RF-11 | Previsto (A-04) |
+| `autoria` | Web | Banco de preguntas y clave, habilitación explícita del examen y, opcionalmente, distractores diagnósticos con apoyo de un LLM ([ADR-0004](../adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md), [ADR-0005](../adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md), [ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)). | RF-06, RF-07, RF-11 | Construido en parte: los distractores diagnósticos (A-06) en [`backend/autoria/distractores.py`](../../backend/autoria/distractores.py) y [`proveedor_llm.py`](../../backend/autoria/proveedor_llm.py); banco, clave y habilitación previstos (A-04) |
 | `dashboard` | Web | Resultados y agregaciones por curso, examen y pregunta; alertas de revisión. | RF-05 | Previsto (A-03) |
 | `identidad` | Web y Worker | Autenticación, roles y aislamiento de datos por curso. | RF-09, RF-10 | Previsto (A-05) |
 | `worker` | Worker | Consume la cola en un ciclo y registra cada trabajo en su log; es el extremo del recorrido de A-01. | RF-01 | Construido: [`backend/worker/main.py`](../../backend/worker/main.py) |
@@ -554,7 +549,8 @@ flowchart TB
 | 7 | `worker` → `omr` → `calificacion` | Procesa la hoja y calcula la nota | Llamada en proceso | Previsto (A-02, A-03) |
 | 8 | `ingesta`, `autoria`, `dashboard`, `omr`, `calificacion` → `identidad` | Verifican acceso y curso | Llamada en proceso | Previsto (A-05) |
 | 9 | `infraestructura` → Base de datos | Persistencia estructurada | SQL sobre PostgreSQL | Previsto: depende del ADR que cierre R-06 |
-| 10 | `autoria` → Proveedor de LLM | Pide distractores diagnósticos a pedido del profesor | HTTPS/JSON, por confirmar | Previsto y opcional (R-02, ADR-0005) |
+| 10 | `autoria` → Proveedor de LLM | Pide distractores diagnósticos a pedido del profesor, por el adaptador `GeneradorCompatibleConOpenAI` | HTTPS · JSON, compatible con OpenAI | Construido y opcional ([ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)) |
+| 11 | `api` → `autoria` | `proponer_distractores()`, con el generador que `api` construye por petición | Llamada en proceso | Construido |
 
 ### Notas de modelado
 
@@ -572,7 +568,7 @@ recorre; esa es la violación V-1 de la
 [sección 8.3 del arc42](../arc42/arc42-template-ES.md#83-propiedad-de-datos).
 
 **Por qué `herramientas` no aparece.** No es parte del sistema en operación: son las herramientas
-versionadas que miden EC-07 y exportan el contrato, y su docstring declara que nada de `backend/`
+versionadas que miden EC-07 y EC-08 y exportan el contrato, y su docstring declara que nada de `backend/`
 importa desde ellas.
 
 **Qué no decide este nivel.** Cómo se recalculará una nota tras la revisión manual (RF-08), cuando
