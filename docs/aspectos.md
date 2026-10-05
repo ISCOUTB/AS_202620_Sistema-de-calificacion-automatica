@@ -25,7 +25,7 @@ verificar y evidenciar.
 
 ## Tabla de trazabilidad
 
-Cada fila enlaza a su escenario de calidad en el arc42. Los siete escenarios documentados son
+Cada fila enlaza a su escenario de calidad en el arc42. Los ocho escenarios documentados son
 alcanzables desde la fila del aspecto que los realiza.
 
 | ID | Aspecto | Estado | Requisito | Escenario de calidad | Contexto C4 (Nivel 1) | C4 | ADR | Código | Pruebas | Evidencia |
@@ -33,8 +33,9 @@ alcanzables desde la fila del aspecto que los realiza.
 | **[A-01](#a-01)** | Carga de examen para calificación | **Construido** | RF-01 | [EC-07](arc42/arc42-template-ES.md#ec-07) | [Rel. 1](c4/doc-c4.md#relaciones): Profesor/TA → Sistema | C1: [QuantIA](c4/doc-c4.md#nivel-1--diagrama-de-contexto-del-sistema) · C2: [Aplicación web](c4/doc-c4.md#nivel-2--diagrama-de-contenedores), [Almacén de imágenes](c4/doc-c4.md#nivel-2--diagrama-de-contenedores), [Cola de trabajos](c4/doc-c4.md#nivel-2--diagrama-de-contenedores) | [0002](adr/0002-procesar-calificacion-de-forma-asincrona.md) · [0006](adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md) | [`ingesta/recepcion.py`](../backend/ingesta/recepcion.py) · [`infraestructura/almacen.py`](../backend/infraestructura/almacen.py) · [`infraestructura/bitacora.py`](../backend/infraestructura/bitacora.py) · [`infraestructura/modelo.py`](../backend/infraestructura/modelo.py) · [`api/main.py`](../backend/api/main.py) · [`frontend/lib/pantalla_carga.dart`](../frontend/lib/pantalla_carga.dart) | [`test_recepcion.py`](../backend/tests/test_recepcion.py) · [`test_durabilidad_recepcion.py`](../backend/tests/test_durabilidad_recepcion.py) · [`test_carga_hojas.py`](../backend/tests/test_carga_hojas.py) · [`widget_test.dart`](../frontend/test/widget_test.dart) | [Medición de EC-07](evidencia/medicion-ec07.md): 1,744 s contra ≤10 s · 0 % de pérdida silenciosa · [captura](#a-01-evidencia) |
 | **[A-02](#a-02)** | Detección de marcas y nivel de confianza | Declarado | RF-02, RF-03 | [EC-01](arc42/arc42-template-ES.md#ec-01) · [EC-02](arc42/arc42-template-ES.md#ec-02) | **Sin contexto propio** — proceso interno, no cruza la frontera del sistema (ver nota abajo) | Pendiente | ADR de umbral previsto (R-04) | Pendiente | Pendiente | Pendiente |
 | **[A-03](#a-03)** | Calificación contra la clave y publicación | Declarado | RF-04, RF-05, RF-08 | [EC-03](arc42/arc42-template-ES.md#ec-03) · [EC-04](arc42/arc42-template-ES.md#ec-04) | [Rel. 2](c4/doc-c4.md#relaciones): Sistema → Profesor/TA | Pendiente | [0002](adr/0002-procesar-calificacion-de-forma-asincrona.md) | Pendiente | Pendiente | Pendiente |
-| **[A-04](#a-04)** | Registro del banco y habilitación del examen | Declarado | RF-06, RF-07, RF-11 | [EC-05](arc42/arc42-template-ES.md#ec-05) | [Rel. 1 y 3](c4/doc-c4.md#relaciones): Profesor/TA → Sistema · Sistema → Proveedor de LLM (opcional, RF-11) | Pendiente | [0003](adr/0003-usar-fastapi-y-flutter.md) · [0004](adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md) · [0005](adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md) | Pendiente | Pendiente | Pendiente |
+| **[A-04](#a-04)** | Registro del banco y habilitación del examen | Declarado | RF-06, RF-07 | [EC-05](arc42/arc42-template-ES.md#ec-05) | [Rel. 1](c4/doc-c4.md#relaciones): Profesor/TA → Sistema | Pendiente | [0003](adr/0003-usar-fastapi-y-flutter.md) · [0004](adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md) · [0005](adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md) | Pendiente | Pendiente | Pendiente |
 | **[A-05](#a-05)** | Identidad y aislamiento por curso | Declarado | RF-09, RF-10 | [EC-06](arc42/arc42-template-ES.md#ec-06) | [Rel. 1 y 2](c4/doc-c4.md#relaciones): transversal a ambas — condición de «docente autenticado» bajo la que operan | Pendiente | ADR de auditoría previsto (RF-10) | Pendiente | Pendiente | Pendiente |
+| **[A-06](#a-06)** | Propuesta de distractores diagnósticos | **Construido** | RF-11 *(opcional)* | [EC-08](arc42/arc42-template-ES.md#ec-08) | [Rel. 3](c4/doc-c4.md#relaciones): Sistema → Proveedor de LLM (opcional) | C1: [Proveedor de LLM](c4/doc-c4.md#nivel-1--diagrama-de-contexto-del-sistema) · C2: [Aplicación web → Proveedor de LLM](c4/doc-c4.md#relaciones-1) (relación 8) · C3: [`autoria`](c4/doc-c4.md#nivel-3--diagrama-de-componentes) | [0005](adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md) · [0013](adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md) | [`autoria/distractores.py`](../backend/autoria/distractores.py) · [`autoria/proveedor_llm.py`](../backend/autoria/proveedor_llm.py) · [`api/main.py`](../backend/api/main.py) (`POST /distractores`) | [`test_distractores.py`](../backend/tests/test_distractores.py) · [`test_proveedor_llm.py`](../backend/tests/test_proveedor_llm.py) · [`test_ruta_distractores.py`](../backend/tests/test_ruta_distractores.py) | [Evaluación de EC-08](evidencia/evaluacion-distractores.md): M1: 0 de 120 propuestas repiten la respuesta correcta · M2: p95 de 2,91 s contra 15 s · M3: 503 en 20,25 s contra 21 s · [la prueba falla ante el defecto](evidencia/prueba-distractores-falla.md) · [auditoría](evidencia/auditoria-s9.md) |
 
 **Estados:** *Declarado* = pasos 1 y 3 parciales (nombre, para quién, qué resuelve, requisitos
 y escenario asignados). *Especificado* = pasos 1 a 4 completos. *Construido* = pasos 5 a 7.
@@ -44,7 +45,7 @@ y escenario asignados). *Especificado* = pasos 1 a 4 completos. *Construido* = p
 **contextos del [mapa de contextos](arc42/arc42-template-ES.md#81-mapa-de-contextos)** son otra
 cosa: son la división interna del dominio, y cada aspecto realiza uno. A-01 realiza **Ingesta**,
 A-02 realiza **OMR**, A-03 realiza **Calificación** y **Dashboard** (la comparación contra la clave
-y la publicación de resultados, RF-05), A-04 realiza **Autoría** y A-05 realiza **Identidad**. El
+y la publicación de resultados, RF-05), A-04 y A-06 realizan **Autoría** y A-05 realiza **Identidad**. El
 séptimo contexto, **Infraestructura**, es de soporte y no tiene aspecto propio: interviene en A-01
 pero no decide ningún campo de negocio. La correspondencia completa, en las dos direcciones, está
 en la [sección 8.3 del arc42](arc42/arc42-template-ES.md#83-propiedad-de-datos), apartado «Aspectos ↔ contextos».
@@ -64,7 +65,7 @@ contexto y es OMR**: la palabra «contexto» significa cosas distintas en el Niv
 mapa de contextos, y esta es la fila donde más se nota. Ver también la [sección 8.3 del arc42](arc42/arc42-template-ES.md#83-propiedad-de-datos)
 para la misma trazabilidad vista desde qué módulo y qué dato realiza cada aspecto.
 
-A-01 es el único aspecto construido. Los demás están declarados para fijar el orden de trabajo y
+A-01 y A-06 son los aspectos construidos. Los demás están declarados para fijar el orden de trabajo y
 para que cada escenario de calidad tenga un aspecto responsable; cada uno se especifica cuando se
 levanta lo que lo bloquea, que está escrito en su sección («Por qué no se trabaja todavía»).
 
@@ -74,6 +75,11 @@ de EC-07 están medidas con una herramienta versionada
 ([`evidencia/medicion-ec07.md`](evidencia/medicion-ec07.md)): confirmación del lote en 1,744 s
 contra un techo de 10 s, y 0 % de pérdida silenciosa. Lo que sigue abierto (el medio definitivo
 de almacenamiento y la retención de RNF-14) depende de R-06, no de A-01.
+
+**Por qué A-06 está en «Construido».** Los pasos 5 a 7 están hechos en la S9: el código, las
+pruebas y la evaluación de EC-08 están en la fila de la tabla, y las tres medidas del escenario
+se midieron con una herramienta versionada: M1, ninguna de las 120 propuestas entregadas repite la respuesta correcta (0 %); M2, p95 de la latencia de 2,91 s contra un techo de 15 s, en 40 solicitudes; M3, con el proveedor caído o lento la ruta responde 503 en 20,25 s como máximo, contra 21 s. Lo que sigue
+abierto es la pantalla del sitio: hoy RF-11 se usa por la API.
 
 ---
 
@@ -348,9 +354,9 @@ máquina.
 - **Para quién es:** el profesor que prepara el examen.
 - **Qué problema resuelve:** recibe el banco de preguntas y la clave que el profesor trae
   escritos, y garantiza que ningún examen se califique sin que él lo haya habilitado
-  explícitamente, dejando registro de quién lo hizo y cuándo. Opcionalmente le propone
-  distractores diagnósticos para ayudarlo a construir las preguntas (RF-11).
-- **Requisitos:** RF-06, RF-07, RF-11 *(opcional)*.
+  explícitamente, dejando registro de quién lo hizo y cuándo. Los distractores diagnósticos
+  opcionales (RF-11) se separaron en [A-06](#a-06), con su propio escenario.
+- **Requisitos:** RF-06, RF-07.
 - **Escenario:** [EC-05](arc42/arc42-template-ES.md#ec-05).
 - **Tensión que lo condicionaba:** [T-2](#t-2) — retirada; ver la nota en esa sección.
 - **Decisión que ya lo condiciona:**
@@ -361,13 +367,97 @@ máquina.
   principal y queda como apoyo opcional (RF-11). [ADR-0003](adr/0003-usar-fastapi-y-flutter.md) sigue
   vigente sin cambios: la elección de FastAPI ya no depende de SymPy, pero se sostiene sobre
   OpenCV.
-- **Restricción legal relevante:** RNF-13 — ningún dato personal de estudiantes se envía al
-  proveedor de LLM. Este aspecto es el único que se comunica con un servicio externo, así que
-  es donde esa restricción se hace efectiva.
 - **Por qué no se trabaja todavía:** no le falta nada técnico. El registro del banco, la clave y
-  la habilitación funcionan sin LLM, y RF-11 es opcional
-  ([ADR-0005](adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md)), así que el
-  proveedor (riesgo R-02) solo hace falta para esa función. Es una cuestión de orden de trabajo.
+  la habilitación funcionan sin LLM; la parte que sí lo necesita, los distractores, ya se
+  construyó en [A-06](#a-06). Es una cuestión de orden de trabajo.
+
+---
+
+<a id="a-06"></a>
+
+## Aspecto A-06: Propuesta de distractores diagnósticos
+
+**Construido** en la S9, con apoyo de IA (registro en [`ia.md`](ia.md), entrada 12).
+
+### 1. Declarar
+
+- **Para quién es:** el profesor que prepara el examen y quiere opciones incorrectas que digan con
+  qué error se equivocó el estudiante.
+- **Qué problema resuelve:** construir distractores diagnósticos toma tiempo. A pedido del
+  profesor, el sistema propone opciones incorrectas, cada una con el error de procedimiento que
+  representa, y **el profesor decide cuáles acepta**: nada entra a un examen sin su habilitación
+  (RF-07).
+- **Requisito:** RF-11, opcional. El sistema funciona completo sin invocarlo nunca
+  ([ADR-0005](adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md)).
+- **Por qué es un aspecto aparte de A-04:** A-04 realiza RF-06 y RF-07, y su escenario (EC-05) mide
+  la habilitación. Los distractores tienen su propio escenario (EC-08), su propio sistema externo
+  y su propio modo de fallar.
+
+### 2. Especificar
+
+- **Escenario:** [EC-08](arc42/arc42-template-ES.md#ec-08), con tres medidas:
+  - **M1:** ninguna propuesta que repita textualmente la respuesta correcta llega al profesor;
+  - **M2:** p95 de la latencia de 15 s o menos;
+  - **M3:** con el proveedor caído o lento, 503 en 21 s o menos.
+- **Restricciones que lo obligan:**
+  - RNF-13: solo la pregunta sale hacia el proveedor;
+  - RNF-16: costo US$0 y sin tarjeta;
+  - RNF-11: la clave llega por el entorno, nunca por el repositorio.
+
+### 3. Ubicar
+
+- **Contexto:** Autoría ([arc42 §8.1](arc42/arc42-template-ES.md#81-mapa-de-contextos)). Llega al
+  proveedor por la relación 5, que es una capa anticorrupción.
+- **C4:** relación 3 del Nivel 1, relación 8 del Nivel 2, y `autoria` con sus relaciones 10 y 11 en
+  el Nivel 3 ([`c4/doc-c4.md`](c4/doc-c4.md)).
+- **Módulo:** `autoria`, que es dueño de sus cuatro entidades
+  ([§8.3](arc42/arc42-template-ES.md#83-propiedad-de-datos)). La entrada es `api`, con
+  `POST /distractores`.
+
+### 4. Decidir
+
+- [ADR-0005](adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md): el LLM es una capacidad opcional de la autoría, fuera de la calificación.
+- [ADR-0013](adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md): Groq detrás de un puerto de `autoria`, llamado con `httpx`, 20 s de
+  espera sin reintentos y 503 ante cualquier falla. Ahí están las alternativas descartadas.
+
+### 5. Construir
+
+- [`autoria/distractores.py`](../backend/autoria/distractores.py): la pregunta, la propuesta, el
+  puerto `GeneradorDeDistractores` y la regla de qué llega al profesor.
+- [`autoria/proveedor_llm.py`](../backend/autoria/proveedor_llm.py): el adaptador al proveedor y
+  la métrica de EC-08 (evento `distractores_propuestos`).
+- [`api/main.py`](../backend/api/main.py): `POST /distractores`. El contrato pasa a 1.1.0
+  ([`contrato/openapi.json`](contrato/openapi.json)).
+- [`herramientas/evaluar_distractores.py`](../backend/herramientas/evaluar_distractores.py): la
+  medición de EC-08.
+
+### 6. Verificar
+
+- [`test_distractores.py`](../backend/tests/test_distractores.py): la regla, y **la prueba del
+  defecto**. Sin el descarte de la respuesta correcta fallan 4 pruebas, y se demostró con un PR
+  que no se fusionó ([procedimiento y runs](evidencia/prueba-distractores-falla.md)).
+- [`test_proveedor_llm.py`](../backend/tests/test_proveedor_llm.py): RNF-13 sobre el cuerpo
+  entero de la solicitud, y la degradación.
+- [`test_ruta_distractores.py`](../backend/tests/test_ruta_distractores.py): la ruta (200, 503 y
+  422).
+- [`test_fronteras.py`](../backend/tests/test_fronteras.py): la auditoría de la S9 le agregó la
+  prueba de que el dominio no importa `api` ni `worker`
+  ([auditoría](evidencia/auditoria-s9.md)).
+
+### 7. Evidenciar
+
+[Evaluación de EC-08](evidencia/evaluacion-distractores.md), con el conjunto de 20 preguntas
+([`evidencia/conjunto-evaluacion-distractores.json`](evidencia/conjunto-evaluacion-distractores.json))
+y el resultado completo
+([`evidencia/evaluacion-distractores.json`](evidencia/evaluacion-distractores.json)):
+
+- M1, ninguna de las 120 propuestas entregadas repite la respuesta correcta (0 %);
+- M2, p95 de la latencia de 2,91 s contra un techo de 15 s, en 40 solicitudes;
+- M3, con el proveedor caído o lento la ruta responde 503 en 20,25 s como máximo, contra 21 s;
+- calidad, calificada por el equipo: 44 de 60 propuestas diagnósticas válidas (73 %), ninguna equivalente a la respuesta correcta, y el error más común es la etiqueta (8 incorrectas y 4 a medias);
+- costo: US$0 en la capa gratuita (al precio de pago serían US$0,0004 por solicitud y US$0,008 por examen de 20 preguntas).
+
+**Pendiente:** la pantalla del sitio. Hoy RF-11 se usa por la API.
 
 ---
 
