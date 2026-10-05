@@ -188,3 +188,43 @@ Fecha, actividad realizada, herramienta utilizada, respuesta obtenida (resumen),
   - **Medir antes de decidir.** Que el servicio gratuito se apaga estaba en la documentación del proveedor; cuánto le cuesta eso a EC-07 solo lo dijo la medición.
   - **Probar como corre la plataforma.** El único fallo de despliegue salió de una diferencia entre cómo ejecuta Docker y cómo ejecuta Render.
   - **Limitar la IA a una tabla de hechos verificados.** Las herramientas de IA inventaron datos justo donde no la tenían: un nombre de archivo y un detalle del CI.
+
+### Entrada 12
+
+- **Fecha:** 2026-10-03 y 2026-10-04
+- **Actividad realizada:** Evidencia S9: una porción real del sistema construida con apoyo de IA, RF-11 (aspecto A-06).
+  - **Código:** la regla de qué distractores llegan al profesor ([`distractores.py`](../backend/autoria/distractores.py)), el adaptador al proveedor ([`proveedor_llm.py`](../backend/autoria/proveedor_llm.py)), la ruta `POST /distractores` con el contrato 1.1.0, la herramienta de evaluación ([`evaluar_distractores.py`](../backend/herramientas/evaluar_distractores.py)) y sus pruebas.
+  - **Evaluación:** el borrador del conjunto de 20 preguntas y las hojas de calificación.
+  - **Documentos:** los borradores de ADR-0013 y ADR-0014, el arc42, el C4, `aspectos.md`, la auditoría, el informe de la evaluación y este registro.
+- **Herramienta utilizada:** Claude (Anthropic), con Claude Code, en una sesión de Sebastián, con búsqueda web para verificar los proveedores en sus páginas oficiales.
+- **Prompt utilizado (resumen):**
+  - Un plan de la semana a partir de la ficha de la S9, la revisión preliminar y el repositorio.
+  - Verificar los proveedores de LLM candidatos.
+  - El código de la porción, en un clon de ensayo y sin subir nada, probado commit por commit.
+  - Los documentos, redactados para que cada integrante los revisara y los subiera.
+
+  La condición de método fue la de siempre: toda cifra con su fuente y su fecha, y nada se da por bueno sin ejecutarlo.
+- **Respuesta obtenida (resumen):**
+  - El código con 44 pruebas nuevas: 106 en total, `mypy` sin errores, y cada commit intermedio ensayado en verde.
+  - La comparación de cuatro proveedores contra sus páginas oficiales.
+  - La herramienta que mide EC-08.
+  - Los documentos de la entrega.
+- **Quién hizo qué con lo generado:** el código se generó en la sesión de Sebastián, y cada integrante revisó y subió los archivos de su parte. El conjunto de evaluación lo redactó la herramienta y lo revisó Josué: revisó las 20 filas (respuesta correcta, errores esperados y forma equivalente) y no encontró errores. La calidad de las propuestas del modelo la calificó el equipo a mano, sin IA. Ningún otro integrante usó IA esta semana: todo lo generado con IA salió de esta sesión. En algunas preguntas, la calificación se apoyó en una calculadora de derivadas (derivative-calculator.net), que no es IA.
+- **Qué se aceptó:**
+  - **RF-11 como la porción de la S9**, como un aspecto propio (A-06) con su escenario (EC-08), porque la fila del componente generativo exige evaluarlo de todas formas.
+  - **Groq**, después de comparar cuatro proveedores en sus páginas oficiales y de una llamada de prueba desde la red de la casa. Es el único con la cuota gratuita publicada y sin tarjeta ([ADR-0013](adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)).
+  - **El puerto en `autoria` y el adaptador como capa anticorrupción**, que el arc42 ya preveía (§4.1 y §8.1).
+  - **Demostrar la prueba que falla con un PR que no se fusiona**, para que `master` no quede nunca en rojo.
+  - **Dejar la verificación de equivalencias con SymPy para la próxima semana.** La herramienta armó un prototipo fuera del repositorio para medirla (detectó `sin(2x)`, no pudo leer 1 de 121 expresiones, 15 ms por comparación); el equipo decidió no construirla en esta entrega y dejar en ADR-0013 las condiciones que la vuelven obligatoria.
+- **Qué se rechazó y se corrigió:**
+  - **El SDK `openai`.** Obliga a regenerar el lock en Linux, y su método `chat.completions.create(` aparece en el grep de erosión que corre el revisor.
+  - **`urllib.request`, que la herramienta propuso primero.** Al leer `requirements.in` se vio que `httpx` ya es dependencia directa del backend, y que `medir_arranque_en_frio.py` ya lo usa: se usó `httpx`, que no agrega nada y permite probar sin red.
+  - **Reintentar ante una falla del proveedor.** Duplica la cuota gastada y la espera del profesor; el profesor decide si vuelve a pedir.
+  - **Seis errores de tipos en el código generado**, que encontró `mypy`: un `.get` sobre un valor que podía ser `None`, y atributos de `LogRecord` que no existen para el tipo. Se corrigieron como lo hacen las pruebas que ya existían.
+  - **La herramienta no había previsto que `test_contrato.py` exige exactamente dos rutas.** Se encontró al leer la prueba antes de correr nada: el commit de la ruta la actualiza, y sin eso el CI habría salido en rojo en `master`.
+  - **El filtro comparaba `x²` y `x^2` como distintos.** La corrida de prueba mostró que el modelo escribe los exponentes con `^`. Sin igualar las dos notaciones, la respuesta correcta escrita en la otra se habría colado como distractor.
+  - **OpenRouter y Mistral como proveedores.** OpenRouter da 50 solicitudes por día sin pagar, que no alcanzan para la evaluación; Mistral no publica sus límites ni su política de datos en las páginas revisadas, y el ADR no podría citarlos.
+- **Justificación:** tres lecciones de esta semana.
+  - **Leer el código antes de aceptar la propuesta.** Dos correcciones (`httpx` y la prueba de contrato) salieron de leer lo que ya había en el repositorio, no de la herramienta.
+  - **Medir la herramienta contra el proveedor real antes de la corrida oficial.** La corrida de prueba encontró el problema de la notación y el primer distractor equivalente a la respuesta correcta (`sin(2x)` para `2·sin(x)·cos(x)`).
+  - **Provocar cada falla que una prueba dice detectar.** La prueba del defecto y la de fronteras se validaron poniéndolas en rojo a propósito.
