@@ -11,6 +11,23 @@ QuantIA es el sistema que automatiza la calificación de exámenes de opción m�
 | María Del Mar Restrepo Licona | `Mariadelmar-restrepo` |
 | Susana Marcela Rosales Castellar | `SusanaRosales` |
 
+## Evidencia S9
+
+La porción construida con apoyo de IA es **RF-11, la propuesta de distractores diagnósticos**
+(aspecto [A-06](docs/aspectos.md#a-06)): el módulo [`backend/autoria/`](backend/autoria/) y la ruta
+`POST /distractores` de la API, con el contrato en la versión 1.1.0.
+
+| Fila de la ficha | Dónde está |
+|---|---|
+| Porción real y su cadena completa | [A-06 en `aspectos.md`](docs/aspectos.md#a-06): RF-11 → [EC-08](docs/arc42/arc42-template-ES.md#ec-08) → C4 → ADR → código → pruebas → evidencia |
+| ADR con la decisión del equipo | [ADR-0013](docs/adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md): Groq detrás de un puerto de `autoria`, `httpx` sin dependencias nuevas, 20 s de espera sin reintentos y 503 ante cualquier falla |
+| Prueba que falla ante el defecto | [El PR del defecto](https://github.com/ISCOUTB/AS_202620_Sistema-de-calificacion-automatica/pull/1), cerrado sin fusionar, y su [procedimiento con los runs](docs/evidencia/prueba-distractores-falla.md): sin el filtro de la respuesta correcta fallan 4 pruebas |
+| Medición de EC-08 | [Evaluación](docs/evidencia/evaluacion-distractores.md): M1, ninguna de las 120 propuestas entregadas repite la respuesta correcta (0 %) · M2, p95 de la latencia de 2,91 s contra un techo de 15 s, en 40 solicitudes · M3, con el proveedor caído o lento la ruta responde 503 en 20,25 s como máximo, contra 21 s |
+| Componente generativo evaluado | Conjunto de 20 preguntas ([`conjunto-evaluacion-distractores.json`](docs/evidencia/conjunto-evaluacion-distractores.json)), resultados ([`evaluacion-distractores.json`](docs/evidencia/evaluacion-distractores.json)), calidad: 44 de 60 propuestas diagnósticas válidas (73 %), ninguna equivalente a la respuesta correcta, y el error más común es la etiqueta (8 incorrectas y 4 a medias); costo: US$0 en la capa gratuita (al precio de pago serían US$0,0004 por solicitud y US$0,008 por examen de 20 preguntas); el proveedor en el [C4 Nivel 2, relación 8](docs/c4/doc-c4.md#relaciones-1) |
+| `ia.md` con lo aceptado, lo corregido y lo rechazado | [Entrada 12](docs/ia.md#entrada-12) |
+| Auditoría de erosión, dependencias y credenciales | [`auditoria-s9.md`](docs/evidencia/auditoria-s9.md): sin cruces de contexto ni de propiedad; un flanco de la prueba de fronteras, corregido; sin dependencias nuevas; sin credenciales |
+| ADR aceptados no reescritos | [ADR-0014](docs/adr/0014-dejar-constancia-del-ajuste-de-enlaces-en-adr-0007.md) deja constancia del ajuste de enlaces de ADR-0007 |
+
 ## Dónde está la evidencia de cada entrega
 
 La documentación larga vive en pocos archivos. Esta tabla dice, para lo que pide cada ficha, en
@@ -28,6 +45,7 @@ qué archivo y en qué sección está.
 | S7 | La prueba falla ante un cambio incompatible, con los tres runs | [`docs/evidencia/prueba-de-contrato-falla.md`](docs/evidencia/prueba-de-contrato-falla.md) |
 | S7 | Flujos de interacción | [arc42 §6](docs/arc42/arc42-template-ES.md#6-runtime-view) |
 | S7 | C4 Nivel 2 con protocolo y formato en cada relación | [`docs/c4/doc-c4.md`](docs/c4/doc-c4.md#nivel-2--diagrama-de-contenedores) |
+| S9 | Porción construida con IA, prueba que falla, EC-08, auditoría y componente generativo | [Evidencia S9](#evidencia-s9) |
 | Todas | Pipeline de integración continua | [Runs de GitHub Actions](https://github.com/ISCOUTB/AS_202620_Sistema-de-calificacion-automatica/actions) |
 | Todas | Análisis estático y su *Quality Gate* | [SonarQube Cloud](https://sonarcloud.io/summary/new_code?id=ISCOUTB_AS_202620_Sistema-de-calificacion-automatica) |
 | Todas | Respuesta a la retroalimentación automática | [`correcciones.md`](correcciones.md) |
@@ -60,9 +78,10 @@ Líneas reales del log en el entorno desplegado (worker y API):
 
 ## Cómo se arranca
 
-Requiere Docker (con el plugin Compose). Antes de la primera vez, copiar `.env.example` a `.env`;
-no hace falta editarlo todavía (no hay credenciales reales), pero establece la convención de
-RNF-11 para cuando las haya.
+Requiere Docker (con el plugin Compose). Antes de la primera vez, copiar `.env.example` a `.env`.
+Solo hace falta editarlo para probar la ruta de distractores: ahí va `LLM_API_KEY`, la clave del
+proveedor de LLM, que nunca se versiona (RNF-11). Sin ella, esa ruta responde 503 y lo demás
+funciona igual.
 
 Desde la raíz del repositorio:
 
@@ -199,7 +218,7 @@ Backend (dentro de `backend/`, con Redis disponible vía `docker compose up -d r
 pytest
 ```
 
-Son 56 pruebas. Verifican: que la aplicación FastAPI arranca y su endpoint de salud responde
+Son 106. Verifican: que la aplicación FastAPI arranca y su endpoint de salud responde
 200; que los siete módulos del dominio se importan sin error ni ciclos; que ningún módulo
 importa por fuera de lo declarado en el docstring de su `__init__.py` (la prueba de fronteras
 entre módulos); que un trabajo encolado en Redis se recupera igual al desencolarlo; y, para el
@@ -213,6 +232,12 @@ ninguna hoja queda sin reportar, que la que no se encoló queda pendiente en la 
 imagen recuperable, que el estado se relee desde el archivo y no de la memoria, que una línea
 truncada no inutiliza el registro, y que el lote deja de insistir contra una cola caída en vez de
 pagar el tiempo de espera de conexión doscientas veces.
+
+Cuarenta y cuatro llegaron con la porción de la S9 (aspecto A-06). Verifican que ninguna
+propuesta que repita la respuesta correcta llega al profesor, aunque esté escrita distinto; que
+al proveedor de LLM solo le llega la pregunta (RNF-13); que el tiempo agotado, la cuota agotada,
+la clave rechazada y una respuesta ilegible terminan en un 503 con su motivo; y que ningún
+módulo del dominio importa `api` ni `worker`. Ninguna sale a la red.
 
 Seis son la **prueba de contrato** ([`backend/tests/test_contrato.py`](backend/tests/test_contrato.py)),
 y verifican que el documento de `docs/contrato/openapi.json` y la API que corre no se puedan
@@ -279,8 +304,9 @@ El resultado, el procedimiento y sus límites están en
 ## El contrato de la API
 
 Lo que la API promete devolver está escrito en un documento OpenAPI versionado en el
-repositorio: [`docs/contrato/openapi.json`](docs/contrato/openapi.json). Describe las dos rutas
-con el esquema de cada respuesta campo por campo, no solo el listado de endpoints.
+repositorio: [`docs/contrato/openapi.json`](docs/contrato/openapi.json), en la versión 1.1.0.
+Describe las tres rutas con el esquema de cada respuesta campo por campo, no solo el listado de
+endpoints.
 
 Está versionado y no se consulta en caliente por dos razones. `/openapi.json` solo existe
 mientras la API está levantada y describe la versión que esté corriendo en ese momento, así que
@@ -339,19 +365,26 @@ El desarrollo sigue Aspect Driven Development (ADD): cada funcionalidad se decla
 | [0006](docs/adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md) | Registrar la recepción en una bitácora antes de encolar | aceptado |
 | [0007](docs/adr/0007-declarar-los-contextos-delimitados-y-la-regla-de-dueno-unico.md) | Declarar los contextos delimitados y la regla de dueño único de los datos | aceptado |
 | [0008](docs/adr/0008-renombrar-el-sistema-a-quantia.md) | Renombrar el sistema a QuantIA | aceptado |
+| [0009](docs/adr/0009-desplegar-la-api-en-el-servicio-web-gratuito-de-render-y-mantenerla-despierta.md) | Desplegar la API en el servicio web gratuito de Render y mantenerla despierta | aceptado |
+| [0010](docs/adr/0010-servir-el-sitio-como-archivos-estaticos-en-render.md) | Servir el sitio como archivos estáticos en Render | aceptado |
+| [0011](docs/adr/0011-consumir-la-cola-desde-la-instancia-de-la-api-con-el-key-value-gratuito.md) | Consumir la cola desde la instancia de la API con el Key Value gratuito | aceptado |
+| [0012](docs/adr/0012-mantener-el-almacen-en-el-disco-efimero-de-la-instancia-hasta-cerrar-r-06.md) | Mantener el almacén en el disco efímero de la instancia hasta cerrar R-06 | aceptado |
+| [0013](docs/adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md) | Consumir Groq detrás de un puerto y degradar sin bloquear la autoría | aceptado |
+| [0014](docs/adr/0014-dejar-constancia-del-ajuste-de-enlaces-en-adr-0007.md) | Dejar constancia del ajuste de enlaces en ADR-0007 | aceptado |
 
-Los ADR aceptados no se editan ni se borran: si una decisión cambia, se escribe uno nuevo y el anterior pasa a estado *reemplazado por*.
+Las decisiones de un ADR aceptado no se editan ni se borran: si una decisión cambia, se escribe uno nuevo y el anterior pasa a estado *reemplazado por*. Los ajustes menores que no son de arquitectura, como un enlace roto, se permiten dejando constancia ([ADR-0014](docs/adr/0014-dejar-constancia-del-ajuste-de-enlaces-en-adr-0007.md)).
 
 ## Estado actual
 
-- [x] Aspecto A-01 (carga de examen) construido de punta a punta; A-02 a A-05 declarados
+- [x] Aspectos A-01 (carga de examen) y A-06 (distractores diagnósticos) construidos de punta a punta;
+  A-02 a A-05 declarados
 - [x] arc42: objetivos de calidad, restricciones clasificadas y contexto
 - [x] arc42: estrategia de solución, decisiones de arquitectura y riesgos
 - [x] arc42: Building Block View, Runtime View y Cross-cutting Concepts (secciones 5, 6 y 8)
 - [x] arc42: Deployment View (sección 7)
-- [x] Escenarios de calidad: 5 priorizados y 2 complementarios; EC-07 medido
+- [x] Escenarios de calidad: 5 priorizados y 3 complementarios; EC-07 y EC-08 medidos
 - [x] C4 Niveles 1, 2 y 3
-- [x] ADR 0001 a 0012
+- [x] ADR 0001 a 0014
 - [x] Elección de stack: FastAPI en el backend, Flutter en el frontend
 - [x] Esqueleto ejecutable
 - [x] Corte vertical de A-01: `ingesta`, almacén, bitácora, encolado y pantalla de carga
@@ -359,7 +392,7 @@ Los ADR aceptados no se editan ni se borran: si una decisión cambia, se escribe
 - [x] Despliegue en Render con URL pública, logs estructurados y métrica de EC-07
 - [ ] ADR de persistencia y almacenamiento (riesgo R-06); el adaptador actual es provisional
 - [ ] Modelo de datos compartido más allá de lo que A-01 necesitó
-- [ ] Elección de proveedor de LLM
+- [x] Proveedor de LLM: Groq, detrás de un puerto de `autoria` (ADR-0013)
 - [ ] Aspectos A-02 a A-05
 
 ## Documentación
