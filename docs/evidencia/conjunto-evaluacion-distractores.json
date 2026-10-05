@@ -1,0 +1,425 @@
+{
+  "descripcion": "Conjunto de evaluación de la propuesta de distractores diagnósticos (RF-11, EC-08). Veinte preguntas de cálculo diferencial escritas para la evaluación, sin ningún dato de estudiantes. Los errores esperados son referencia para quienes califican: no se le muestran al modelo. forma_equivalente marca las preguntas cuya respuesta correcta tiene otra escritura conocida, para medir si el modelo la propone como distractor.",
+  "preguntas": [
+    {
+      "id": 1,
+      "tema": "producto",
+      "enunciado": "Derivada de x·sin(x)",
+      "respuesta_correcta": "sin(x) + x·cos(x)",
+      "errores_esperados": [
+        {
+          "expresion": "cos(x)",
+          "error": "Se omitió la regla del producto"
+        },
+        {
+          "expresion": "x·cos(x)",
+          "error": "La regla del producto se aplicó a medias"
+        },
+        {
+          "expresion": "sin(x) − x·cos(x)",
+          "error": "Error de signo"
+        }
+      ],
+      "forma_equivalente": null
+    },
+    {
+      "id": 2,
+      "tema": "potencia",
+      "enunciado": "Derivada de x⁵",
+      "respuesta_correcta": "5x⁴",
+      "errores_esperados": [
+        {
+          "expresion": "x⁴",
+          "error": "No se multiplicó por el exponente"
+        },
+        {
+          "expresion": "5x⁵",
+          "error": "No se restó 1 al exponente"
+        },
+        {
+          "expresion": "5x⁶",
+          "error": "Se sumó 1 al exponente, como en la integral"
+        }
+      ],
+      "forma_equivalente": null
+    },
+    {
+      "id": 3,
+      "tema": "suma y constante",
+      "enunciado": "Derivada de 3x² − 4x + 7",
+      "respuesta_correcta": "6x − 4",
+      "errores_esperados": [
+        {
+          "expresion": "6x + 3",
+          "error": "No se anuló la derivada de la constante 7"
+        },
+        {
+          "expresion": "3x − 4",
+          "error": "No se multiplicó por el exponente en 3x²"
+        },
+        {
+          "expresion": "6x",
+          "error": "Se omitió la derivada de −4x"
+        }
+      ],
+      "forma_equivalente": null
+    },
+    {
+      "id": 4,
+      "tema": "producto",
+      "enunciado": "Derivada de x²·eˣ",
+      "respuesta_correcta": "2x·eˣ + x²·eˣ",
+      "errores_esperados": [
+        {
+          "expresion": "2x·eˣ",
+          "error": "Se multiplicaron las derivadas de los factores"
+        },
+        {
+          "expresion": "x²·eˣ",
+          "error": "Solo se derivó eˣ"
+        },
+        {
+          "expresion": "2x·eˣ − x²·eˣ",
+          "error": "Error de signo en la regla del producto"
+        }
+      ],
+      "forma_equivalente": "eˣ·(x² + 2x)"
+    },
+    {
+      "id": 5,
+      "tema": "cociente",
+      "enunciado": "Derivada de sin(x)/x",
+      "respuesta_correcta": "(x·cos(x) − sin(x))/x²",
+      "errores_esperados": [
+        {
+          "expresion": "cos(x)",
+          "error": "Se derivaron numerador y denominador por separado"
+        },
+        {
+          "expresion": "(sin(x) − x·cos(x))/x²",
+          "error": "Se invirtió el orden de la resta en el numerador"
+        },
+        {
+          "expresion": "(x·cos(x) − sin(x))/x",
+          "error": "No se elevó al cuadrado el denominador"
+        }
+      ],
+      "forma_equivalente": null
+    },
+    {
+      "id": 6,
+      "tema": "cociente",
+      "enunciado": "Derivada de (x² + 1)/(x − 1)",
+      "respuesta_correcta": "(x² − 2x − 1)/(x − 1)²",
+      "errores_esperados": [
+        {
+          "expresion": "2x",
+          "error": "Se derivaron numerador y denominador por separado"
+        },
+        {
+          "expresion": "(−x² + 2x + 1)/(x − 1)²",
+          "error": "Se invirtió el orden de la resta en el numerador"
+        },
+        {
+          "expresion": "(x² − 2x − 1)/(x − 1)",
+          "error": "No se elevó al cuadrado el denominador"
+        }
+      ],
+      "forma_equivalente": null
+    },
+    {
+      "id": 7,
+      "tema": "cadena",
+      "enunciado": "Derivada de sin(3x)",
+      "respuesta_correcta": "3·cos(3x)",
+      "errores_esperados": [
+        {
+          "expresion": "cos(3x)",
+          "error": "Se omitió la derivada interna (regla de la cadena)"
+        },
+        {
+          "expresion": "3·cos(x)",
+          "error": "Se multiplicó por la derivada interna pero se perdió el argumento 3x"
+        },
+        {
+          "expresion": "−3·cos(3x)",
+          "error": "Error de signo: se tomó la derivada del seno como −cos"
+        }
+      ],
+      "forma_equivalente": null
+    },
+    {
+      "id": 8,
+      "tema": "cadena y potencia",
+      "enunciado": "Derivada de (2x + 1)⁵",
+      "respuesta_correcta": "10(2x + 1)⁴",
+      "errores_esperados": [
+        {
+          "expresion": "5(2x + 1)⁴",
+          "error": "Se omitió la derivada interna"
+        },
+        {
+          "expresion": "10(2x + 1)⁵",
+          "error": "No se restó 1 al exponente"
+        },
+        {
+          "expresion": "2(2x + 1)⁴",
+          "error": "No se multiplicó por el exponente 5"
+        }
+      ],
+      "forma_equivalente": null
+    },
+    {
+      "id": 9,
+      "tema": "exponencial y cadena",
+      "enunciado": "Derivada de e^(x²)",
+      "respuesta_correcta": "2x·e^(x²)",
+      "errores_esperados": [
+        {
+          "expresion": "e^(x²)",
+          "error": "Se omitió la regla de la cadena"
+        },
+        {
+          "expresion": "x²·e^(x² − 1)",
+          "error": "Se aplicó la regla de la potencia a una exponencial"
+        },
+        {
+          "expresion": "2x·e^(2x)",
+          "error": "Se derivó también el exponente dentro de la exponencial"
+        }
+      ],
+      "forma_equivalente": null
+    },
+    {
+      "id": 10,
+      "tema": "logaritmo y cadena",
+      "enunciado": "Derivada de ln(x² + 1)",
+      "respuesta_correcta": "2x/(x² + 1)",
+      "errores_esperados": [
+        {
+          "expresion": "1/(x² + 1)",
+          "error": "Se omitió la derivada interna"
+        },
+        {
+          "expresion": "2x",
+          "error": "Solo se derivó el argumento"
+        },
+        {
+          "expresion": "1/(2x)",
+          "error": "Se puso la derivada interna en el denominador"
+        }
+      ],
+      "forma_equivalente": null
+    },
+    {
+      "id": 11,
+      "tema": "cadena con identidad",
+      "enunciado": "Derivada de sin²(x)",
+      "respuesta_correcta": "2·sin(x)·cos(x)",
+      "errores_esperados": [
+        {
+          "expresion": "2·sin(x)",
+          "error": "Se omitió la derivada interna"
+        },
+        {
+          "expresion": "2·cos(x)",
+          "error": "Se derivó como x² y se cambió el seno por el coseno"
+        },
+        {
+          "expresion": "cos²(x)",
+          "error": "Se derivó el seno dentro del cuadrado sin bajar el exponente"
+        }
+      ],
+      "forma_equivalente": "sin(2x)"
+    },
+    {
+      "id": 12,
+      "tema": "cadena con identidad",
+      "enunciado": "Derivada de cos²(x)",
+      "respuesta_correcta": "−2·sin(x)·cos(x)",
+      "errores_esperados": [
+        {
+          "expresion": "2·sin(x)·cos(x)",
+          "error": "Error de signo: se olvidó el menos de la derivada del coseno"
+        },
+        {
+          "expresion": "2·cos(x)",
+          "error": "Se omitió la derivada interna"
+        },
+        {
+          "expresion": "−sin²(x)",
+          "error": "Se derivó el coseno dentro del cuadrado sin bajar el exponente"
+        }
+      ],
+      "forma_equivalente": "−sin(2x)"
+    },
+    {
+      "id": 13,
+      "tema": "potencia negativa",
+      "enunciado": "Derivada de 1/x",
+      "respuesta_correcta": "−1/x²",
+      "errores_esperados": [
+        {
+          "expresion": "1/x²",
+          "error": "Se olvidó el signo al bajar el exponente −1"
+        },
+        {
+          "expresion": "ln(x)",
+          "error": "Se confundió la derivada con la integral"
+        },
+        {
+          "expresion": "−1/x",
+          "error": "No se restó 1 al exponente"
+        }
+      ],
+      "forma_equivalente": "−x⁻²"
+    },
+    {
+      "id": 14,
+      "tema": "potencia fraccionaria",
+      "enunciado": "Derivada de √x",
+      "respuesta_correcta": "1/(2√x)",
+      "errores_esperados": [
+        {
+          "expresion": "1/√x",
+          "error": "Se olvidó el factor 1/2"
+        },
+        {
+          "expresion": "√x/2",
+          "error": "No se restó 1 al exponente"
+        },
+        {
+          "expresion": "2√x",
+          "error": "Se multiplicó por 2 en lugar de dividir entre 2"
+        }
+      ],
+      "forma_equivalente": "(1/2)·x^(−1/2)"
+    },
+    {
+      "id": 15,
+      "tema": "trigonométrica",
+      "enunciado": "Derivada de tan(x)",
+      "respuesta_correcta": "sec²(x)",
+      "errores_esperados": [
+        {
+          "expresion": "−sec²(x)",
+          "error": "Error de signo"
+        },
+        {
+          "expresion": "sec(x)·tan(x)",
+          "error": "Se confundió con la derivada de sec(x)"
+        },
+        {
+          "expresion": "−csc²(x)",
+          "error": "Se confundió con la derivada de cot(x)"
+        }
+      ],
+      "forma_equivalente": "1 + tan²(x)"
+    },
+    {
+      "id": 16,
+      "tema": "producto con logaritmo",
+      "enunciado": "Derivada de x·ln(x)",
+      "respuesta_correcta": "ln(x) + 1",
+      "errores_esperados": [
+        {
+          "expresion": "1/x",
+          "error": "Se multiplicaron las derivadas de los factores"
+        },
+        {
+          "expresion": "ln(x)",
+          "error": "Solo se derivó el factor x"
+        },
+        {
+          "expresion": "1",
+          "error": "Solo se derivó el factor ln(x)"
+        }
+      ],
+      "forma_equivalente": null
+    },
+    {
+      "id": 17,
+      "tema": "producto",
+      "enunciado": "Derivada de eˣ·cos(x)",
+      "respuesta_correcta": "eˣ·cos(x) − eˣ·sin(x)",
+      "errores_esperados": [
+        {
+          "expresion": "−eˣ·sin(x)",
+          "error": "Se multiplicaron las derivadas de los factores"
+        },
+        {
+          "expresion": "eˣ·cos(x) + eˣ·sin(x)",
+          "error": "Error de signo en la derivada del coseno"
+        },
+        {
+          "expresion": "eˣ·cos(x)",
+          "error": "Solo se derivó eˣ"
+        }
+      ],
+      "forma_equivalente": "eˣ·(cos(x) − sin(x))"
+    },
+    {
+      "id": 18,
+      "tema": "logaritmo y cadena",
+      "enunciado": "Derivada de ln(sin(x))",
+      "respuesta_correcta": "cos(x)/sin(x)",
+      "errores_esperados": [
+        {
+          "expresion": "1/sin(x)",
+          "error": "Se omitió la derivada interna"
+        },
+        {
+          "expresion": "cos(x)",
+          "error": "Solo se derivó el argumento"
+        },
+        {
+          "expresion": "1/cos(x)",
+          "error": "Se puso la derivada interna en el denominador"
+        }
+      ],
+      "forma_equivalente": "cot(x)"
+    },
+    {
+      "id": 19,
+      "tema": "exponencial de otra base",
+      "enunciado": "Derivada de 2ˣ",
+      "respuesta_correcta": "2ˣ·ln(2)",
+      "errores_esperados": [
+        {
+          "expresion": "x·2^(x − 1)",
+          "error": "Se aplicó la regla de la potencia a una exponencial"
+        },
+        {
+          "expresion": "2ˣ",
+          "error": "Se trató 2ˣ como eˣ"
+        },
+        {
+          "expresion": "2ˣ/ln(2)",
+          "error": "Se dividió entre ln(2) en lugar de multiplicar, como en la integral"
+        }
+      ],
+      "forma_equivalente": null
+    },
+    {
+      "id": 20,
+      "tema": "cadena",
+      "enunciado": "Derivada de cos(x²)",
+      "respuesta_correcta": "−2x·sin(x²)",
+      "errores_esperados": [
+        {
+          "expresion": "−sin(x²)",
+          "error": "Se omitió la derivada interna"
+        },
+        {
+          "expresion": "2x·sin(x²)",
+          "error": "Error de signo"
+        },
+        {
+          "expresion": "−2x·sin(x)",
+          "error": "Se perdió el argumento interno x²"
+        }
+      ],
+      "forma_equivalente": null
+    }
+  ]
+}
