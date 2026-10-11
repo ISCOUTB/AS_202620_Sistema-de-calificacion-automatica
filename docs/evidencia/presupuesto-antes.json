@@ -1,0 +1,283 @@
+{
+  "herramienta": "backend/herramientas/medir_presupuesto.py",
+  "etiqueta": "antes: sin presupuesto (master 7201193)",
+  "entorno": {
+    "destino": "desplegada",
+    "url": "https://quantia-utb-api.onrender.com",
+    "red": "internet residencial, Cartagena",
+    "solicitudes": 20,
+    "pausa_segundos": 0.0,
+    "tokens_por_solicitud_supuestos": 856
+  },
+  "inicio": {
+    "utc": "2026-10-11T21:31:15+00:00",
+    "cartagena": "2026-10-11T16:31:15-05:00"
+  },
+  "fin": {
+    "utc": "2026-10-11T21:31:37+00:00",
+    "cartagena": "2026-10-11T16:31:37-05:00"
+  },
+  "duracion_de_la_rafaga_segundos": 22.3,
+  "resumen": {
+    "solicitudes": 20,
+    "por_clase": {
+      "propuesta": 12,
+      "limitada_por_la_api": 0,
+      "limitada_por_el_proveedor": 8,
+      "proveedor_no_disponible": 0,
+      "otra": 0
+    },
+    "llegaron_al_proveedor": 20,
+    "tokens_gastados_estimados": 10272,
+    "tiempos_por_clase": {
+      "propuesta": {
+        "muestras": 12,
+        "mediana_segundos": 1.663,
+        "p95_segundos": 2.426,
+        "peor_segundos": 2.426
+      },
+      "limitada_por_la_api": {
+        "muestras": 0
+      },
+      "limitada_por_el_proveedor": {
+        "muestras": 8,
+        "mediana_segundos": 0.179,
+        "p95_segundos": 0.205,
+        "peor_segundos": 0.205
+      },
+      "proveedor_no_disponible": {
+        "muestras": 0
+      },
+      "otra": {
+        "muestras": 0
+      }
+    },
+    "salud_siempre_200": true
+  },
+  "salud": [
+    {
+      "momento": "antes",
+      "codigo": 200,
+      "segundos": 0.198,
+      "hora": "2026-10-11T16:31:15-05:00"
+    },
+    {
+      "momento": "durante, tras la solicitud 5",
+      "codigo": 200,
+      "segundos": 0.124,
+      "hora": "2026-10-11T16:31:23-05:00"
+    },
+    {
+      "momento": "durante, tras la solicitud 10",
+      "codigo": 200,
+      "segundos": 0.121,
+      "hora": "2026-10-11T16:31:32-05:00"
+    },
+    {
+      "momento": "durante, tras la solicitud 15",
+      "codigo": 200,
+      "segundos": 0.12,
+      "hora": "2026-10-11T16:31:36-05:00"
+    },
+    {
+      "momento": "durante, tras la solicitud 20",
+      "codigo": 200,
+      "segundos": 0.121,
+      "hora": "2026-10-11T16:31:37-05:00"
+    },
+    {
+      "momento": "después",
+      "codigo": 200,
+      "segundos": 0.118,
+      "hora": "2026-10-11T16:31:37-05:00"
+    }
+  ],
+  "metricas_antes": {
+    "codigo": 404
+  },
+  "metricas_despues": {
+    "codigo": 404
+  },
+  "solicitudes": [
+    {
+      "numero": 1,
+      "hora": "2026-10-11T16:31:15-05:00",
+      "codigo": 200,
+      "segundos": 1.815,
+      "clase": "propuesta",
+      "motivo": "",
+      "reintentar_en": null
+    },
+    {
+      "numero": 2,
+      "hora": "2026-10-11T16:31:17-05:00",
+      "codigo": 200,
+      "segundos": 1.467,
+      "clase": "propuesta",
+      "motivo": "",
+      "reintentar_en": null
+    },
+    {
+      "numero": 3,
+      "hora": "2026-10-11T16:31:18-05:00",
+      "codigo": 200,
+      "segundos": 1.511,
+      "clase": "propuesta",
+      "motivo": "",
+      "reintentar_en": null
+    },
+    {
+      "numero": 4,
+      "hora": "2026-10-11T16:31:20-05:00",
+      "codigo": 200,
+      "segundos": 1.937,
+      "clase": "propuesta",
+      "motivo": "",
+      "reintentar_en": null
+    },
+    {
+      "numero": 5,
+      "hora": "2026-10-11T16:31:22-05:00",
+      "codigo": 200,
+      "segundos": 1.113,
+      "clase": "propuesta",
+      "motivo": "",
+      "reintentar_en": null
+    },
+    {
+      "numero": 6,
+      "hora": "2026-10-11T16:31:23-05:00",
+      "codigo": 200,
+      "segundos": 2.386,
+      "clase": "propuesta",
+      "motivo": "",
+      "reintentar_en": null
+    },
+    {
+      "numero": 7,
+      "hora": "2026-10-11T16:31:25-05:00",
+      "codigo": 200,
+      "segundos": 0.982,
+      "clase": "propuesta",
+      "motivo": "",
+      "reintentar_en": null
+    },
+    {
+      "numero": 8,
+      "hora": "2026-10-11T16:31:26-05:00",
+      "codigo": 200,
+      "segundos": 2.015,
+      "clase": "propuesta",
+      "motivo": "",
+      "reintentar_en": null
+    },
+    {
+      "numero": 9,
+      "hora": "2026-10-11T16:31:28-05:00",
+      "codigo": 200,
+      "segundos": 1.282,
+      "clase": "propuesta",
+      "motivo": "",
+      "reintentar_en": null
+    },
+    {
+      "numero": 10,
+      "hora": "2026-10-11T16:31:29-05:00",
+      "codigo": 200,
+      "segundos": 1.995,
+      "clase": "propuesta",
+      "motivo": "",
+      "reintentar_en": null
+    },
+    {
+      "numero": 11,
+      "hora": "2026-10-11T16:31:32-05:00",
+      "codigo": 200,
+      "segundos": 1.456,
+      "clase": "propuesta",
+      "motivo": "",
+      "reintentar_en": null
+    },
+    {
+      "numero": 12,
+      "hora": "2026-10-11T16:31:33-05:00",
+      "codigo": 200,
+      "segundos": 2.426,
+      "clase": "propuesta",
+      "motivo": "",
+      "reintentar_en": null
+    },
+    {
+      "numero": 13,
+      "hora": "2026-10-11T16:31:35-05:00",
+      "codigo": 503,
+      "segundos": 0.184,
+      "clase": "limitada_por_el_proveedor",
+      "motivo": "Se agotó la cuota gratuita del proveedor por ahora. Puede volver a pedirlo en unos minutos o escribir los distractores a mano.",
+      "reintentar_en": null
+    },
+    {
+      "numero": 14,
+      "hora": "2026-10-11T16:31:36-05:00",
+      "codigo": 503,
+      "segundos": 0.205,
+      "clase": "limitada_por_el_proveedor",
+      "motivo": "Se agotó la cuota gratuita del proveedor por ahora. Puede volver a pedirlo en unos minutos o escribir los distractores a mano.",
+      "reintentar_en": null
+    },
+    {
+      "numero": 15,
+      "hora": "2026-10-11T16:31:36-05:00",
+      "codigo": 503,
+      "segundos": 0.177,
+      "clase": "limitada_por_el_proveedor",
+      "motivo": "Se agotó la cuota gratuita del proveedor por ahora. Puede volver a pedirlo en unos minutos o escribir los distractores a mano.",
+      "reintentar_en": null
+    },
+    {
+      "numero": 16,
+      "hora": "2026-10-11T16:31:36-05:00",
+      "codigo": 503,
+      "segundos": 0.19,
+      "clase": "limitada_por_el_proveedor",
+      "motivo": "Se agotó la cuota gratuita del proveedor por ahora. Puede volver a pedirlo en unos minutos o escribir los distractores a mano.",
+      "reintentar_en": null
+    },
+    {
+      "numero": 17,
+      "hora": "2026-10-11T16:31:36-05:00",
+      "codigo": 503,
+      "segundos": 0.18,
+      "clase": "limitada_por_el_proveedor",
+      "motivo": "Se agotó la cuota gratuita del proveedor por ahora. Puede volver a pedirlo en unos minutos o escribir los distractores a mano.",
+      "reintentar_en": null
+    },
+    {
+      "numero": 18,
+      "hora": "2026-10-11T16:31:37-05:00",
+      "codigo": 503,
+      "segundos": 0.178,
+      "clase": "limitada_por_el_proveedor",
+      "motivo": "Se agotó la cuota gratuita del proveedor por ahora. Puede volver a pedirlo en unos minutos o escribir los distractores a mano.",
+      "reintentar_en": null
+    },
+    {
+      "numero": 19,
+      "hora": "2026-10-11T16:31:37-05:00",
+      "codigo": 503,
+      "segundos": 0.175,
+      "clase": "limitada_por_el_proveedor",
+      "motivo": "Se agotó la cuota gratuita del proveedor por ahora. Puede volver a pedirlo en unos minutos o escribir los distractores a mano.",
+      "reintentar_en": null
+    },
+    {
+      "numero": 20,
+      "hora": "2026-10-11T16:31:37-05:00",
+      "codigo": 503,
+      "segundos": 0.177,
+      "clase": "limitada_por_el_proveedor",
+      "motivo": "Se agotó la cuota gratuita del proveedor por ahora. Puede volver a pedirlo en unos minutos o escribir los distractores a mano.",
+      "reintentar_en": null
+    }
+  ]
+}
