@@ -54,6 +54,13 @@ services:
         value: openai/gpt-oss-120b
       - key: LLM_API_KEY
         sync: false
+      # Presupuesto del proveedor de LLM (escenario del segundo corte, ADR-0015): lo que pase de 6
+      # solicitudes por minuto o de 150 por día se responde con 429 sin gastar cuota de Groq. Vive
+      # en la memoria del único proceso de uvicorn de esta instancia y se vacía en cada despliegue.
+      - key: LLM_SOLICITUDES_POR_MINUTO
+        value: "6"
+      - key: LLM_SOLICITUDES_POR_DIA
+        value: "150"
 
   # La cola. Solo es accesible por la red privada de Render (lista de IP vacía), y con
   # `noeviction` no descarta trabajos para hacer espacio: si se llena, el encolado falla y la
