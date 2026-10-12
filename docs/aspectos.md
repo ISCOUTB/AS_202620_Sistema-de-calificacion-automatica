@@ -27,7 +27,10 @@ verificar y evidenciar.
 
 **La porción de la S9 es [A-06](#a-06)** (RF-11, escenario [EC-08](arc42/arc42-template-ES.md#ec-08), [ADR-0013](adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)). Medida: M1, 0 de 120 propuestas repiten la respuesta correcta; M2, p95 de 2,91 s contra 15 s; M3, 503 en 20,25 s contra 21 s ([evaluación](evidencia/evaluacion-distractores.md)). La prueba falla ante el defecto en el [PR #1](https://github.com/ISCOUTB/AS_202620_Sistema-de-calificacion-automatica/pull/1) ([procedimiento](evidencia/prueba-distractores-falla.md)), y la [auditoría](evidencia/auditoria-s9.md) recorre contextos, propiedad, dependencias y credenciales.
 
-Cada fila enlaza a su escenario de calidad en el arc42. Los ocho escenarios documentados son
+**El escenario operativo del segundo corte es de límite de costo, sobre la misma fila [A-06](#a-06)**
+(escenario [EC-09](arc42/arc42-template-ES.md#ec-09), [ADR-0015](adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md)): una ráfaga contra `POST /distractores`. Medido en local con un proveedor que aplica el límite de Groq, pasa de 20 solicitudes en el proveedor y 11 cortes por cuota a 6 y 0, con los 14 rechazos de la API en 2 ms de mediana ([experimento](evidencia/experimento-presupuesto.md)).
+
+Cada fila enlaza a su escenario de calidad en el arc42. Los nueve escenarios documentados son
 alcanzables desde la fila del aspecto que los realiza.
 
 | ID | Aspecto | Estado | Requisito | Escenario de calidad | Contexto C4 (Nivel 1) | C4 | ADR | Código | Pruebas | Evidencia |
@@ -37,7 +40,7 @@ alcanzables desde la fila del aspecto que los realiza.
 | **[A-03](#a-03)** | Calificación contra la clave y publicación | Declarado | RF-04, RF-05, RF-08 | [EC-03](arc42/arc42-template-ES.md#ec-03) · [EC-04](arc42/arc42-template-ES.md#ec-04) | [Rel. 2](c4/doc-c4.md#relaciones): Sistema → Profesor/TA | Pendiente | [0002](adr/0002-procesar-calificacion-de-forma-asincrona.md) | Pendiente | Pendiente | Pendiente |
 | **[A-04](#a-04)** | Registro del banco y habilitación del examen | Declarado | RF-06, RF-07 | [EC-05](arc42/arc42-template-ES.md#ec-05) | [Rel. 1](c4/doc-c4.md#relaciones): Profesor/TA → Sistema | Pendiente | [0003](adr/0003-usar-fastapi-y-flutter.md) · [0004](adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md) · [0005](adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md) | Pendiente | Pendiente | Pendiente |
 | **[A-05](#a-05)** | Identidad y aislamiento por curso | Declarado | RF-09, RF-10 | [EC-06](arc42/arc42-template-ES.md#ec-06) | [Rel. 1 y 2](c4/doc-c4.md#relaciones): transversal a ambas — condición de «docente autenticado» bajo la que operan | Pendiente | ADR de auditoría previsto (RF-10) | Pendiente | Pendiente | Pendiente |
-| **[A-06](#a-06)** | Propuesta de distractores diagnósticos | **Construido** | RF-11 *(opcional)* | [EC-08](arc42/arc42-template-ES.md#ec-08) | [Rel. 3](c4/doc-c4.md#relaciones): Sistema → Proveedor de LLM (opcional) | C1: [Proveedor de LLM](c4/doc-c4.md#nivel-1--diagrama-de-contexto-del-sistema) · C2: [Aplicación web → Proveedor de LLM](c4/doc-c4.md#relaciones-1) (relación 8) · C3: [`autoria`](c4/doc-c4.md#nivel-3--diagrama-de-componentes) | [0005](adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md) · [0013](adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md) | [`autoria/distractores.py`](../backend/autoria/distractores.py) · [`autoria/proveedor_llm.py`](../backend/autoria/proveedor_llm.py) · [`api/main.py`](../backend/api/main.py) (`POST /distractores`) | [`test_distractores.py`](../backend/tests/test_distractores.py) · [`test_proveedor_llm.py`](../backend/tests/test_proveedor_llm.py) · [`test_ruta_distractores.py`](../backend/tests/test_ruta_distractores.py) | [Evaluación de EC-08](evidencia/evaluacion-distractores.md): M1: 0 de 120 propuestas repiten la respuesta correcta · M2: p95 de 2,91 s contra 15 s · M3: 503 en 20,25 s contra 21 s · [la prueba falla ante el defecto](evidencia/prueba-distractores-falla.md) · [auditoría](evidencia/auditoria-s9.md) |
+| **[A-06](#a-06)** | Propuesta de distractores diagnósticos | **Construido** | RF-11 *(opcional)* | [EC-08](arc42/arc42-template-ES.md#ec-08) · [EC-09](arc42/arc42-template-ES.md#ec-09) | [Rel. 3](c4/doc-c4.md#relaciones): Sistema → Proveedor de LLM (opcional) | C1: [Proveedor de LLM](c4/doc-c4.md#nivel-1--diagrama-de-contexto-del-sistema) · C2: [Aplicación web → Proveedor de LLM](c4/doc-c4.md#relaciones-1) (relación 8) · C3: [`autoria`](c4/doc-c4.md#nivel-3--diagrama-de-componentes) | [0005](adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md) · [0013](adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md) · [0015](adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md) | [`autoria/distractores.py`](../backend/autoria/distractores.py) · [`autoria/proveedor_llm.py`](../backend/autoria/proveedor_llm.py) · [`autoria/presupuesto.py`](../backend/autoria/presupuesto.py) · [`api/main.py`](../backend/api/main.py) (`POST /distractores` y `GET /metricas`) | [`test_distractores.py`](../backend/tests/test_distractores.py) · [`test_proveedor_llm.py`](../backend/tests/test_proveedor_llm.py) · [`test_ruta_distractores.py`](../backend/tests/test_ruta_distractores.py) · [`test_presupuesto.py`](../backend/tests/test_presupuesto.py) | [Evaluación de EC-08](evidencia/evaluacion-distractores.md): M1: 0 de 120 propuestas repiten la respuesta correcta · M2: p95 de 2,91 s contra 15 s · M3: 503 en 20,25 s contra 21 s · [la prueba falla ante el defecto](evidencia/prueba-distractores-falla.md) · [auditoría](evidencia/auditoria-s9.md) · [Experimento de EC-09](evidencia/experimento-presupuesto.md) (segundo corte): de 20 solicitudes en el proveedor y 11 cortes por cuota a 6 y 0 |
 
 **Estados:** *Declarado* = pasos 1 y 3 parciales (nombre, para quién, qué resuelve, requisitos
 y escenario asignados). *Especificado* = pasos 1 a 4 completos. *Construido* = pasos 5 a 7.
@@ -460,6 +463,29 @@ y el resultado completo
 - costo: US$0 en la capa gratuita (al precio de pago serían US$0,0004 por solicitud y US$0,008 por examen de 20 preguntas).
 
 **Pendiente:** la pantalla del sitio. Hoy RF-11 se usa por la API.
+
+### Segundo corte: límite de costo (EC-09)
+
+El escenario operativo del segundo corte cae sobre este aspecto: `POST /distractores` es pública y
+cada solicitud gasta cuota de Groq (R-17). La línea base, medida en el entorno desplegado antes de
+cambiar nada, mostró que una ráfaga de 20 solicitudes llegaba entera al proveedor y que 8 terminaban
+en 503 por cuota ([`presupuesto-antes.json`](evidencia/presupuesto-antes.json)).
+
+- **Especificar:** [EC-09](arc42/arc42-template-ES.md#ec-09), con cuatro medidas: ningún corte del
+  proveedor por cuota, 6 o menos solicitudes en el proveedor, un 429 propio en 1 s o menos y
+  `/health` en 200.
+- **Decidir:** [ADR-0015](adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md),
+  un presupuesto de 6 solicitudes por minuto y 150 por día en la memoria de la API, que precisa a
+  ADR-0013 sin reemplazarlo.
+- **Construir:** [`autoria/presupuesto.py`](../backend/autoria/presupuesto.py) (el presupuesto y
+  `GeneradorConPresupuesto`, que envuelve al adaptador de Groq) y [`api/main.py`](../backend/api/main.py)
+  (el 429 con `Retry-After`, el evento `presupuesto_agotado` y `GET /metricas`). El contrato pasa a
+  1.2.0.
+- **Verificar:** [`test_presupuesto.py`](../backend/tests/test_presupuesto.py), con un reloj falso,
+  y cuatro pruebas nuevas en [`test_ruta_distractores.py`](../backend/tests/test_ruta_distractores.py),
+  que el pipeline corre como paso propio.
+- **Evidenciar:** el [experimento](evidencia/experimento-presupuesto.md), con hipótesis, dos montajes
+  (local con un proveedor simulado y el entorno desplegado con Groq), resultado y conclusión.
 
 ---
 
