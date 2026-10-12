@@ -17,20 +17,20 @@ Antes, durante (cada 5 solicitudes) y después de la ráfaga consulta `GET /heal
 que el resto de la API sigue atendiendo. Si la API publica `GET /metricas`, la lee antes y después.
 
 Las preguntas son las del conjunto de evaluación de EC-08, en orden, para que la carga sea la
-misma en cada corrida. Como en `medir_arranque_en_frio.py`, la URL no se recibe por la línea de
-comandos (`--destino` elige entre dos direcciones fijas) y el informe solo se escribe dentro de
-`docs/evidencia/`.
+misma en cada corrida. Ningún argumento de la línea de comandos llega a la red ni al sistema de
+archivos: `--destino` elige entre dos direcciones fijas e `--informe` entre cuatro nombres fijos en
+`docs/evidencia/`. Así lo pide SonarCloud para las herramientas que un agente de IA podría invocar:
+la versión anterior recibía el nombre del archivo y lo validaba, y aun así quedaba marcada.
 
 Uso, desde backend/:
 
     python -m herramientas.medir_presupuesto --destino desplegada --solicitudes 20 \\
-        --red "internet residencial, Cartagena" --json presupuesto-antes.json
+        --red "internet residencial, Cartagena" --informe antes
 """
 
 import argparse
 import json
 import math
-import os
 import statistics
 import sys
 import time
@@ -62,15 +62,14 @@ def _url_del_destino(destino: str) -> str:
     return API_LOCAL if destino == "local" else API_DESPLEGADA
 
 
-def _ruta_del_informe(nombre: str) -> Path:
-    """Ruta del informe dentro de `docs/evidencia/`, comprobada sobre la ruta canónica."""
-    base = os.path.realpath(CARPETA_DE_EVIDENCIA)
-    ruta = os.path.realpath(os.path.join(base, nombre))
-    if not ruta.startswith(base + os.sep):
-        raise SystemExit(
-            f"--json tiene que ser un nombre de archivo dentro de docs/evidencia/: {nombre!r}"
-        )
-    return Path(ruta)
+# Los únicos informes que la herramienta puede escribir. El argumento elige una clave y la ruta
+# sale de aquí: es una constante, no algo armado con lo que llega por la línea de comandos.
+INFORMES = {
+    "antes": CARPETA_DE_EVIDENCIA / "presupuesto-antes.json",
+    "despues": CARPETA_DE_EVIDENCIA / "presupuesto-despues.json",
+    "local-antes": CARPETA_DE_EVIDENCIA / "presupuesto-local-antes.json",
+    "local-despues": CARPETA_DE_EVIDENCIA / "presupuesto-local-despues.json",
+}
 
 
 def _ahora() -> dict[str, str]:
@@ -232,8 +231,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="segundos entre una solicitud y la siguiente")
     parser.add_argument("--red", default="sin declarar")
     parser.add_argument("--etiqueta", default="", help="por ejemplo «antes» o «después»")
-    parser.add_argument("--json", default=None,
-                        help="nombre del archivo del informe, que se escribe en docs/evidencia/")
+    parser.add_argument("--informe", choices=sorted(INFORMES), default=None,
+                        help="qué informe escribir en docs/evidencia/ (presupuesto-<informe>.json)")
     args = parser.parse_args(argv)
 
     url = _url_del_destino(args.destino)
@@ -247,8 +246,8 @@ def main(argv: list[str] | None = None) -> int:
         **medir(url, args.solicitudes, args.pausa),
     }
     texto = json.dumps(informe, ensure_ascii=False, indent=2)
-    if args.json:
-        ruta = _ruta_del_informe(args.json)
+    if args.informe:
+        ruta = INFORMES[args.informe]
         ruta.write_text(texto + "\n", encoding="utf-8", newline="\n")
         print(f"Informe: {ruta}", file=sys.stderr)
     print(json.dumps(informe["resumen"], ensure_ascii=False, indent=2))

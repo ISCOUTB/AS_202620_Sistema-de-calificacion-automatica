@@ -112,8 +112,9 @@ def test_registra_la_metrica_de_ec08_con_duracion_y_tokens(
 
 
 def _falla_con(manejador) -> str:
+    generador = _generador(manejador)
     with pytest.raises(ProveedorNoDisponible) as falla:
-        _generador(manejador).proponer(PREGUNTA)
+        generador.proponer(PREGUNTA)
     return falla.value.motivo
 
 

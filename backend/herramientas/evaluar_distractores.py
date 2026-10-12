@@ -168,6 +168,35 @@ def _cargar_conjunto() -> list[dict[str, Any]]:
     return preguntas
 
 
+def _muestra(
+    pasada: int,
+    pregunta: dict[str, Any],
+    respuesta: Any,
+    segundos: float,
+    evento: dict[str, Any],
+) -> dict[str, Any]:
+    """Una muestra del escenario normal: la solicitud, su resultado y los tokens que registró el
+    adaptador. Va aparte de `medir_normal` para que el ciclo de las pasadas se lea de un vistazo
+    (SonarCloud la marcó por complejidad cognitiva)."""
+    cuerpo = respuesta.json()
+    muestra: dict[str, Any] = {
+        "pasada": pasada,
+        "id": pregunta.get("id"),
+        "enunciado": pregunta["enunciado"],
+        "respuesta_correcta": pregunta["respuesta_correcta"],
+        "codigo": respuesta.status_code,
+        "segundos": segundos,
+        "tokens_entrada": evento.get("tokens_entrada"),
+        "tokens_salida": evento.get("tokens_salida"),
+    }
+    if respuesta.status_code == 200:
+        muestra["distractores"] = cuerpo["distractores"]
+        muestra["descartados"] = cuerpo["descartados"]
+    else:
+        muestra["detalle"] = cuerpo.get("detail")
+    return muestra
+
+
 def medir_normal(pasadas: int, pausa: float) -> dict[str, Any]:
     if not LLM_API_KEY:
         raise SystemExit(
@@ -185,23 +214,7 @@ def medir_normal(pasadas: int, pausa: float) -> dict[str, Any]:
                     cliente, pregunta["enunciado"], pregunta["respuesta_correcta"]
                 )
                 evento = captura.eventos[-1] if len(captura.eventos) > antes else {}
-                cuerpo = respuesta.json()
-                muestra: dict[str, Any] = {
-                    "pasada": pasada,
-                    "id": pregunta.get("id"),
-                    "enunciado": pregunta["enunciado"],
-                    "respuesta_correcta": pregunta["respuesta_correcta"],
-                    "codigo": respuesta.status_code,
-                    "segundos": segundos,
-                    "tokens_entrada": evento.get("tokens_entrada"),
-                    "tokens_salida": evento.get("tokens_salida"),
-                }
-                if respuesta.status_code == 200:
-                    muestra["distractores"] = cuerpo["distractores"]
-                    muestra["descartados"] = cuerpo["descartados"]
-                else:
-                    muestra["detalle"] = cuerpo.get("detail")
-                muestras.append(muestra)
+                muestras.append(_muestra(pasada, pregunta, respuesta, segundos, evento))
                 print(f"  pasada {pasada}, pregunta {pregunta.get('id')}: "
                       f"{respuesta.status_code} en {segundos} s", file=sys.stderr, flush=True)
 
