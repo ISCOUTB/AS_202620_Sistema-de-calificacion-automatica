@@ -38,6 +38,14 @@ jobs:
         run: pytest -v tests/test_contrato.py
         working-directory: backend
 
+      # Mismo criterio que el paso anterior, para el escenario del segundo corte (EC-09,
+      # ADR-0015): que la ruta pública de distractores no pueda gastar la cuota del proveedor de
+      # LLM sin límite es una promesa de operación, y con nombre propio en la lista de pasos se ve
+      # sin abrir el log si un cambio la rompió. La suite completa la vuelve a correr.
+      - name: Escenario del segundo corte (presupuesto del proveedor de LLM)
+        run: pytest -v tests/test_presupuesto.py tests/test_ruta_distractores.py
+        working-directory: backend
+
       - name: Suite completa del backend
         run: pytest -v
         working-directory: backend
