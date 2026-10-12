@@ -86,7 +86,7 @@ su ventana llena, y las 6 solicitudes que el presupuesto dejó pasar las cortó 
 evidencia.
 
 **Montaje B**: la línea base se midió el 11-oct-2026 a las 16:31; el después, con el código
-desplegado, el ⟦FECHA Y HORA DE LA CORRIDA DESPLEGADA⟧:
+desplegado, el 11-oct-2026 a las 22:42 (−05:00):
 
 ```
 cd backend
@@ -120,12 +120,12 @@ Informes en crudo: [`presupuesto-local-antes.json`](presupuesto-local-antes.json
 
 | Medida | Umbral | Antes (`7201193`) | Después (ADR-0015) | |
 |---|---|---|---|---|
-| **M1:** cortadas por el proveedor por cuota | 0 | **8** | **⟦M1⟧** | ⟦CUMPLE M1⟧ |
-| **M2:** llegaron al proveedor | ≤ 6 | 20 | **⟦M2⟧** | ⟦CUMPLE M2⟧ |
-| **M3:** p95 de un 429 de la API | ≤ 1 s | no había 429 | **⟦M3⟧ s** | ⟦CUMPLE M3⟧ |
-| **M4:** `/health` | 200 siempre | 200 en 6 de 6 | ⟦M4⟧ | ⟦CUMPLE M4⟧ |
-| Recibieron propuestas | | 12 | ⟦PROPUESTAS⟧ | |
-| Duración de la ráfaga | | 22,3 s | ⟦DURACIÓN⟧ s | |
+| **M1:** cortadas por el proveedor por cuota | 0 | **8** | **0** | Cumple |
+| **M2:** llegaron al proveedor | ≤ 6 | 20 | **6** | Cumple |
+| **M3:** p95 de un 429 de la API | ≤ 1 s | no había 429 | **0,121 s** | Cumple |
+| **M4:** `/health` | 200 siempre | 200 en 6 de 6 | 200 en 6 de 6 | Cumple |
+| Recibieron propuestas | | 12 | 6 | |
+| Duración de la ráfaga | | 22,3 s | 11,8 s | |
 
 Informes en crudo: [`presupuesto-antes.json`](presupuesto-antes.json) ·
 [`presupuesto-despues.json`](presupuesto-despues.json).
@@ -157,7 +157,7 @@ misma carga, el presupuesto es lo único que cambió, y cambió exactamente lo q
 20 solicitudes en el proveedor y 11 cortes por cuota a 6 y 0. Los 14 rechazos los dio la API en 2 ms
 de mediana, sin salir a la red, con la cabecera que dice cuándo volver.
 
-**En el montaje B,** ⟦CONCLUSIÓN DESPLEGADA⟧
+**En el montaje B,** con Groq real, la hipótesis también se acepta en sus cuatro medidas: de 20 solicitudes llegaron 6 al proveedor y 6 recibieron propuestas; 0 terminaron en 503 por cuota; las 14 restantes recibieron un 429 de la API con p95 de 0,121 s, y `/health` respondió 200 en 6 de 6 consultas. El MVP desplegado responde al escenario como el montaje local.
 
 **El costo de la respuesta:** en la ráfaga, el profesor recibe 6 propuestas en vez de 12 (en la
 línea base desplegada). Es la consecuencia buscada: las 6 que faltan no las pierde, se las difiere

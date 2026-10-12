@@ -27,10 +27,10 @@ cuando alguien la golpea con una ráfaga.
   a ADR-0013 sin reemplazarlo.
 - **Observabilidad:** el evento `presupuesto_agotado` en el registro JSON y `GET /metricas`, con el
   contrato en 1.2.0.
-- **Experimento, con hipótesis, montaje, ejecución y conclusión:**
-  [`experimento-presupuesto.md`](docs/evidencia/experimento-presupuesto.md). En local, con un
-  proveedor que aplica el límite publicado de Groq: de 20 solicitudes en el proveedor y 11 cortes
-  por cuota a 6 y 0, y los 14 rechazos de la API en 2 ms de mediana.
+- **Resultado desplegado** ([experimento](docs/evidencia/experimento-presupuesto.md), con
+  hipótesis, montaje, umbrales y límites): de 20 solicitudes, 6 llegaron a Groq, 0 cortadas por
+  cuota (antes 8) y 14 con 429 de la API (p95 0,121 s); `/health` en 200. Cumple los cuatro
+  umbrales. Una corrida local con proveedor simulado aísla la variación de Groq.
 - **CI:** el paso «Escenario del segundo corte (presupuesto del proveedor de LLM)» de
   [`ci.yml`](.github/workflows/ci.yml).
 
