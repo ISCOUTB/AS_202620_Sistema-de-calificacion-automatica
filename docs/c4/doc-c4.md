@@ -7,11 +7,12 @@ cambios y no se desincronicen en silencio.
 | | |
 |---|---|
 | **Sistema** | QuantIA, sistema de calificación de exámenes de opción múltiple mediante OMR ([ADR-0008](../adr/0008-renombrar-el-sistema-a-quantia.md)) |
-| **Última actualización** | 2026-10-04 |
+| **Última actualización** | 2026-10-11 |
 | **Niveles completos** | Nivel 1 (Contexto), Nivel 2 (Contenedores) y Nivel 3 (Componentes) |
 | **Notación** | C4 model — [c4model.com](https://c4model.com) · Renderizado con Mermaid `flowchart` |
 | **Documentos relacionados** | [`../arc42/arc42-template-ES.md`](../arc42/arc42-template-ES.md) · [`../adr/`](../adr/) · [`../aspectos.md`](../aspectos.md) |
 | **Componente generativo (S9)** | Proveedor de LLM: Groq, con `openai/gpt-oss-120b`, sistema externo ([ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)). En el [Nivel 2, relación 8](#relaciones-1): HTTPS · JSON, chat compatible con OpenAI, clave en `LLM_API_KEY`, 20 s de espera sin reintentos y 503 si falla. Costo: US$0 en la capa gratuita, sin tarjeta; US$0,0004 por solicitud al precio de pago ([evaluación](../evidencia/evaluacion-distractores.md)) |
+| **Escenario del segundo corte** | Límite de costo ([EC-09](../arc42/arc42-template-ES.md#ec-09), [ADR-0015](../adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md)): la relación 8 del Nivel 2 pasa por un presupuesto de 6 solicitudes por minuto y 150 por día, y lo que no cabe se responde con 429 sin salir a la red. En el Nivel 3, `GeneradorConPresupuesto` dentro de `autoria` y la ruta `GET /metricas` en `api` (relación 12) |
 
 ---
 
@@ -272,7 +273,7 @@ flowchart TB
 | 5 | Cola de trabajos → Worker de procesamiento | Entrega los trabajos pendientes para su procesamiento. | Redis · `BLPOP`, bloqueante con timeout de 5 s · el mismo JSON | **Construido** |
 | 6 | Worker de procesamiento → Base de datos | Consulta información necesaria y persiste las calificaciones y resultados del procesamiento. | SQL sobre PostgreSQL | **Previsto**, por la misma razón que la relación 2. |
 | 7 | Worker de procesamiento → Almacén de imágenes | Recupera las hojas escaneadas que debe procesar. | Lectura de la imagen desde el worker | **Previsto.** Depende del aspecto A-02; hoy el worker solo registra el trabajo en su log. |
-| 8 | Aplicación web → Proveedor de LLM *(opcional)* | Solicita distractores diagnósticos para una pregunta durante la autoría. | HTTPS · JSON · `POST /chat/completions` compatible con OpenAI; clave en la variable de entorno `LLM_API_KEY`; 20 s de espera, sin reintentos | **Construido** ([ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)). Opcional: sin clave o con el proveedor caído, la ruta `/distractores` responde 503 |
+| 8 | Aplicación web → Proveedor de LLM *(opcional)* | Solicita distractores diagnósticos para una pregunta durante la autoría. | HTTPS · JSON · `POST /chat/completions` compatible con OpenAI; clave en la variable de entorno `LLM_API_KEY`; 20 s de espera, sin reintentos; a lo sumo 6 solicitudes por minuto y 150 por día ([ADR-0015](../adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md)) | **Construido** ([ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)). Opcional: sin clave o con el proveedor caído, la ruta `/distractores` responde 503; sin cupo en el presupuesto, 429 sin llegar a esta relación |
 
 ---
 
@@ -297,6 +298,13 @@ Estas notas explican **por qué** se han separado los diferentes contenedores y 
 **Por qué el proveedor de LLM se conecta con la aplicación web.** El LLM únicamente participa en la fase de autoría, cuando el profesor solicita propuestas de distractores diagnósticos (RF-11). No participa en el flujo de procesamiento de las hojas ni en el cálculo de las calificaciones. Por ello, la interacción se realiza desde la aplicación web.
 
 **Por qué la relación con el proveedor de LLM ya es continua.** [ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md) decidió consumir una API alojada (Groq), así que el proveedor sigue siendo un sistema externo y la relación 8 está construida: la aplicación web lo llama desde el adaptador de `autoria`. Sigue siendo opcional (RF-11): sin clave, o con el proveedor caído o lento, la ruta responde 503 y el resto de la aplicación no se entera.
+
+**Por qué el presupuesto no es un contenedor ni cambia la relación 8.** Desde el segundo corte, cada
+solicitud al proveedor pasa antes por un presupuesto (ADR-0015), pero ese presupuesto es una parte
+del código de la aplicación web, en la memoria de su proceso: no se despliega aparte, no tiene
+protocolo propio y no guarda nada fuera del proceso. Por eso no aparece como contenedor, y la
+relación 8 conserva su protocolo; lo que cambia es cuántas veces por minuto puede ocurrir, que se
+anota en su columna de protocolo y formato. Se ve como componente en el Nivel 3.
 
 **Qué información se envía al LLM.** De acuerdo con RNF-13, la interacción con el proveedor de LLM se limita a especificaciones de preguntas matemáticas necesarias para generar distractores. No deben enviarse nombres de estudiantes, calificaciones ni hojas escaneadas. Lo verifica [`test_proveedor_llm.py`](../../backend/tests/test_proveedor_llm.py), que compara el cuerpo entero de la solicitud.
 
@@ -334,9 +342,10 @@ son dominio: `api`, que traduce HTTP a llamadas de módulo, y `worker`, que cons
 nivel se dibuja contra el código de hoy, con la misma convención del Nivel 2: flecha continua para
 lo construido y punteada para lo previsto. La tabla de elementos dice el estado de cada componente.
 
-Hoy solo el aspecto A-01 tiene código. `autoria`, `omr`, `calificacion`, `dashboard` e `identidad`
-existen como paquetes con su docstring (`Responsabilidad:`, `Requisitos:` e `Importa:`) y sin
-implementación.
+Hoy tienen código el aspecto A-01, en `ingesta` e `infraestructura`, y el A-06, en `autoria`, que
+desde el segundo corte incluye el presupuesto del proveedor de LLM (ADR-0015). `omr`,
+`calificacion`, `dashboard` e `identidad` existen como paquetes con su docstring
+(`Responsabilidad:`, `Requisitos:` e `Importa:`) y sin implementación.
 
 ### Reparto de módulos por contenedor
 
@@ -376,8 +385,9 @@ flowchart TB
         autoria["<b>autoria</b>
         [Componente]
 
-        Distractores diagnósticos (construido);
-        banco, clave y habilitación (previstos)."]
+        Distractores diagnósticos y presupuesto
+        del proveedor (construidos); banco, clave
+        y habilitación (previstos)."]
 
         dashboard["<b>dashboard</b>
         [Componente · previsto]
@@ -415,7 +425,8 @@ flowchart TB
     api -->|"recibir_lote()"| ingesta
     api -->|"Construye almacén, bitácora
     y cliente de cola"| infraestructura
-    api -->|"proponer_distractores()"| autoria
+    api -->|"proponer_distractores();
+    estado del presupuesto"| autoria
     api -.->|"Rutas previstas"| dashboard
 
     ingesta -->|"Puertos AlmacenDeImagenes
@@ -429,6 +440,7 @@ flowchart TB
     infraestructura -.->|"<b>[SQL]</b>"| db
 
     autoria -->|"<b>Capa anticorrupción</b>
+    GeneradorConPresupuesto →
     GeneradorCompatibleConOpenAI
     <b>[HTTPS · JSON]</b>"| llm
 
@@ -527,9 +539,9 @@ flowchart TB
 
 | Componente | Contenedor | Responsabilidad | Requisitos | Estado |
 |---|---|---|---|---|
-| `api` | Web | Entrada HTTP: `GET /health`, `POST /examenes/{examen_id}/hojas` y `POST /distractores`. Construye por petición el almacén, la bitácora y el cliente de cola, y publica el contrato ([`openapi.json`](../contrato/openapi.json)). | RF-01, RF-11 | Construido: [`backend/api/main.py`](../../backend/api/main.py) |
+| `api` | Web | Entrada HTTP: `GET /health`, `POST /examenes/{examen_id}/hojas`, `POST /distractores` y `GET /metricas`. Construye por petición el almacén, la bitácora y el cliente de cola; el presupuesto del proveedor lo crea una sola vez, al arrancar, porque tiene que recordar de una solicitud a la siguiente (ADR-0015). Publica el contrato ([`openapi.json`](../contrato/openapi.json), 1.2.0). | RF-01, RF-11 | Construido: [`backend/api/main.py`](../../backend/api/main.py) |
 | `ingesta` | Web | Valida extensión y firma de bytes, almacena, acuña el trabajo, lo registra en la bitácora y lo publica ([ADR-0006](../adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md)). | RF-01 | Construido: [`backend/ingesta/recepcion.py`](../../backend/ingesta/recepcion.py) |
-| `autoria` | Web | Banco de preguntas y clave, habilitación explícita del examen y, opcionalmente, distractores diagnósticos con apoyo de un LLM ([ADR-0004](../adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md), [ADR-0005](../adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md), [ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)). | RF-06, RF-07, RF-11 | Construido en parte: los distractores diagnósticos (A-06) en [`backend/autoria/distractores.py`](../../backend/autoria/distractores.py) y [`proveedor_llm.py`](../../backend/autoria/proveedor_llm.py); banco, clave y habilitación previstos (A-04) |
+| `autoria` | Web | Banco de preguntas y clave, habilitación explícita del examen y, opcionalmente, distractores diagnósticos con apoyo de un LLM ([ADR-0004](../adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md), [ADR-0005](../adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md), [ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)). | RF-06, RF-07, RF-11 | Construido en parte: los distractores diagnósticos (A-06) en [`backend/autoria/distractores.py`](../../backend/autoria/distractores.py) y [`proveedor_llm.py`](../../backend/autoria/proveedor_llm.py), y el presupuesto del proveedor (segundo corte) en [`presupuesto.py`](../../backend/autoria/presupuesto.py); banco, clave y habilitación previstos (A-04) |
 | `dashboard` | Web | Resultados y agregaciones por curso, examen y pregunta; alertas de revisión. | RF-05 | Previsto (A-03) |
 | `identidad` | Web y Worker | Autenticación, roles y aislamiento de datos por curso. | RF-09, RF-10 | Previsto (A-05) |
 | `worker` | Worker | Consume la cola en un ciclo y registra cada trabajo en su log; es el extremo del recorrido de A-01. | RF-01 | Construido: [`backend/worker/main.py`](../../backend/worker/main.py) |
@@ -551,7 +563,8 @@ flowchart TB
 | 8 | `ingesta`, `autoria`, `dashboard`, `omr`, `calificacion` → `identidad` | Verifican acceso y curso | Llamada en proceso | Previsto (A-05) |
 | 9 | `infraestructura` → Base de datos | Persistencia estructurada | SQL sobre PostgreSQL | Previsto: depende del ADR que cierre R-06 |
 | 10 | `autoria` → Proveedor de LLM | Pide distractores diagnósticos a pedido del profesor, por el adaptador `GeneradorCompatibleConOpenAI` | HTTPS · JSON, compatible con OpenAI | Construido y opcional ([ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)) |
-| 11 | `api` → `autoria` | `proponer_distractores()`, con el generador que `api` construye por petición | Llamada en proceso | Construido |
+| 11 | `api` → `autoria` | `proponer_distractores()`, con el generador que `api` construye por petición, envuelto desde el segundo corte en `GeneradorConPresupuesto` | Llamada en proceso | Construido |
+| 12 | `api` → `autoria` | `PresupuestoDeSolicitudes.estado()`, que `GET /metricas` publica; y, si no hay cupo, `PresupuestoAgotado`, que `api` traduce a 429 con `Retry-After` | Llamada en proceso | Construido en el segundo corte ([ADR-0015](../adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md)) |
 
 ### Notas de modelado
 
