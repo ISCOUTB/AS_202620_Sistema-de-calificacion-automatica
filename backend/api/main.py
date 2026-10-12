@@ -1,6 +1,7 @@
 """Entrada HTTP del sistema. No es dominio: traduce peticiones a llamadas de módulo y de
 vuelta, y ese es todo su trabajo. La validación, el almacenamiento y el encolado viven en
-`ingesta` e `infraestructura`; la regla de los distractores, en `autoria`."""
+`ingesta` e `infraestructura`; la regla de los distractores y el presupuesto del proveedor, en
+`autoria`."""
 
 import logging
 import time
@@ -14,10 +15,13 @@ from api.esquemas import (
     ArchivoRechazadoEnRespuesta,
     DescartadoEnRespuesta,
     DistractorEnRespuesta,
+    EstadoDelPresupuestoEnRespuesta,
     HojaAceptadaEnRespuesta,
+    PresupuestoAgotadoEnRespuesta,
     ProveedorNoDisponibleEnRespuesta,
     RespuestaDeCarga,
     RespuestaDeDistractores,
+    RespuestaDeMetricas,
     RespuestaDeSalud,
     SolicitudDeDistractores,
 )
@@ -25,6 +29,8 @@ from api.settings import (
     ALLOWED_ORIGIN,
     LLM_API_KEY,
     LLM_MODELO,
+    LLM_SOLICITUDES_POR_DIA,
+    LLM_SOLICITUDES_POR_MINUTO,
     LLM_URL_BASE,
     NOMBRE_COLA,
     REDIS_URL,
@@ -33,8 +39,11 @@ from api.settings import (
 )
 from autoria import (
     GeneradorCompatibleConOpenAI,
+    GeneradorConPresupuesto,
     GeneradorDeDistractores,
     PreguntaParaDistractores,
+    PresupuestoAgotado,
+    PresupuestoDeSolicitudes,
     ProveedorNoDisponible,
     proponer_distractores,
 )
@@ -57,7 +66,8 @@ app = FastAPI(
     description=(
         "Interfaz HTTP de QuantIA, sistema de calificación de exámenes de opción múltiple. "
         "Hoy cubre el aspecto A-01 (carga de hojas escaneadas para calificación) y el A-06 "
-        "(propuesta opcional de distractores diagnósticos)."
+        "(propuesta opcional de distractores diagnósticos), con el presupuesto que protege la "
+        "cuota del proveedor de LLM y su métrica en `GET /metricas` (EC-09)."
     ),
 )
 
@@ -86,6 +96,22 @@ def obtener_cliente_cola():
     """Dependencia de la cola. Misma razón que arriba: si el cliente se creara al importar,
     ninguna prueba de la API podría correr sin un Redis levantado."""
     return cliente_redis(REDIS_URL)
+
+
+# El presupuesto del proveedor de LLM (ADR-0015). A diferencia del almacén y la cola, se crea una
+# sola vez al importar y no por petición: lo que cuenta tiene que sobrevivir de una solicitud a la
+# siguiente. Vive en la memoria de este proceso, que es correcto con la única instancia y el único
+# proceso de uvicorn que corren hoy (`arrancar-api-y-worker.sh`), y se vacía con cada reinicio
+# (R-18). Crearlo no toca la red ni el disco, así que `test_arranque` sigue igual.
+PRESUPUESTO_DE_DISTRACTORES = PresupuestoDeSolicitudes(
+    por_minuto=LLM_SOLICITUDES_POR_MINUTO, por_dia=LLM_SOLICITUDES_POR_DIA
+)
+
+
+def obtener_presupuesto() -> PresupuestoDeSolicitudes:
+    """Dependencia del presupuesto. Sustituible, como las otras: cada prueba recibe uno nuevo y
+    ninguna gasta el cupo de la siguiente."""
+    return PRESUPUESTO_DE_DISTRACTORES
 
 
 def obtener_generador() -> GeneradorDeDistractores | None:
@@ -138,9 +164,9 @@ async def cargar_hojas(
     reintentarla es asunto del sistema, no del docente: el archivo ya está adentro.
 
     **El `examen_id` todavía no se verifica contra nada, y es un hueco conocido, no un olvido.**
-    El módulo `autoria` (aspecto A-04) es el que registrará los exámenes, y aún no existe;
-    `identidad` (A-05) es el que comprobará que el docente puede cargar en ese curso, y
-    tampoco. La ruta ya tiene la forma definitiva para que cuando esos módulos lleguen solo
+    El módulo `autoria` es el que registrará los exámenes, y esa parte (aspecto A-04) aún no
+    existe; `identidad` (A-05) es el que comprobará que el docente puede cargar en ese curso, y
+    tampoco. La ruta ya tiene la forma definitiva para que cuando esas partes lleguen solo
     haya que sumar la comprobación, sin migrar el frontend.
     """
     inicio = time.perf_counter()
@@ -205,6 +231,13 @@ async def cargar_hojas(
     summary="Proponer distractores diagnósticos para una pregunta",
     response_description="Las propuestas que pasaron la regla y las que no, con su motivo.",
     responses={
+        429: {
+            "model": PresupuestoAgotadoEnRespuesta,
+            "description": (
+                "La solicitud no cabe en el presupuesto del proveedor de LLM y no se envió "
+                "(ADR-0015). La cabecera `Retry-After` dice en cuántos segundos habrá cupo."
+            ),
+        },
         503: {
             "model": ProveedorNoDisponibleEnRespuesta,
             "description": (
@@ -217,6 +250,7 @@ async def cargar_hojas(
 def proponer_distractores_para_una_pregunta(
     solicitud: SolicitudDeDistractores,
     generador: GeneradorDeDistractores | None = Depends(obtener_generador),
+    presupuesto: PresupuestoDeSolicitudes = Depends(obtener_presupuesto),
 ) -> RespuestaDeDistractores:
     """Pide al proveedor de LLM distractores diagnósticos para una pregunta (RF-11, EC-08).
 
@@ -227,6 +261,10 @@ def proponer_distractores_para_una_pregunta(
 
     **Ninguna propuesta que repita la respuesta correcta llega al profesor** (M1 de EC-08). Lo
     que la regla descarta vuelve en `descartados`, con su motivo.
+
+    **Ninguna solicitud sale al proveedor sin cupo en el presupuesto** (EC-09, ADR-0015). Si no
+    cabe, la respuesta es 429 con `Retry-After`, sin tocar la red. Una solicitud sin proveedor
+    configurado responde 503 antes de reservar, así que no gasta cupo.
 
     Es una ruta `def` y no `async def` a propósito: la llamada al proveedor bloquea mientras
     espera, y FastAPI corre estas rutas en su grupo de hilos, así que la espera no detiene a las
@@ -247,8 +285,28 @@ def proponer_distractores_para_una_pregunta(
                 respuesta_correcta=solicitud.respuesta_correcta,
                 cantidad=solicitud.cantidad,
             ),
-            generador,
+            GeneradorConPresupuesto(generador, presupuesto),
         )
+    except PresupuestoAgotado as agotado:
+        # La métrica de EC-09 en el registro: cada solicitud cortada deja un evento, con la
+        # ventana que la cortó y lo usado en ese momento.
+        estado = presupuesto.estado()
+        logger.warning(
+            "Presupuesto agotado",
+            extra={
+                "evento": "presupuesto_agotado",
+                "ventana": agotado.ventana,
+                "reintentar_en_segundos": agotado.reintentar_en_segundos,
+                "usadas_en_el_ultimo_minuto": estado.usadas_en_el_ultimo_minuto,
+                "usadas_en_las_ultimas_24_horas": estado.usadas_en_las_ultimas_24_horas,
+                "rechazadas_desde_el_arranque": estado.rechazadas_desde_el_arranque,
+            },
+        )
+        raise HTTPException(
+            status_code=429,
+            detail=agotado.motivo,
+            headers={"Retry-After": str(agotado.reintentar_en_segundos)},
+        ) from agotado
     except ProveedorNoDisponible as falla:
         raise HTTPException(status_code=503, detail=falla.motivo) from falla
 
@@ -260,4 +318,24 @@ def proponer_distractores_para_una_pregunta(
             DescartadoEnRespuesta.model_validate(descartado)
             for descartado in resultado.descartados
         ],
+    )
+
+
+@app.get(
+    "/metricas",
+    summary="Estado del presupuesto del proveedor de LLM",
+    response_description="Lo usado en las dos ventanas y lo enviado y cortado desde el arranque.",
+)
+def metricas(
+    presupuesto: PresupuestoDeSolicitudes = Depends(obtener_presupuesto),
+) -> RespuestaDeMetricas:
+    """La métrica de EC-09 consultable en vivo (ADR-0015).
+
+    Dice cuántas solicitudes al proveedor caben todavía y cuántas se cortaron con 429, sin
+    revisar el registro. Solo publica cuentas, ningún dato de un profesor ni de una pregunta, y no
+    toca la red ni el disco, así que responde aunque el proveedor esté caído."""
+    return RespuestaDeMetricas(
+        presupuesto_de_distractores=EstadoDelPresupuestoEnRespuesta.model_validate(
+            presupuesto.estado()
+        )
     )

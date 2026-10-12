@@ -31,6 +31,12 @@ propuestas para eso. Tampoco la red del profesor: la ruta se ejerce dentro del p
 
 A qué apunta y dónde escribe
 ----------------------------
+Desde el segundo corte la ruta pasa por el presupuesto de ADR-0015 (6 solicitudes por minuto).
+Esta herramienta lo sustituye por uno sin tope práctico mientras mide, porque lo que evalúa es el
+proveedor y la regla, no el presupuesto: con su pausa de 8 s manda 7,5 solicitudes por minuto, y
+con el presupuesto puesto la medición de EC-08 dejaría de ser comparable con la de la S9. El
+presupuesto se mide con `medir_presupuesto.py` (EC-09).
+
 La URL del proveedor sale de la misma configuración que usa la API, nunca de la línea de
 comandos, y los dos casos degradados apuntan a destinos locales fijos (`http` sin cifrar porque
 no salen de esta máquina). El informe se escribe solo dentro de `docs/evidencia/`, y `--json`
@@ -68,15 +74,19 @@ from typing import Any
 import httpx
 from fastapi.testclient import TestClient
 
-from api.main import app, obtener_generador
+from api.main import app, obtener_generador, obtener_presupuesto
 from api.settings import LLM_API_KEY, LLM_MODELO, LLM_URL_BASE
-from autoria import GeneradorCompatibleConOpenAI
+from autoria import GeneradorCompatibleConOpenAI, PresupuestoDeSolicitudes
 from autoria.distractores import normalizar
 from autoria.proveedor_llm import TIEMPO_DE_ESPERA_SEGUNDOS
 
 UMBRAL_M2_P95_SEGUNDOS = 15.0
 UMBRAL_M3_SEGUNDOS = TIEMPO_DE_ESPERA_SEGUNDOS + 1.0
 CARTAGENA = timezone(timedelta(hours=-5))
+
+# Presupuesto sin tope práctico para las mediciones de EC-08: ver en el docstring
+# «A qué apunta y dónde escribe».
+SIN_TOPE = 1_000_000
 
 CARPETA_DE_EVIDENCIA = Path(__file__).resolve().parent.parent.parent / "docs" / "evidencia"
 CONJUNTO = CARPETA_DE_EVIDENCIA / "conjunto-evaluacion-distractores.json"
@@ -204,6 +214,9 @@ def medir_normal(pasadas: int, pausa: float) -> dict[str, Any]:
         )
     preguntas = _cargar_conjunto()
     muestras: list[dict[str, Any]] = []
+    app.dependency_overrides[obtener_presupuesto] = lambda: PresupuestoDeSolicitudes(
+        por_minuto=SIN_TOPE, por_dia=SIN_TOPE
+    )
     with _capturar_eventos() as captura, TestClient(app) as cliente:
         for pasada in range(1, pasadas + 1):
             for pregunta in preguntas:
@@ -217,6 +230,7 @@ def medir_normal(pasadas: int, pausa: float) -> dict[str, Any]:
                 muestras.append(_muestra(pasada, pregunta, respuesta, segundos, evento))
                 print(f"  pasada {pasada}, pregunta {pregunta.get('id')}: "
                       f"{respuesta.status_code} en {segundos} s", file=sys.stderr, flush=True)
+    app.dependency_overrides.pop(obtener_presupuesto, None)
 
     respondidas = [m for m in muestras if m["codigo"] == 200]
     latencias = [m["segundos"] for m in respondidas]
@@ -269,6 +283,9 @@ def _medir_degradado(url_base: str, muestras: int) -> list[dict[str, Any]]:
     app.dependency_overrides[obtener_generador] = lambda: GeneradorCompatibleConOpenAI(
         url_base, "modelo-de-prueba", "clave-de-prueba"
     )
+    app.dependency_overrides[obtener_presupuesto] = lambda: PresupuestoDeSolicitudes(
+        por_minuto=SIN_TOPE, por_dia=SIN_TOPE
+    )
     resultados = []
     try:
         with TestClient(app) as cliente:
@@ -285,6 +302,7 @@ def _medir_degradado(url_base: str, muestras: int) -> list[dict[str, Any]]:
                       file=sys.stderr, flush=True)
     finally:
         app.dependency_overrides.pop(obtener_generador, None)
+        app.dependency_overrides.pop(obtener_presupuesto, None)
     return resultados
 
 

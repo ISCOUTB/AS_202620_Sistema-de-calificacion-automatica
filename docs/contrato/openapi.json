@@ -81,6 +81,58 @@
         "title": "DistractorEnRespuesta",
         "type": "object"
       },
+      "EstadoDelPresupuestoEnRespuesta": {
+        "description": "Cuanto del presupuesto de solicitudes al proveedor de LLM se ha usado.\n\nLas dos ventanas deslizantes son las que deciden si una solicitud cabe. Los contadores\n`desde_el_arranque` son observabilidad y vuelven a cero cuando el proceso se reinicia.",
+        "properties": {
+          "arrancado_en": {
+            "description": "Momento en que arranco el proceso de la API.",
+            "format": "date-time",
+            "title": "Arrancado En",
+            "type": "string"
+          },
+          "enviadas_desde_el_arranque": {
+            "description": "Solicitudes que salieron hacia el proveedor desde que arranco el proceso.",
+            "title": "Enviadas Desde El Arranque",
+            "type": "integer"
+          },
+          "limite_por_dia": {
+            "description": "Solicitudes al proveedor admitidas en 24 horas.",
+            "title": "Limite Por Dia",
+            "type": "integer"
+          },
+          "limite_por_minuto": {
+            "description": "Solicitudes al proveedor admitidas por minuto.",
+            "title": "Limite Por Minuto",
+            "type": "integer"
+          },
+          "rechazadas_desde_el_arranque": {
+            "description": "Solicitudes cortadas con 429, sin salir a la red, desde que arranco el proceso.",
+            "title": "Rechazadas Desde El Arranque",
+            "type": "integer"
+          },
+          "usadas_en_el_ultimo_minuto": {
+            "description": "Enviadas en los ultimos 60 s.",
+            "title": "Usadas En El Ultimo Minuto",
+            "type": "integer"
+          },
+          "usadas_en_las_ultimas_24_horas": {
+            "description": "Enviadas en las ultimas 24 horas.",
+            "title": "Usadas En Las Ultimas 24 Horas",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "limite_por_minuto",
+          "limite_por_dia",
+          "usadas_en_el_ultimo_minuto",
+          "usadas_en_las_ultimas_24_horas",
+          "enviadas_desde_el_arranque",
+          "rechazadas_desde_el_arranque",
+          "arrancado_en"
+        ],
+        "title": "EstadoDelPresupuestoEnRespuesta",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -136,6 +188,21 @@
           "estado"
         ],
         "title": "HojaAceptadaEnRespuesta",
+        "type": "object"
+      },
+      "PresupuestoAgotadoEnRespuesta": {
+        "description": "Cuerpo del 429: la solicitud no cabe en el presupuesto y no se envio al proveedor (ADR-0015).\n\nLa respuesta lleva ademas la cabecera `Retry-After` con los segundos que faltan para que haya\ncupo. Usa `detail`, como el 503, para que un cliente lea los dos errores igual.",
+        "properties": {
+          "detail": {
+            "description": "Que paso y cuando volver a pedirlo, redactado para el profesor.",
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "PresupuestoAgotadoEnRespuesta",
         "type": "object"
       },
       "ProveedorNoDisponibleEnRespuesta": {
@@ -213,6 +280,19 @@
           "descartados"
         ],
         "title": "RespuestaDeDistractores",
+        "type": "object"
+      },
+      "RespuestaDeMetricas": {
+        "description": "Lo que devuelve `GET /metricas`: el estado del presupuesto del proveedor de LLM.\n\nEs la metrica de EC-09 consultable en vivo, como `lote_confirmado` en el registro lo es de\nEC-07. Solo publica cuentas: ningun dato de un profesor ni de una pregunta.",
+        "properties": {
+          "presupuesto_de_distractores": {
+            "$ref": "#/components/schemas/EstadoDelPresupuestoEnRespuesta"
+          }
+        },
+        "required": [
+          "presupuesto_de_distractores"
+        ],
+        "title": "RespuestaDeMetricas",
         "type": "object"
       },
       "RespuestaDeSalud": {
@@ -307,15 +387,15 @@
     }
   },
   "info": {
-    "description": "Interfaz HTTP de QuantIA, sistema de calificación de exámenes de opción múltiple. Hoy cubre el aspecto A-01 (carga de hojas escaneadas para calificación) y el A-06 (propuesta opcional de distractores diagnósticos).",
+    "description": "Interfaz HTTP de QuantIA, sistema de calificación de exámenes de opción múltiple. Hoy cubre el aspecto A-01 (carga de hojas escaneadas para calificación) y el A-06 (propuesta opcional de distractores diagnósticos), con el presupuesto que protege la cuota del proveedor de LLM y su métrica en `GET /metricas` (EC-09).",
     "title": "QuantIA",
-    "version": "1.1.0"
+    "version": "1.2.0"
   },
   "openapi": "3.1.0",
   "paths": {
     "/distractores": {
       "post": {
-        "description": "Pide al proveedor de LLM distractores diagnósticos para una pregunta (RF-11, EC-08).\n\n**Es opcional y se degrada sin arrastrar a nadie.** Si el proveedor no está configurado,\ntarda más de lo que el adaptador espera o falla, la respuesta es 503 con el motivo, y el\nresto de la API sigue igual: la calificación no usa el LLM (ADR-0005) y el registro manual\nde preguntas no depende de él (ADR-0013).\n\n**Ninguna propuesta que repita la respuesta correcta llega al profesor** (M1 de EC-08). Lo\nque la regla descarta vuelve en `descartados`, con su motivo.\n\nEs una ruta `def` y no `async def` a propósito: la llamada al proveedor bloquea mientras\nespera, y FastAPI corre estas rutas en su grupo de hilos, así que la espera no detiene a las\ndemás peticiones.",
+        "description": "Pide al proveedor de LLM distractores diagnósticos para una pregunta (RF-11, EC-08).\n\n**Es opcional y se degrada sin arrastrar a nadie.** Si el proveedor no está configurado,\ntarda más de lo que el adaptador espera o falla, la respuesta es 503 con el motivo, y el\nresto de la API sigue igual: la calificación no usa el LLM (ADR-0005) y el registro manual\nde preguntas no depende de él (ADR-0013).\n\n**Ninguna propuesta que repita la respuesta correcta llega al profesor** (M1 de EC-08). Lo\nque la regla descarta vuelve en `descartados`, con su motivo.\n\n**Ninguna solicitud sale al proveedor sin cupo en el presupuesto** (EC-09, ADR-0015). Si no\ncabe, la respuesta es 429 con `Retry-After`, sin tocar la red. Una solicitud sin proveedor\nconfigurado responde 503 antes de reservar, así que no gasta cupo.\n\nEs una ruta `def` y no `async def` a propósito: la llamada al proveedor bloquea mientras\nespera, y FastAPI corre estas rutas en su grupo de hilos, así que la espera no detiene a las\ndemás peticiones.",
         "operationId": "proponer_distractores_para_una_pregunta_distractores_post",
         "requestBody": {
           "content": {
@@ -348,6 +428,16 @@
             },
             "description": "Validation Error"
           },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresupuestoAgotadoEnRespuesta"
+                }
+              }
+            },
+            "description": "La solicitud no cabe en el presupuesto del proveedor de LLM y no se envió (ADR-0015). La cabecera `Retry-After` dice en cuántos segundos habrá cupo."
+          },
           "503": {
             "content": {
               "application/json": {
@@ -364,7 +454,7 @@
     },
     "/examenes/{examen_id}/hojas": {
       "post": {
-        "description": "Recibe una o varias hojas escaneadas de un examen y confirma qué entró y qué no (RF-01).\n\n**Responde 200 aunque haya archivos rechazados, y eso es deliberado.** La petición se\natendió por completo: el 200 confirma que el sistema procesó el lote entero, y el cuerpo\ndice archivo por archivo qué pasó. Devolver un error por un rechazo obligaría al cliente a\nreenviar el lote completo, que es justo lo que EC-07 quiere evitar.\n\n**Una hoja puede volver como aceptada y todavía pendiente de encolar.** Desde ADR-0006 el\ncampo `estado` de cada aceptada vale `encolada` o `pendiente_de_encolar`: la segunda es una\nhoja almacenada y registrada en la bitácora cuyo trabajo no llegó a la cola. Se reporta en\nvez de omitirse porque EC-07 exige que ningún archivo cargado desaparezca sin traza, y\nreintentarla es asunto del sistema, no del docente: el archivo ya está adentro.\n\n**El `examen_id` todavía no se verifica contra nada, y es un hueco conocido, no un olvido.**\nEl módulo `autoria` (aspecto A-04) es el que registrará los exámenes, y aún no existe;\n`identidad` (A-05) es el que comprobará que el docente puede cargar en ese curso, y\ntampoco. La ruta ya tiene la forma definitiva para que cuando esos módulos lleguen solo\nhaya que sumar la comprobación, sin migrar el frontend.",
+        "description": "Recibe una o varias hojas escaneadas de un examen y confirma qué entró y qué no (RF-01).\n\n**Responde 200 aunque haya archivos rechazados, y eso es deliberado.** La petición se\natendió por completo: el 200 confirma que el sistema procesó el lote entero, y el cuerpo\ndice archivo por archivo qué pasó. Devolver un error por un rechazo obligaría al cliente a\nreenviar el lote completo, que es justo lo que EC-07 quiere evitar.\n\n**Una hoja puede volver como aceptada y todavía pendiente de encolar.** Desde ADR-0006 el\ncampo `estado` de cada aceptada vale `encolada` o `pendiente_de_encolar`: la segunda es una\nhoja almacenada y registrada en la bitácora cuyo trabajo no llegó a la cola. Se reporta en\nvez de omitirse porque EC-07 exige que ningún archivo cargado desaparezca sin traza, y\nreintentarla es asunto del sistema, no del docente: el archivo ya está adentro.\n\n**El `examen_id` todavía no se verifica contra nada, y es un hueco conocido, no un olvido.**\nEl módulo `autoria` es el que registrará los exámenes, y esa parte (aspecto A-04) aún no\nexiste; `identidad` (A-05) es el que comprobará que el docente puede cargar en ese curso, y\ntampoco. La ruta ya tiene la forma definitiva para que cuando esas partes lleguen solo\nhaya que sumar la comprobación, sin migrar el frontend.",
         "operationId": "cargar_hojas_examenes__examen_id__hojas_post",
         "parameters": [
           {
@@ -428,6 +518,25 @@
           }
         },
         "summary": "Sonda de vida"
+      }
+    },
+    "/metricas": {
+      "get": {
+        "description": "La métrica de EC-09 consultable en vivo (ADR-0015).\n\nDice cuántas solicitudes al proveedor caben todavía y cuántas se cortaron con 429, sin\nrevisar el registro. Solo publica cuentas, ningún dato de un profesor ni de una pregunta, y no\ntoca la red ni el disco, así que responde aunque el proveedor esté caído.",
+        "operationId": "metricas_metricas_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespuestaDeMetricas"
+                }
+              }
+            },
+            "description": "Lo usado en las dos ventanas y lo enviado y cortado desde el arranque."
+          }
+        },
+        "summary": "Estado del presupuesto del proveedor de LLM"
       }
     }
   }

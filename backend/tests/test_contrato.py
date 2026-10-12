@@ -10,8 +10,8 @@ Las tres cosas que verifica, en orden de fuerza
 1. Que el documento versionado es **exactamente** el que genera la aplicacion de hoy. Esta es
    la que atrapa cualquier cambio, compatible o no, y obliga a que todo cambio del contrato sea
    deliberado y quede commiteado junto al codigo que lo produce.
-2. Que el contrato sigue prometiendo lo que el sistema depende de prometer: las tres rutas, el
-   503 de la ruta de distractores, los campos obligatorios de la respuesta de carga, y los dos
+2. Que el contrato sigue prometiendo lo que el sistema depende de prometer: las cuatro rutas, el
+   503 y el 429 de la ruta de distractores, los campos obligatorios de la respuesta de carga, y los dos
    unicos estados que puede tener una hoja. Estas existen para que el fallo diga **que** se rompio y no solo que algo difiere.
 3. Que una respuesta real de la API cabe en el esquema publicado, campo por campo. Esta se lee
    desde el archivo versionado y no desde los modelos, asi que no es circular: comprueba que la
@@ -48,6 +48,7 @@ from tests.test_recepcion import JPG, ColaFalsa
 
 RUTA_CARGA = "/examenes/{examen_id}/hojas"
 RUTA_DISTRACTORES = "/distractores"
+RUTA_METRICAS = "/metricas"
 
 
 @pytest.fixture(scope="module")
@@ -148,19 +149,22 @@ def test_la_version_del_contrato_es_la_declarada_en_el_codigo(contrato_publicado
     assert contrato_publicado["info"]["version"] == VERSION_DEL_CONTRATO
 
 
-def test_el_contrato_declara_las_tres_rutas_que_la_api_expone(contrato_publicado):
+def test_el_contrato_declara_las_cuatro_rutas_que_la_api_expone(contrato_publicado):
     """Las rutas son lo primero que un consumidor busca; que desaparezca una es el cambio
     incompatible mas obvio que existe.
 
     De la ruta de distractores se exige ademas que publique su 503: es la degradacion que
     ADR-0013 promete cuando el proveedor de LLM falla, y un cliente que no sepa que existe la
-    trataria como un error inesperado."""
+    trataria como un error inesperado. Desde 1.2.0 se exige tambien su 429, el corte del
+    presupuesto de ADR-0015, y la ruta `GET /metricas` que lo publica."""
     rutas = contrato_publicado["paths"]
 
-    assert set(rutas) == {"/health", RUTA_CARGA, RUTA_DISTRACTORES}
+    assert set(rutas) == {"/health", RUTA_CARGA, RUTA_DISTRACTORES, RUTA_METRICAS}
     assert "get" in rutas["/health"]
     assert "post" in rutas[RUTA_CARGA]
+    assert "get" in rutas[RUTA_METRICAS]
     assert "503" in rutas[RUTA_DISTRACTORES]["post"]["responses"]
+    assert "429" in rutas[RUTA_DISTRACTORES]["post"]["responses"]
 
 
 def test_la_respuesta_de_carga_exige_los_cuatro_campos_del_reporte(contrato_publicado):

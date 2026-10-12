@@ -1,5 +1,7 @@
 import os
 
+from autoria import SOLICITUDES_POR_DIA, SOLICITUDES_POR_MINUTO
+
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 ALLOWED_ORIGIN = os.environ.get("ALLOWED_ORIGIN", "http://localhost:8080")
 
@@ -26,3 +28,12 @@ RUTA_BITACORA = os.environ.get(
 LLM_URL_BASE = os.environ.get("LLM_URL_BASE", "https://api.groq.com/openai/v1")
 LLM_MODELO = os.environ.get("LLM_MODELO", "openai/gpt-oss-120b")
 LLM_API_KEY = os.environ.get("LLM_API_KEY", "")
+
+# Presupuesto de solicitudes al proveedor de LLM (escenario del segundo corte, EC-09, ADR-0015).
+# Los valores por omisión no se repiten aquí: se leen de `autoria` (`presupuesto.py`), que es
+# donde está su justificación, para no volver a tener dos declaraciones del mismo dato (la
+# lección de V-2 con NOMBRE_COLA).
+LLM_SOLICITUDES_POR_MINUTO = int(
+    os.environ.get("LLM_SOLICITUDES_POR_MINUTO", SOLICITUDES_POR_MINUTO)
+)
+LLM_SOLICITUDES_POR_DIA = int(os.environ.get("LLM_SOLICITUDES_POR_DIA", SOLICITUDES_POR_DIA))

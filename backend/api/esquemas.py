@@ -25,7 +25,13 @@ from infraestructura.modelo import ENCOLADA, PENDIENTE_DE_ENCOLAR
 # 1.1.0 agrega la ruta de distractores (RF-11). Sube la version menor y no la mayor porque solo
 # agrega: las dos rutas de 1.0.0 y sus esquemas siguen identicos, asi que nadie que ya consuma la
 # API tiene que cambiar nada.
-VERSION_DEL_CONTRATO = "1.1.0"
+#
+# 1.2.0 agrega `GET /metricas` y el 429 de la ruta de distractores (escenario del segundo corte,
+# EC-09, ADR-0015). Vuelve a subir la menor y no la mayor por la misma razón: las rutas y los
+# esquemas de 1.1.0 siguen identicos. Un cliente que ya consume `/distractores` puede recibir
+# ahora un 429, pero ese codigo no reemplaza a ninguno de los que ya conocia: solo aparece cuando
+# antes la solicitud habria agotado la cuota del proveedor.
+VERSION_DEL_CONTRATO = "1.2.0"
 
 EstadoDeHoja = Literal["encolada", "pendiente_de_encolar"]
 
@@ -162,3 +168,46 @@ class ProveedorNoDisponibleEnRespuesta(BaseModel):
     los demas."""
 
     detail: str = Field(description="Que paso, redactado para el profesor.")
+
+
+class PresupuestoAgotadoEnRespuesta(BaseModel):
+    """Cuerpo del 429: la solicitud no cabe en el presupuesto y no se envio al proveedor (ADR-0015).
+
+    La respuesta lleva ademas la cabecera `Retry-After` con los segundos que faltan para que haya
+    cupo. Usa `detail`, como el 503, para que un cliente lea los dos errores igual."""
+
+    detail: str = Field(
+        description="Que paso y cuando volver a pedirlo, redactado para el profesor."
+    )
+
+
+class EstadoDelPresupuestoEnRespuesta(BaseModel):
+    """Cuanto del presupuesto de solicitudes al proveedor de LLM se ha usado.
+
+    Las dos ventanas deslizantes son las que deciden si una solicitud cabe. Los contadores
+    `desde_el_arranque` son observabilidad y vuelven a cero cuando el proceso se reinicia."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    limite_por_minuto: int = Field(description="Solicitudes al proveedor admitidas por minuto.")
+    limite_por_dia: int = Field(description="Solicitudes al proveedor admitidas en 24 horas.")
+    usadas_en_el_ultimo_minuto: int = Field(description="Enviadas en los ultimos 60 s.")
+    usadas_en_las_ultimas_24_horas: int = Field(description="Enviadas en las ultimas 24 horas.")
+    enviadas_desde_el_arranque: int = Field(
+        description="Solicitudes que salieron hacia el proveedor desde que arranco el proceso."
+    )
+    rechazadas_desde_el_arranque: int = Field(
+        description=(
+            "Solicitudes cortadas con 429, sin salir a la red, desde que arranco el proceso."
+        )
+    )
+    arrancado_en: datetime = Field(description="Momento en que arranco el proceso de la API.")
+
+
+class RespuestaDeMetricas(BaseModel):
+    """Lo que devuelve `GET /metricas`: el estado del presupuesto del proveedor de LLM.
+
+    Es la metrica de EC-09 consultable en vivo, como `lote_confirmado` en el registro lo es de
+    EC-07. Solo publica cuentas: ningun dato de un profesor ni de una pregunta."""
+
+    presupuesto_de_distractores: EstadoDelPresupuestoEnRespuesta
