@@ -1,0 +1,299 @@
+{
+  "herramienta": "backend/herramientas/medir_presupuesto.py",
+  "etiqueta": "local después: con el presupuesto de ADR-0015",
+  "entorno": {
+    "destino": "local",
+    "url": "http://127.0.0.1:8000",
+    "red": "local, proveedor simulado con el límite por minuto de Groq",
+    "solicitudes": 20,
+    "pausa_segundos": 0.0,
+    "tokens_por_solicitud_supuestos": 856
+  },
+  "inicio": {
+    "utc": "2026-10-12T02:06:33+00:00",
+    "cartagena": "2026-10-11T21:06:33-05:00"
+  },
+  "fin": {
+    "utc": "2026-10-12T02:06:44+00:00",
+    "cartagena": "2026-10-11T21:06:44-05:00"
+  },
+  "duracion_de_la_rafaga_segundos": 10.5,
+  "resumen": {
+    "solicitudes": 20,
+    "por_clase": {
+      "propuesta": 6,
+      "limitada_por_la_api": 14,
+      "limitada_por_el_proveedor": 0,
+      "proveedor_no_disponible": 0,
+      "otra": 0
+    },
+    "llegaron_al_proveedor": 6,
+    "tokens_gastados_estimados": 5136,
+    "tiempos_por_clase": {
+      "propuesta": {
+        "muestras": 6,
+        "mediana_segundos": 1.746,
+        "p95_segundos": 1.775,
+        "peor_segundos": 1.775
+      },
+      "limitada_por_la_api": {
+        "muestras": 14,
+        "mediana_segundos": 0.002,
+        "p95_segundos": 0.005,
+        "peor_segundos": 0.005
+      },
+      "limitada_por_el_proveedor": {
+        "muestras": 0
+      },
+      "proveedor_no_disponible": {
+        "muestras": 0
+      },
+      "otra": {
+        "muestras": 0
+      }
+    },
+    "salud_siempre_200": true
+  },
+  "salud": [
+    {
+      "momento": "antes",
+      "codigo": 200,
+      "segundos": 0.016,
+      "hora": "2026-10-11T21:06:33-05:00"
+    },
+    {
+      "momento": "durante, tras la solicitud 5",
+      "codigo": 200,
+      "segundos": 0.003,
+      "hora": "2026-10-11T21:06:42-05:00"
+    },
+    {
+      "momento": "durante, tras la solicitud 10",
+      "codigo": 200,
+      "segundos": 0.001,
+      "hora": "2026-10-11T21:06:44-05:00"
+    },
+    {
+      "momento": "durante, tras la solicitud 15",
+      "codigo": 200,
+      "segundos": 0.001,
+      "hora": "2026-10-11T21:06:44-05:00"
+    },
+    {
+      "momento": "durante, tras la solicitud 20",
+      "codigo": 200,
+      "segundos": 0.001,
+      "hora": "2026-10-11T21:06:44-05:00"
+    },
+    {
+      "momento": "después",
+      "codigo": 200,
+      "segundos": 0.001,
+      "hora": "2026-10-11T21:06:44-05:00"
+    }
+  ],
+  "metricas_antes": {
+    "presupuesto_de_distractores": {
+      "limite_por_minuto": 6,
+      "limite_por_dia": 150,
+      "usadas_en_el_ultimo_minuto": 0,
+      "usadas_en_las_ultimas_24_horas": 0,
+      "enviadas_desde_el_arranque": 0,
+      "rechazadas_desde_el_arranque": 0,
+      "arrancado_en": "2026-10-12T02:06:30.844257Z"
+    }
+  },
+  "metricas_despues": {
+    "presupuesto_de_distractores": {
+      "limite_por_minuto": 6,
+      "limite_por_dia": 150,
+      "usadas_en_el_ultimo_minuto": 6,
+      "usadas_en_las_ultimas_24_horas": 6,
+      "enviadas_desde_el_arranque": 6,
+      "rechazadas_desde_el_arranque": 14,
+      "arrancado_en": "2026-10-12T02:06:30.844257Z"
+    }
+  },
+  "solicitudes": [
+    {
+      "numero": 1,
+      "hora": "2026-10-11T21:06:33-05:00",
+      "codigo": 200,
+      "segundos": 1.775,
+      "clase": "propuesta",
+      "motivo": "",
+      "reintentar_en": null
+    },
+    {
+      "numero": 2,
+      "hora": "2026-10-11T21:06:35-05:00",
+      "codigo": 200,
+      "segundos": 1.745,
+      "clase": "propuesta",
+      "motivo": "",
+      "reintentar_en": null
+    },
+    {
+      "numero": 3,
+      "hora": "2026-10-11T21:06:37-05:00",
+      "codigo": 200,
+      "segundos": 1.746,
+      "clase": "propuesta",
+      "motivo": "",
+      "reintentar_en": null
+    },
+    {
+      "numero": 4,
+      "hora": "2026-10-11T21:06:38-05:00",
+      "codigo": 200,
+      "segundos": 1.753,
+      "clase": "propuesta",
+      "motivo": "",
+      "reintentar_en": null
+    },
+    {
+      "numero": 5,
+      "hora": "2026-10-11T21:06:40-05:00",
+      "codigo": 200,
+      "segundos": 1.743,
+      "clase": "propuesta",
+      "motivo": "",
+      "reintentar_en": null
+    },
+    {
+      "numero": 6,
+      "hora": "2026-10-11T21:06:42-05:00",
+      "codigo": 200,
+      "segundos": 1.745,
+      "clase": "propuesta",
+      "motivo": "",
+      "reintentar_en": null
+    },
+    {
+      "numero": 7,
+      "hora": "2026-10-11T21:06:44-05:00",
+      "codigo": 429,
+      "segundos": 0.003,
+      "clase": "limitada_por_la_api",
+      "motivo": "Se alcanzó el límite de 6 solicitudes por minuto al proveedor. Puede volver a pedirlo en 50 s.",
+      "reintentar_en": "50"
+    },
+    {
+      "numero": 8,
+      "hora": "2026-10-11T21:06:44-05:00",
+      "codigo": 429,
+      "segundos": 0.002,
+      "clase": "limitada_por_la_api",
+      "motivo": "Se alcanzó el límite de 6 solicitudes por minuto al proveedor. Puede volver a pedirlo en 50 s.",
+      "reintentar_en": "50"
+    },
+    {
+      "numero": 9,
+      "hora": "2026-10-11T21:06:44-05:00",
+      "codigo": 429,
+      "segundos": 0.002,
+      "clase": "limitada_por_la_api",
+      "motivo": "Se alcanzó el límite de 6 solicitudes por minuto al proveedor. Puede volver a pedirlo en 50 s.",
+      "reintentar_en": "50"
+    },
+    {
+      "numero": 10,
+      "hora": "2026-10-11T21:06:44-05:00",
+      "codigo": 429,
+      "segundos": 0.002,
+      "clase": "limitada_por_la_api",
+      "motivo": "Se alcanzó el límite de 6 solicitudes por minuto al proveedor. Puede volver a pedirlo en 50 s.",
+      "reintentar_en": "50"
+    },
+    {
+      "numero": 11,
+      "hora": "2026-10-11T21:06:44-05:00",
+      "codigo": 429,
+      "segundos": 0.005,
+      "clase": "limitada_por_la_api",
+      "motivo": "Se alcanzó el límite de 6 solicitudes por minuto al proveedor. Puede volver a pedirlo en 50 s.",
+      "reintentar_en": "50"
+    },
+    {
+      "numero": 12,
+      "hora": "2026-10-11T21:06:44-05:00",
+      "codigo": 429,
+      "segundos": 0.002,
+      "clase": "limitada_por_la_api",
+      "motivo": "Se alcanzó el límite de 6 solicitudes por minuto al proveedor. Puede volver a pedirlo en 50 s.",
+      "reintentar_en": "50"
+    },
+    {
+      "numero": 13,
+      "hora": "2026-10-11T21:06:44-05:00",
+      "codigo": 429,
+      "segundos": 0.002,
+      "clase": "limitada_por_la_api",
+      "motivo": "Se alcanzó el límite de 6 solicitudes por minuto al proveedor. Puede volver a pedirlo en 50 s.",
+      "reintentar_en": "50"
+    },
+    {
+      "numero": 14,
+      "hora": "2026-10-11T21:06:44-05:00",
+      "codigo": 429,
+      "segundos": 0.002,
+      "clase": "limitada_por_la_api",
+      "motivo": "Se alcanzó el límite de 6 solicitudes por minuto al proveedor. Puede volver a pedirlo en 50 s.",
+      "reintentar_en": "50"
+    },
+    {
+      "numero": 15,
+      "hora": "2026-10-11T21:06:44-05:00",
+      "codigo": 429,
+      "segundos": 0.002,
+      "clase": "limitada_por_la_api",
+      "motivo": "Se alcanzó el límite de 6 solicitudes por minuto al proveedor. Puede volver a pedirlo en 50 s.",
+      "reintentar_en": "50"
+    },
+    {
+      "numero": 16,
+      "hora": "2026-10-11T21:06:44-05:00",
+      "codigo": 429,
+      "segundos": 0.001,
+      "clase": "limitada_por_la_api",
+      "motivo": "Se alcanzó el límite de 6 solicitudes por minuto al proveedor. Puede volver a pedirlo en 50 s.",
+      "reintentar_en": "50"
+    },
+    {
+      "numero": 17,
+      "hora": "2026-10-11T21:06:44-05:00",
+      "codigo": 429,
+      "segundos": 0.002,
+      "clase": "limitada_por_la_api",
+      "motivo": "Se alcanzó el límite de 6 solicitudes por minuto al proveedor. Puede volver a pedirlo en 50 s.",
+      "reintentar_en": "50"
+    },
+    {
+      "numero": 18,
+      "hora": "2026-10-11T21:06:44-05:00",
+      "codigo": 429,
+      "segundos": 0.002,
+      "clase": "limitada_por_la_api",
+      "motivo": "Se alcanzó el límite de 6 solicitudes por minuto al proveedor. Puede volver a pedirlo en 50 s.",
+      "reintentar_en": "50"
+    },
+    {
+      "numero": 19,
+      "hora": "2026-10-11T21:06:44-05:00",
+      "codigo": 429,
+      "segundos": 0.002,
+      "clase": "limitada_por_la_api",
+      "motivo": "Se alcanzó el límite de 6 solicitudes por minuto al proveedor. Puede volver a pedirlo en 50 s.",
+      "reintentar_en": "50"
+    },
+    {
+      "numero": 20,
+      "hora": "2026-10-11T21:06:44-05:00",
+      "codigo": 429,
+      "segundos": 0.002,
+      "clase": "limitada_por_la_api",
+      "motivo": "Se alcanzó el límite de 6 solicitudes por minuto al proveedor. Puede volver a pedirlo en 50 s.",
+      "reintentar_en": "50"
+    }
+  ]
+}
