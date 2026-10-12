@@ -48,7 +48,7 @@ INSTRUCCIONES_DEL_SISTEMA = (
     "Respondes solo con JSON."
 )
 
-# Todo lo que se le dice al modelo sobre la pregunta sale de esta plantilla y de los tres campos
+# Lo que se le dice al modelo sobre la pregunta sale solo de esta plantilla y de los tres campos
 # de `PreguntaParaDistractores`. Por eso RNF-13 se puede probar: no hay otro lugar por donde un
 # dato del curso pudiera colarse en la solicitud.
 MENSAJE_PARA_EL_MODELO = (
