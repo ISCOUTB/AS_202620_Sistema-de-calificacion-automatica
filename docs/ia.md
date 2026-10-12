@@ -6,7 +6,9 @@ Este documento registra el uso de herramientas de IA durante el desarrollo del p
 
 Este registro documenta IA como herramienta de construcción (apoyo para redactar, diseñar y documentar). El modelo de lenguaje que el sistema usa para proponer distractores diagnósticos (RF-11, función opcional que no interviene en la calificación) es IA como componente del sistema: se documenta en el aspecto A-06 y en su evaluación (`docs/evidencia/evaluacion-distractores.md`), no aquí.
 
-**La entrada más reciente es la [12](#entrada-12), de la S9** (2026-10-03 y 2026-10-04): la porción RF-11 construida con Claude. **Lo rechazado, con su motivo técnico:** el SDK `openai`, porque obliga a regenerar el lock en Linux y su llamada aparece en el grep de erosión; `urllib.request`, porque `httpx` ya es dependencia directa del backend; y reintentar ante una falla del proveedor, porque duplica la cuota gastada y la espera del profesor. **Lo corregido:** seis errores de tipos que encontró `mypy`, la prueba de contrato que exigía dos rutas, y el filtro que trataba `x²` y `x^2` como distintos. **Lo aceptado:** Groq detrás de un puerto de `autoria` (ADR-0013) y la prueba del defecto en un PR que no se fusiona. La calidad de las propuestas del modelo la calificó el equipo a mano, sin IA.
+**La entrada más reciente es la [13](#entrada-13), del segundo corte** (2026-10-11): el escenario operativo de límite de costo, construido con Claude. **Lo rechazado, con su motivo técnico:** un límite por IP con `slowapi`, porque agrega una dependencia y la IP detrás del proxy de Render se puede falsificar; contar tokens, porque se conocen cuando ya se gastaron; y responder 503 sin cupo, porque diría que el proveedor falló cuando no falló. **Lo corregido al ejecutar:** una corrida local contaminada por un simulador que seguía vivo, que se descartó; un docstring que afirmaba que la prueba de concurrencia detecta la falta del candado, cuando en 20 de 20 corridas no lo hace; una consecuencia del ADR-0015 que hacía mal una cuenta; y la herramienta de EC-08, que el presupuesto habría cortado. **Lo aceptado:** el presupuesto en memoria detrás del puerto de `autoria` (ADR-0015), `GET /metricas` con el contrato 1.2.0, y anotar en la sección 11 las divergencias conocidas en vez de corregirlas sin medir.
+
+**La entrada [12](#entrada-12) es la de la S9** (2026-10-03 y 2026-10-04): la porción RF-11 construida con Claude. **Lo rechazado, con su motivo técnico:** el SDK `openai`, porque obliga a regenerar el lock en Linux y su llamada aparece en el grep de erosión; `urllib.request`, porque `httpx` ya es dependencia directa del backend; y reintentar ante una falla del proveedor, porque duplica la cuota gastada y la espera del profesor. **Lo corregido:** seis errores de tipos que encontró `mypy`, la prueba de contrato que exigía dos rutas, y el filtro que trataba `x²` y `x^2` como distintos. **Lo aceptado:** Groq detrás de un puerto de `autoria` (ADR-0013) y la prueba del defecto en un PR que no se fusiona. La calidad de las propuestas del modelo la calificó el equipo a mano, sin IA.
 
 ## Campos de cada entrada
 
@@ -230,3 +232,41 @@ Fecha, actividad realizada, herramienta utilizada, respuesta obtenida (resumen),
   - **Leer el código antes de aceptar la propuesta.** Dos correcciones (`httpx` y la prueba de contrato) salieron de leer lo que ya había en el repositorio, no de la herramienta.
   - **Medir la herramienta contra el proveedor real antes de la corrida oficial.** La corrida de prueba encontró el problema de la notación y el primer distractor equivalente a la respuesta correcta (`sin(2x)` para `2·sin(x)·cos(x)`).
   - **Provocar cada falla que una prueba dice detectar.** La prueba del defecto y la de fronteras se validaron poniéndolas en rojo a propósito.
+
+### Entrada 13
+
+- **Fecha:** 2026-10-11
+- **Actividad realizada:** Segundo corte, reto aplicado sobre el MVP desplegado, con el escenario operativo de **límite de costo** sobre `POST /distractores` (R-17).
+  - **Código:** el presupuesto de solicitudes al proveedor ([`autoria/presupuesto.py`](../backend/autoria/presupuesto.py)), el 429 con `Retry-After`, el evento `presupuesto_agotado` y la ruta `GET /metricas` en [`api/main.py`](../backend/api/main.py), con el contrato 1.2.0; la configuración en `.env.example`, `docker-compose.yml` y `render.yaml`; y el paso propio del pipeline.
+  - **Medición:** el proveedor simulado ([`proveedor_simulado.py`](../backend/herramientas/proveedor_simulado.py)) y las corridas locales de antes y después con [`medir_presupuesto.py`](../backend/herramientas/medir_presupuesto.py), que ya existía con la línea base desplegada.
+  - **Documentos:** [ADR-0015](adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md), el [experimento](evidencia/experimento-presupuesto.md), EC-09 y las secciones 3, 5, 6, 7, 8, 9, 10 y 11 del arc42, el C4, `aspectos.md`, el README y este registro.
+- **Herramienta utilizada:** Claude (Anthropic), en claude.ai, con acceso a un clon del repositorio y a una terminal para ejecutar las pruebas, `mypy` y las mediciones locales.
+- **Prompt utilizado (resumen):**
+  - Primero, analizar el repositorio completo sin cambiar nada.
+  - Después, construir el reto del segundo corte siguiendo la estructura, los títulos y las convenciones del repositorio, sin cambiar lo que ya está salvo lo que quede falso con el cambio, y repartir los commits entre los cuatro integrantes.
+
+  La condición de método fue la de siempre: ninguna cifra sin medirla, ninguna prueba sin verla fallar, y ninguna afirmación sobre el código sin abrir el archivo.
+- **Respuesta obtenida (resumen):**
+  - Un análisis del repositorio con los hallazgos que no cuadraban, entre ellos la cifra de 1,744 s de EC-07 que no está en su informe crudo, la pantalla de carga que muestra «En cola» para las hojas pendientes y la ruta de carga que bloquea el bucle de eventos.
+  - El código del presupuesto con 12 pruebas nuevas: 118 en total, `mypy` sin errores y el contrato regenerado con la herramienta.
+  - El proveedor simulado y las dos corridas locales.
+  - Los documentos, y una guía de commits por integrante.
+- **Quién hizo qué con lo generado:** cada integrante revisó y subió los archivos de su parte, en el orden de la guía de commits. La corrida contra el entorno desplegado (`presupuesto-despues.json`) la hizo Sebastián, que opera el workspace de Render y tiene la clave de Groq: es una medición, no una salida de la herramienta.
+- **Qué se aceptó:**
+  - **Un presupuesto global en la memoria de la API, como adaptador del puerto** (`GeneradorConPresupuesto`), porque cubre la línea base medida sin dependencias, sin red y sin tocar la regla ni el adaptador de Groq.
+  - **Los límites derivados del peor caso medido** en la evaluación de EC-08 (1 323 tokens por solicitud): 6 por minuto y 150 por día caben en los 8 000 y 200 000 tokens de Groq aun en el peor caso.
+  - **`GET /metricas` y el contrato 1.2.0.** En la entrada 11 se había descartado una ruta `/metricas` para no cambiar el contrato. Esta vez el escenario pide observar el presupuesto en vivo, y el cambio es aditivo: sube la versión menor.
+  - **Que ADR-0015 precise a ADR-0013 y no lo reemplace**, porque los nueve puntos de su decisión siguen vigentes.
+  - **Anotar como R-20 y R-21 las divergencias encontradas en el análisis**, en vez de corregirlas dentro de este reto sin medir su efecto.
+- **Qué se rechazó y se corrigió:**
+  - **Un límite por IP con `slowapi`.** Agrega una dependencia y regenera el lock, y detrás del proxy de Render la IP llega en una cabecera que el cliente puede falsificar. Además no protege la cuota: veinte IP la agotan igual.
+  - **Contar tokens en vez de solicitudes.** Los tokens solo se conocen cuando el proveedor ya respondió, y para entonces ya se gastaron.
+  - **Responder 503 cuando no hay cupo.** Diría que el proveedor falló, y no falló: lo agotado es el presupuesto propio. El cliente no podría distinguir los dos casos.
+  - **Una corrida local del después, descartada.** Al detener la corrida anterior, la orden que debía terminar el proveedor simulado terminó también la terminal que la lanzaba, y el simulador siguió vivo con su ventana llena: las 6 solicitudes que el presupuesto dejó pasar las cortó él. El resultado no tenía sentido y se investigó antes de usarlo. Se repitieron las dos corridas con un procedimiento que detiene los dos procesos y espera a que terminen, y el experimento declara el descarte.
+  - **Un docstring que prometía de más.** La primera versión de `test_presupuesto.py` decía que sin el candado de `reservar` la prueba de los cuarenta hilos fallaba en la mayoría de las corridas. Se provocó la falla y siguió en verde en 20 de 20: con el GIL la carrera es improbable y la prueba no la provoca. El docstring dice ahora eso, como el de la prueba del `fsync` en la entrada 7, y las otras dos mutaciones quedaron registradas con su número real de pruebas en rojo (8 y 4).
+  - **Una cuenta mal hecha en ADR-0015.** El borrador decía que un reinicio a mitad del día dejaba el gasto debajo del límite diario de Groq. No es así: un reinicio permite hasta 300 solicitudes en 24 horas, más de las 233 que caben. Se corrigió en el ADR y en R-18.
+  - **La herramienta de EC-08 habría quedado cortada por el presupuesto.** Con su pausa de 8 s manda 7,5 solicitudes por minuto. Se le sustituye el presupuesto con `dependency_overrides` mientras mide, y lo dice en su docstring, para que su resultado siga siendo comparable con el de la S9.
+- **Justificación:** tres lecciones de este corte.
+  - **Medir antes de decidir, otra vez.** La línea base desplegada (8 cortes por cuota en una ráfaga) es lo que convirtió R-17 de «riesgo bajo, sin factura» en algo que había que resolver.
+  - **Aislar la variable.** El proveedor simulado deja comparar antes y después con el mismo proveedor y sin gastar cuota; la corrida desplegada responde lo otro, si el MVP real se comporta igual.
+  - **Provocar la falla también sirve para descubrir lo que una prueba no detecta.** La mutación del candado no la pone en rojo, y eso quedó escrito en vez de prometido.
