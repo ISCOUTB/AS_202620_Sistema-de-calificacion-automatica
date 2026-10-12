@@ -40,6 +40,10 @@ services:
       LLM_URL_BASE: ${LLM_URL_BASE:-https://api.groq.com/openai/v1}
       LLM_MODELO: ${LLM_MODELO:-openai/gpt-oss-120b}
       LLM_API_KEY: ${LLM_API_KEY:-}
+      # Presupuesto del proveedor de LLM (ADR-0015). Vive en la memoria de este proceso, así que
+      # solo `api` lo lee y se vacía al reiniciar el servicio.
+      LLM_SOLICITUDES_POR_MINUTO: ${LLM_SOLICITUDES_POR_MINUTO:-6}
+      LLM_SOLICITUDES_POR_DIA: ${LLM_SOLICITUDES_POR_DIA:-150}
     volumes:
       - almacen_imagenes:/app/almacen_imagenes
     depends_on:
