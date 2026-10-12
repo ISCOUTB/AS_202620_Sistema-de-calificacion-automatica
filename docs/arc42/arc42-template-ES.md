@@ -13,6 +13,14 @@ y colaboradores. Ver [https://arc42.org](https://arc42.org).
 **Estado de este documento:** las doce secciones están escritas, incluida la 7 (*Deployment
 View*), escrita el 27 de septiembre de 2026 con el despliegue en Render (ADR-0009 a ADR-0012).
 
+**Segundo corte (11 de octubre de 2026).** El escenario operativo de este corte es de **límite
+de costo**: una ráfaga contra la ruta pública de distractores. La respuesta del sistema está en
+[ADR-0015](../adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md), su
+escenario es [EC-09](#ec-09), su recorrido en ejecución es [6.5](#65-ráfaga-contra-la-ruta-de-distractores-ec-09--adr-0015)
+y el experimento está en [`../evidencia/experimento-presupuesto.md`](../evidencia/experimento-presupuesto.md).
+Con él se actualizaron las secciones 3, 5, 6, 7, 8, 9, 10 y 11, y la sección 11 anota las
+divergencias conocidas entre esta documentación y lo desplegado (R-20).
+
 Las secciones 5 y 6 describen **el estado real del código**, no el diseño previsto. Eso las
 obliga a envejecer con cada avance: conviene revisarlas (y con ellas la sección 11) en el mismo
 *pull request* que añade código, igual que se actualiza el docstring de un módulo cuando cambia
@@ -45,6 +53,7 @@ su frontera.
   - [6.2 Carga de una hoja escaneada (RF-01 · aspecto A-01 · EC-07)](#62-carga-de-una-hoja-escaneada-rf-01--aspecto-a-01--ec-07)
   - [6.3 Escenarios pendientes](#63-escenarios-pendientes)
   - [6.4 Solicitud de distractores (RF-11 · aspecto A-06 · EC-08)](#64-solicitud-de-distractores-rf-11--aspecto-a-06--ec-08)
+  - [6.5 Ráfaga contra la ruta de distractores (EC-09 · ADR-0015)](#65-ráfaga-contra-la-ruta-de-distractores-ec-09--adr-0015)
 - [7. Deployment View](#7-deployment-view)
   - [7.1 Las seis piezas del despliegue](#71-las-seis-piezas-del-despliegue)
   - [7.2 Entorno local](#72-entorno-local)
@@ -176,7 +185,7 @@ describen el espacio dentro del cual se puede diseñar.
 | **RNF-09** | **Equipo de cuatro estudiantes con dedicación parcial y cronograma fijado por el curso** (cortes en las semanas 5 y 10, entrega final en la 16). | Contexto académico | Limita la complejidad operacional asumible: no hay capacidad para operar infraestructura distribuida ni para sostener varios despliegues. Es uno de los argumentos que sostiene la elección de monolito modular frente a microservicios en ADR-0002. |
 | **RNF-10** | **Todos los integrantes deben contribuir al historial del repositorio**, con código y documentación repartidos a lo largo del semestre. | `CONTRATO.md` §10 del curso | Criterio calificado. Obliga a repartir el trabajo por módulos y a usar ramas y *pull requests* en lugar de commits directos de una sola persona, lo que a su vez favorece una descomposición con fronteras claras que puedan asignarse por separado. |
 | **RNF-11** | **Repositorio público, en la organización `ISCOUTB` y con la convención de nombres del curso.** | `CONTRATO.md` del curso | Ninguna parte del sistema puede depender de artefactos privados ni de secretos versionados. Cualquier credencial (por ejemplo, la clave del proveedor de LLM) debe leerse de variables de entorno y nunca del repositorio. |
-| **RNF-16** | **Costo mensual de US$0 y ninguna cuenta con tarjeta vinculada.** | Política de costos de la «Guía de despliegue y costos» del curso: «Ninguna cuenta personal de pago es obligatoria en este curso.» | Obliga a que toda pieza desplegada quepa en capas gratuitas sin tarjeta (Render Hobby): servicio web Free, Key Value Free y sitio estático. Descarta cualquier instancia de pago (Starter US$7, disco persistente US$0,25/GB) y condiciona la elección de Render sobre alternativas que sí piden tarjeta, o que todavía no verifican si la piden (ver [ADR-0011](../adr/0011-consumir-la-cola-desde-la-instancia-de-la-api-con-el-key-value-gratuito.md) y [ADR-0012](../adr/0012-mantener-el-almacen-en-el-disco-efimero-de-la-instancia-hasta-cerrar-r-06.md)). |
+| **RNF-16** | **Costo mensual de US$0 y ninguna cuenta con tarjeta vinculada.** | Política de costos de la «Guía de despliegue y costos» del curso: «Ninguna cuenta personal de pago es obligatoria en este curso.» | Obliga a que toda pieza desplegada quepa en capas gratuitas sin tarjeta (Render Hobby): servicio web Free, Key Value Free y sitio estático. Descarta cualquier instancia de pago (Starter US$7, disco persistente US$0,25/GB) y condiciona la elección de Render sobre alternativas que sí piden tarjeta, o que todavía no verifican si la piden (ver [ADR-0011](../adr/0011-consumir-la-cola-desde-la-instancia-de-la-api-con-el-key-value-gratuito.md) y [ADR-0012](../adr/0012-mantener-el-almacen-en-el-disco-efimero-de-la-instancia-hasta-cerrar-r-06.md)). La cuota gratuita del proveedor de LLM cae bajo la misma restricción: como no hay tarjeta, se protege con un presupuesto propio en la API ([ADR-0015](../adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md)). |
 
 ## 2.3 Restricciones legales
 
@@ -216,7 +225,7 @@ diagrama C4 de contexto en [`../c4/doc-c4.md`](../c4/doc-c4.md).
 |---|---|---|---|---|
 | **Interfaz Web (Dashboard)** | Autenticación, gestión de cursos y bancos de preguntas, carga de escaneos, resolución de marcas ambiguas | Notas, gráficos, alertas de ambigüedad y estadística por pregunta | HTTPS · JSON en las respuestas; multipart/form-data en la carga de escaneos. Frontend en Flutter compilado a web. Interfaz descrita campo por campo en [../contrato/openapi.json](../contrato/openapi.json) | Profesor / TA |
 | **Canal de ingesta OMR** | Lote de imágenes o PDF de hojas escaneadas | Matriz de respuestas detectadas con nivel de confianza (%) por pregunta | Carga HTTP multipart. Procesamiento previsto con OpenCV sobre PNG, JPG o PDF a 300 DPI; **aún no está implementado** (ver A-02) | Profesor / TA |
-| **Proveedor de LLM** *(opcional)* | Especificación de la pregunta para la que se piden distractores | Distractores candidatos, cada uno con la etiqueta del error de procedimiento que representa, sujetos a la decisión del profesor (RF-11) | HTTPS · JSON, `POST /chat/completions` compatible con OpenAI, contra Groq; clave en la variable `LLM_API_KEY`; 20 s de espera, sin reintentos ([ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)) | Proveedor de LLM |
+| **Proveedor de LLM** *(opcional)* | Especificación de la pregunta para la que se piden distractores | Distractores candidatos, cada uno con la etiqueta del error de procedimiento que representa, sujetos a la decisión del profesor (RF-11) | HTTPS · JSON, `POST /chat/completions` compatible con OpenAI, contra Groq; clave en la variable `LLM_API_KEY`; 20 s de espera, sin reintentos ([ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)); a lo sumo 6 solicitudes por minuto y 150 por día, y lo que no cabe se responde con 429 sin salir a la red ([ADR-0015](../adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md)) | Proveedor de LLM |
 
 ## 3.3 Fuera de alcance
 
@@ -282,7 +291,9 @@ política global.
 > parcialmente esos contenedores: el aspecto **A-01 (carga de examen para calificación)** está
 > en estado *Construido* según [`../aspectos.md`](../aspectos.md#a-01), con recepción,
 > almacenamiento y encolado funcionando de punta a punta. Los otros cuatro aspectos (A-02 a
-> A-05) siguen *Declarados*, sin código.
+> A-05) siguen *Declarados*, sin código. El aspecto **A-06 (distractores diagnósticos)** también
+> está *Construido* desde la S9, y en el segundo corte se le agregó el presupuesto del proveedor
+> de LLM (ADR-0015).
 
 ## 5.1 Whitebox Overall System
 
@@ -300,13 +311,13 @@ los dos documentos juntos:
 
 | Contenedor | Responsabilidad (C4 Nivel 2) | Tecnología | Estado de implementación |
 |---|---|---|---|
-| **Aplicación web** *(lado servidor)* | Autenticación, cursos, preguntas, exámenes, carga de escaneos y consulta de resultados; inicia los trabajos de procesamiento. | FastAPI (`backend/api/main.py`), Uvicorn (servicio `api`). | Expone `GET /health`, `POST /examenes/{examen_id}/hojas` (RF-01, aspecto A-01) y `POST /distractores` (RF-11, aspecto A-06). El resto de responsabilidades del contenedor (cursos, preguntas, resultados) siguen sin ruta. |
+| **Aplicación web** *(lado servidor)* | Autenticación, cursos, preguntas, exámenes, carga de escaneos y consulta de resultados; inicia los trabajos de procesamiento. | FastAPI (`backend/api/main.py`), Uvicorn (servicio `api`). | Expone `GET /health`, `POST /examenes/{examen_id}/hojas` (RF-01, aspecto A-01), `POST /distractores` (RF-11, aspecto A-06) y `GET /metricas` (EC-09, ADR-0015). El resto de responsabilidades del contenedor (cursos, preguntas, resultados) siguen sin ruta. |
 | **Interfaz web** *(parte de «Aplicación web» en el C4)* | Presenta al docente el dashboard, la carga de escaneos y la resolución de marcas ambiguas. | Flutter compilado a web, servido por nginx (servicio `frontend`). | Construida la pantalla de carga del aspecto A-01 (`pantalla_carga.dart`, `servicio_carga.dart`, `selector_archivos.dart`) y la de inicio con el estado de conexión. El dashboard de RNF-04 y la resolución de marcas ambiguas siguen sin construir. |
 | **Worker de procesamiento** | Ejecuta el OMR, calcula calificaciones y genera alertas de revisión. | Proceso Python (`backend/worker/main.py`), misma imagen que la aplicación web. | Consume la cola y confirma que la hoja encolada por `ingesta` le llegó, registrando en log su identificador, examen, archivo y referencia. **No ejecuta todavía** el pipeline `omr → calificacion`: ese es el aspecto A-02, aún declarado. |
 | **Cola de trabajos** | Desacopla la aplicación web del procesamiento OMR. | Redis 7, adaptador FIFO en `infraestructura/cola.py` (RPUSH/BLPOP). | Implementado y probado contra un Redis real (`backend/tests/test_encolado.py`); sigue siendo, según su propio docstring, «el germen» de lo que EC-07 exige, no una cola de producción con reintentos o acuses de recibo. |
 | **Base de datos** | Almacena usuarios, cursos, preguntas, claves, exámenes y resultados. | PostgreSQL 16, volumen `datos_postgres`. | Declarada en `docker-compose.yml` y `.env.example`; **ningún módulo la usa todavía** — sin esquema ni migraciones. |
 | **Almacén de imágenes** | Conserva las hojas escaneadas, la bitácora de recepción y archivos asociados. | Volumen Docker `almacen_imagenes`, montado en `api` y `worker`. | **Implementado como dos puertos con adaptadores provisionales**: `infraestructura/almacen.py` define el puerto `AlmacenDeImagenes` y el adaptador `AlmacenEnDisco`, que escribe en el volumen con nombres saneados (`nombre_seguro`) para evitar escapes de directorio; `infraestructura/bitacora.py` define `BitacoraDeRecepcion` y `BitacoraEnDisco`, de solo agregado y con `fsync` por línea ([ADR-0006](../adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md)). Los dos son deliberadamente provisionales: el riesgo R-06 (decisión de persistencia) sigue abierto, y cuando se resuelva solo cambian los adaptadores, no los puertos ni quien los consume. La política de retención de RNF-14 aterrizará aquí y hoy no está implementada. |
-| **Proveedor de LLM** *(externo y opcional)* | Propone distractores diagnósticos durante la autoría. | Groq, modelo `openai/gpt-oss-120b`, con el protocolo de chat de OpenAI ([ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)). | Lo llama `autoria/proveedor_llm.py` desde la aplicación web, nunca desde el worker (RNF-13). Sin clave, la ruta de distractores responde 503 y nada más cambia. |
+| **Proveedor de LLM** *(externo y opcional)* | Propone distractores diagnósticos durante la autoría. | Groq, modelo `openai/gpt-oss-120b`, con el protocolo de chat de OpenAI ([ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)). | Lo llama `autoria/proveedor_llm.py` desde la aplicación web, nunca desde el worker (RNF-13). Sin clave, la ruta de distractores responde 503 y nada más cambia. Desde el segundo corte, cada llamada pasa antes por el presupuesto de `autoria/presupuesto.py`: 6 por minuto y 150 por día, y 429 sin salir a la red si no hay cupo (ADR-0015). |
 
 ## 5.2 Level 2
 
@@ -319,7 +330,7 @@ importación que declara el docstring de cada `__init__.py` y que hace cumplir
 |---|---|---|---|---|
 | **ingesta** | Recepción y validación de archivos escaneados (individual o en lote) y encolado del procesamiento. | RF-01 | `infraestructura`, `identidad` | **Implementado** (`recepcion.py`): valida extensión *y* firma de bytes por archivo, no aborta el lote ante un archivo inválido ni ante un fallo de la cola (ADR-0006), y por cada hoja almacena, acuña el trabajo, registra en la bitácora y solo entonces publica. Expone `recibir_lote`, `motivo_de_rechazo` y `EXTENSIONES_ACEPTADAS` como interfaz pública vía `__all__`. Aún no verifica el `examen_id` contra nada (hueco conocido: depende de `autoria`, A-04) ni la autorización del docente (depende de `identidad`, A-05). |
 | **infraestructura** | Persistencia, almacenamiento de imágenes, bitácora de recepción y adaptador de la cola de trabajos. | Transversal | ninguno | **Parcialmente implementado.** `cola.py` (acuñar, publicar y desencolar sobre Redis, con `ColaNoDisponible` como traducción de los errores de redis-py al dominio), `almacen.py` (puerto `AlmacenDeImagenes` + adaptador `AlmacenEnDisco`), `bitacora.py` (puerto `BitacoraDeRecepcion` + adaptadores `BitacoraEnDisco` y `BitacoraEnMemoria`, ADR-0006) y `modelo.py` (el modelo de datos compartido: `ArchivoCargado`, `HojaAceptada`, `ArchivoRechazado`, `ResultadoRecepcion`, `EntradaDeBitacora`) ya tienen código. Sigue sin persistencia estructurada (Postgres sin esquema) y sin política de retención (R-06, RNF-14 abiertos). |
-| **autoria** | Bancos de preguntas y clave de respuestas, generación opcional de distractores diagnósticos con LLM, y habilitación del examen. | RF-06, RF-07, RF-11 | `infraestructura`, `identidad` | **Implementado en parte** (aspecto A-06): `distractores.py` (los tipos, el puerto `GeneradorDeDistractores` y la regla de qué propuestas llegan al profesor) y `proveedor_llm.py` (el adaptador al proveedor, [ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)). El banco, la clave y la habilitación siguen sin código (aspecto A-04). |
+| **autoria** | Bancos de preguntas y clave de respuestas, generación opcional de distractores diagnósticos con LLM, y habilitación del examen. | RF-06, RF-07, RF-11 | `infraestructura`, `identidad` | **Implementado en parte** (aspecto A-06): `distractores.py` (los tipos, el puerto `GeneradorDeDistractores` y la regla de qué propuestas llegan al profesor) y `proveedor_llm.py` (el adaptador al proveedor, [ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)), y desde el segundo corte `presupuesto.py` (el presupuesto de solicitudes al proveedor, [ADR-0015](../adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md)). El banco, la clave y la habilitación siguen sin código (aspecto A-04). |
 | **omr** | Detección de marcas y cálculo del nivel de confianza; clasificación de ambigüedad. | RF-02, RF-03 | `infraestructura`, `identidad` | Paquete vacío (aspecto A-02, declarado). |
 | **calificacion** | Comparación contra la clave habilitada por el profesor y cálculo de notas; recálculo tras revisión manual. | RF-04, RF-08 | `infraestructura`, `identidad`, `omr` | Paquete vacío (aspecto A-03, declarado). |
 | **dashboard** | Presentación de resultados y agregaciones por curso, examen y pregunta. | RF-05 | `infraestructura`, `identidad`, `calificacion` | Paquete vacío (aspecto A-03, declarado). |
@@ -328,14 +339,16 @@ importación que declara el docstring de cada `__init__.py` y que hace cumplir
 `api/main.py` es la traducción entre HTTP y dominio: construye sus dependencias (almacén,
 cliente de cola) por petición vía `Depends`, precisamente para que arrancar la aplicación (y
 probarla) no exija que el volumen o Redis existan. `worker/main.py` comparte esa misma base de
-dominio. Los bordes de importación que existen hoy son tres, todos dentro de lo declarado:
-`api/main.py` importa `ingesta` e `infraestructura`, `ingesta/recepcion.py` importa
-`infraestructura`, y `worker/main.py` importa `infraestructura.cola`.
+dominio. Los bordes de importación que existen hoy son cuatro, todos dentro de lo declarado:
+`api/main.py` importa `autoria`, `ingesta` e `infraestructura`; `api/settings.py` importa `autoria`
+(los valores por omisión del presupuesto); `ingesta/recepcion.py` importa `infraestructura`; y
+`worker/main.py` importa `infraestructura.cola`. `autoria` declara poder importar `infraestructura`
+e `identidad`, y hoy no usa ninguno de los dos.
 
 ## 5.3 Level 3
 
-Solo el aspecto **A-01** tiene estructura interna suficiente para bajar a Nivel 3; el resto
-sigue vacío (ver 5.2).
+Los aspectos **A-01** y **A-06** tienen estructura interna suficiente para bajar a Nivel 3; el
+resto sigue vacío (ver 5.2).
 
 **Dentro de `ingesta` (aspecto A-01):**
 
@@ -353,6 +366,16 @@ sigue vacío (ver 5.2).
 | `cola.py` (`encolar`/`desencolar`) | Adaptador FIFO sobre Redis, ya descrito en 5.1. |
 | `modelo.py` | Dataclasses inmutables compartidas por los siete módulos (`ArchivoCargado`, `HojaAceptada`, `ArchivoRechazado`, `ResultadoRecepcion`, `EntradaDeBitacora`), sin dependencias fuera de la librería estándar. |
 
+**Dentro de `autoria` (aspecto A-06 y escenario EC-09):**
+
+| Componente | Responsabilidad |
+|---|---|
+| `proponer_distractores()` y `filtrar_propuestas()` | La regla de qué propuestas llegan al profesor y con qué motivo se descartan las demás (`distractores.py`). |
+| `GeneradorDeDistractores` (puerto) | Contrato hacia el proveedor de LLM: `proponer(pregunta) -> list[DistractorPropuesto]`. |
+| `GeneradorCompatibleConOpenAI` (adaptador) | Capa anticorrupción hacia Groq: traduce la pregunta a `POST /chat/completions` y la respuesta a `DistractorPropuesto` (`proveedor_llm.py`, ADR-0013). |
+| `GeneradorConPresupuesto` (adaptador) | Implementa el mismo puerto: reserva un cupo en `PresupuestoDeSolicitudes` y solo entonces delega en el adaptador de Groq; sin cupo levanta `PresupuestoAgotado` sin salir a la red (`presupuesto.py`, ADR-0015). |
+| `PresupuestoDeSolicitudes` | Dos ventanas deslizantes, de 60 s y de 24 h, en la memoria del proceso de la API; publica su `EstadoDelPresupuesto` para `GET /metricas`. |
+
 Los aspectos A-02 a A-05 se documentan a Nivel 3 cuando dejen de estar vacíos,
 según [`../aspectos.md`](../aspectos.md).
 
@@ -360,8 +383,10 @@ según [`../aspectos.md`](../aspectos.md).
 
 # 6. Runtime View
 
-> **Estado.** El único escenario de negocio con código real es la carga de un examen (RF-01,
-> aspecto A-01, [EC-07](#ec-07)). Los otros dos escenarios previstos (calificación de un lote y
+> **Estado.** Los escenarios de negocio con código real son la carga de un examen (RF-01,
+> aspecto A-01, [EC-07](#ec-07), en 6.2), la solicitud de distractores (RF-11, aspecto A-06,
+> [EC-08](#ec-08), en 6.4) y, desde el segundo corte, la ráfaga contra esa ruta ([EC-09](#ec-09),
+> en 6.5). Los otros dos escenarios previstos (calificación de un lote y
 > resolución manual de una marca ambigua) siguen bloqueados porque dependen de módulos vacíos
 > (`omr`, `calificacion`, `identidad`); se documentan en 6.3 con lo que falta para
 > desbloquearlos.
@@ -482,9 +507,70 @@ sequenceDiagram
   con el motivo para el profesor.
 - **No hay reintentos.** El registro manual de preguntas y la calificación no dependen de este
   camino.
+- **Si no hay cupo en el presupuesto** (6 por minuto, 150 por día), la ruta responde 429 con
+  `Retry-After` antes de llegar al adaptador, sin salir a la red ([ADR-0015](../adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md)).
+  El recorrido completo está en 6.5.
 
 Cada solicitud deja un evento JSON, `distractores_propuestos` o `proveedor_no_disponible`, con la
 duración y los tokens: es la métrica de [EC-08](#ec-08).
+
+## 6.5 Ráfaga contra la ruta de distractores (EC-09 · ADR-0015)
+
+Es el escenario operativo del segundo corte, de límite de costo. Alguien lanza veinte solicitudes
+seguidas contra `POST /distractores`: un profesor que insiste, un script, o alguien fuera del curso
+que encontró la URL pública (R-17). Antes de ADR-0015 las veinte llegaban a Groq, y el proveedor
+cortaba las que pasaban de su límite por minuto con un 503 para todos. Desde ADR-0015 la API corta
+primero.
+
+```mermaid
+sequenceDiagram
+    actor C as Cliente de la URL pública
+    participant API as api, POST /distractores
+    participant P as autoria, presupuesto
+    participant G as autoria, adaptador
+    participant L as Groq, externo
+    loop solicitudes 1 a 6 del minuto
+        C->>API: enunciado y respuesta correcta
+        API->>P: reservar()
+        P-->>API: hay cupo, queda reservado
+        API->>G: proponer(pregunta)
+        G->>L: POST /chat/completions
+        L-->>G: propuestas
+        G-->>API: DistractorPropuesto, filtrados por la regla
+        API-->>C: 200
+    end
+    loop solicitudes 7 a 20
+        C->>API: enunciado y respuesta correcta
+        API->>P: reservar()
+        P-->>API: PresupuestoAgotado, ventana del minuto
+        API->>API: evento presupuesto_agotado en el registro
+        API-->>C: 429 con Retry-After, sin salir a la red
+    end
+    C->>API: GET /metricas
+    API->>P: estado()
+    API-->>C: enviadas 6, rechazadas 14
+```
+
+1. Cada solicitud válida (la mal formada sale antes con 422, y la que llega sin proveedor
+   configurado, con 503) pide un cupo a `PresupuestoDeSolicitudes.reservar()`, bajo un candado,
+   porque la ruta corre en el grupo de hilos de FastAPI.
+2. Si cabe en la ventana de 60 s y en la de 24 h, el cupo queda reservado y la solicitud sigue el
+   recorrido de 6.4. Cuenta aunque el proveedor falle después.
+3. Si no cabe, `GeneradorConPresupuesto` levanta `PresupuestoAgotado` sin llamar al adaptador. La
+   API deja el evento `presupuesto_agotado` en el registro y responde 429, con el motivo en
+   `detail` y los segundos que faltan en `Retry-After`.
+4. `/health` y la carga de hojas no pasan por el presupuesto: siguen respondiendo durante la ráfaga.
+5. `GET /metricas` publica lo usado en las dos ventanas y lo enviado y cortado desde el arranque.
+
+**Lo que demuestra el experimento y lo que no.** Medido en local con un proveedor que aplica el
+límite publicado de Groq, la ráfaga pasa de 20 solicitudes en el proveedor y 11 cortes por cuota a
+6 y 0, y los 14 rechazos de la API tardan 2 ms de mediana
+([experimento](../evidencia/experimento-presupuesto.md)). No demuestra el reparto entre clientes,
+que no existe (R-19), ni el comportamiento tras un reinicio, que vacía el presupuesto (R-18).
+
+**Pruebas que lo verifican:** `backend/tests/test_presupuesto.py` (las ventanas, con un reloj falso)
+y `backend/tests/test_ruta_distractores.py` (el 429, `Retry-After` y `/metricas` vistos desde fuera),
+que el pipeline corre como paso propio, «Escenario del segundo corte».
 
 ---
 
@@ -539,7 +625,7 @@ flowchart TB
 | Servicio | Tipo (plan) | Recursos | Notas |
 |---|---|---|---|
 | `quantia-utb` | Sitio estático | Siempre gratis | Flutter 3.44.3 compilado por Render, con la URL de la API horneada al compilar (ADR-0010); si la URL cambia, hay que recompilar. |
-| `quantia-utb-api` | Servicio web Free | 0,1 CPU, 512 MB | Docker con `backend/Dockerfile`. API y worker en la misma instancia (`backend/arrancar-api-y-worker.sh`), porque Render no ofrece plan gratuito para *background workers*. Se apagaría a los 15 min sin tráfico; el monitor externo lo evita (ADR-0009, R-13). Lee `LLM_URL_BASE`, `LLM_MODELO` y `LLM_API_KEY` para el proveedor de LLM; la clave se escribe en el panel de Render (`sync: false`, [ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)). |
+| `quantia-utb-api` | Servicio web Free | 0,1 CPU, 512 MB | Docker con `backend/Dockerfile`. API y worker en la misma instancia (`backend/arrancar-api-y-worker.sh`), porque Render no ofrece plan gratuito para *background workers*. Se apagaría a los 15 min sin tráfico; el monitor externo lo evita (ADR-0009, R-13). Lee `LLM_URL_BASE`, `LLM_MODELO` y `LLM_API_KEY` para el proveedor de LLM; la clave se escribe en el panel de Render (`sync: false`, [ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)). Lee también `LLM_SOLICITUDES_POR_MINUTO` (6) y `LLM_SOLICITUDES_POR_DIA` (150), el presupuesto del proveedor, que vive en la memoria de su único proceso de uvicorn y se vacía en cada despliegue ([ADR-0015](../adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md), R-18). |
 | `quantia-utb-cola` | Key Value Free | 25 MB, 50 conexiones | Sin persistencia, solo red privada (`ipAllowList: []`), política `noeviction` (ADR-0011). |
 
 `REDIS_URL` la inyecta Render desde `quantia-utb-cola` hacia `quantia-utb-api` con `fromService`, y
@@ -548,7 +634,8 @@ flowchart TB
 **URL declarada del sistema:** https://quantia-utb.onrender.com. La raíz de la API
 (https://quantia-utb-api.onrender.com) responde 404 porque no existe `GET /`; eso es normal y no
 se declara como URL del sistema. El *health check* está en
-https://quantia-utb-api.onrender.com/health.
+https://quantia-utb-api.onrender.com/health. El estado del presupuesto del proveedor de LLM se
+consulta en https://quantia-utb-api.onrender.com/metricas (EC-09).
 
 ## 7.2 Entorno local
 
@@ -578,7 +665,9 @@ pruebas del backend con Redis como servicio y las del frontend con Flutter 3.44.
 - **Dependencia de la capa gratuita, con condiciones que pueden cambiar:** ver R-15. El punto de
   ruptura por recurso está en [`docs/despliegue/costo-mensual.md`](../despliegue/costo-mensual.md).
 - **Un solo operador de Render:** ver R-16.
-- **Una ruta de distractores sin autenticación, que gasta cuota del proveedor:** ver R-17.
+- **Una ruta de distractores sin autenticación, que gasta cuota del proveedor:** ver R-17. Desde el
+  segundo corte, acotada por un presupuesto en memoria (ADR-0015): ver R-18 y R-19.
+- **Divergencias conocidas entre esta documentación y lo desplegado:** ver R-20.
 
 ---
 
@@ -787,6 +876,7 @@ de su significado, que es lo que convierte un glosario en lenguaje ubicuo.
 | **Umbral de confianza** | OMR | Sin código todavía; su valor se fija con evidencia (R-04) |
 | **Clave de respuestas** | Autoría | Sin código todavía (A-04) |
 | **Distractor diagnóstico** | Autoría | `DistractorPropuesto` en [`autoria/distractores.py`](../../backend/autoria/distractores.py), con la etiqueta del error en su campo `error` (A-06) |
+| **Presupuesto del proveedor** | Autoría | `PresupuestoDeSolicitudes` y `EstadoDelPresupuesto` en [`autoria/presupuesto.py`](../../backend/autoria/presupuesto.py): cuántas solicitudes pueden salir al proveedor de LLM por minuto y por día (EC-09, ADR-0015) |
 | **Habilitación del examen** | Autoría | Sin código todavía; su invariante es que ningún examen se califica sin ella (RF-07) |
 | **Nota** | Calificación | Sin código todavía (A-03) |
 | **Curso** | Identidad | Sin código todavía (A-05) |
@@ -861,6 +951,7 @@ eso se trata aparte, en [«Entidades previstas»](#entidades-previstas-sin-const
 | `DistractorPropuesto` | `autoria` | [`backend/autoria/distractores.py`](../../backend/autoria/distractores.py) | 54 |
 | `PropuestaDescartada` | `autoria` | [`backend/autoria/distractores.py`](../../backend/autoria/distractores.py) | 63 |
 | `ResultadoDePropuesta` | `autoria` | [`backend/autoria/distractores.py`](../../backend/autoria/distractores.py) | 71 |
+| `EstadoDelPresupuesto` | `autoria` | [`backend/autoria/presupuesto.py`](../../backend/autoria/presupuesto.py) | 60 |
 
 **Por qué el dueño de las cinco es `ingesta` y no `infraestructura`, si las cinco clases están
 declaradas en `infraestructura/modelo.py`.** La ruta y la línea son de dónde vive la
@@ -871,7 +962,7 @@ propiedad no es lo mismo que ubicación: quien decide qué significa cada campo 
 cambia de valor es `ingesta.recepcion.recibir_lote`, que es donde se construyen las cinco
 instancias con datos reales —el motivo de un rechazo, el estado `encolada` o
 `pendiente_de_encolar`, el `trabajo_id`— y no `infraestructura`, que no conoce esas reglas de
-negocio. `api/main.py` construye un `ArchivoCargado` en la línea 106, pero solo como el adaptador
+negocio. `api/main.py` construye un `ArchivoCargado` en la línea 174, pero solo como el adaptador
 HTTP que traduce el `multipart/form-data` de la petición al tipo que `ingesta` ya definió; no
 decide ningún campo de negocio, se limita a copiar nombre y bytes.
 
@@ -904,6 +995,13 @@ dio— ahí sí pasaría a tener dos dueños, y esta tabla es la que lo haría v
 `api/main.py` construye una `PreguntaParaDistractores` con lo que envía el profesor, pero solo
 como el adaptador HTTP que traduce la petición, igual que hace con `ArchivoCargado`. `autoria` las
 declara además en la línea `Posee:` de su `__init__.py`: es el primer módulo que lo hace.
+
+**Por qué `EstadoDelPresupuesto` es de `autoria`.** Lo construye `PresupuestoDeSolicitudes.estado()`
+([`presupuesto.py`](../../backend/autoria/presupuesto.py)), que es quien decide qué solicitudes
+cuentan y cuándo salen de la ventana (ADR-0015). `api/main.py` lo copia campo por campo en
+`EstadoDelPresupuestoEnRespuesta` para publicarlo en `GET /metricas`, igual que hace con las
+entidades de A-01: traduce, no decide. Se agregó a la línea `Posee:` de `autoria` en el segundo
+corte.
 
 ### Entidades previstas (sin construir)
 
@@ -997,7 +1095,7 @@ hace cumplir algo parecido a la regla de dueño único es
 docstring y falla si un módulo importa algo que no declaró. Su lista `MODULOS` (líneas 17 a 25)
 contiene exactamente los siete módulos del dominio, así que **los dos paquetes que tocan las
 entidades desde fuera del dominio son precisamente los dos que la prueba no recorre**.
-`api/main.py` construye un `ArchivoCargado` en su línea 106; hoy es traducción fiel del
+`api/main.py` construye un `ArchivoCargado` en su línea 174; hoy es traducción fiel del
 `multipart/form-data` a un tipo que `ingesta` ya definió, y por eso no aparece como segundo dueño
 en la tabla de arriba, pero nada en el repositorio verificaría que siga siéndolo.
 
@@ -1130,7 +1228,7 @@ C4**, que describen cómo el sistema se comunica con actores externos, no cómo 
 | [A-02](../aspectos.md#a-02) | **OMR** | `omr` (previsto) | Marca detectada y confianza (previsto) | Ninguna: proceso interno |
 | [A-03](../aspectos.md#a-03) | **Calificación** y **Dashboard** | `calificacion` (previsto) | Nota / resultado (previsto) | [Rel. 2](../c4/doc-c4.md#relaciones): Sistema → Profesor/TA |
 | [A-04](../aspectos.md#a-04) | **Autoría** | `autoria` (previsto) | Banco y clave (previstos) | [Rel. 1](../c4/doc-c4.md#relaciones): Profesor/TA → Sistema |
-| [A-06](../aspectos.md#a-06) | **Autoría** | `autoria` | `PreguntaParaDistractores`, `DistractorPropuesto`, `PropuestaDescartada`, `ResultadoDePropuesta` | [Rel. 3](../c4/doc-c4.md#relaciones): Sistema → Proveedor de LLM |
+| [A-06](../aspectos.md#a-06) | **Autoría** | `autoria` | `PreguntaParaDistractores`, `DistractorPropuesto`, `PropuestaDescartada`, `ResultadoDePropuesta`, `EstadoDelPresupuesto` (segundo corte) | [Rel. 3](../c4/doc-c4.md#relaciones): Sistema → Proveedor de LLM |
 | [A-05](../aspectos.md#a-05) | **Identidad** | `identidad` (previsto) | Usuario, rol, curso (previsto) | [Rel. 1 y 2](../c4/doc-c4.md#relaciones): transversal a ambas |
 
 **Por qué A-03 abarca dos contextos.** Su enunciado es «calificación contra la clave y
@@ -1221,6 +1319,7 @@ constancia en el commit y en esta sección ([0014](../adr/0014-dejar-constancia-
 | [0012](../adr/0012-mantener-el-almacen-en-el-disco-efimero-de-la-instancia-hasta-cerrar-r-06.md) | Mantener el almacén en el disco efímero de la instancia hasta cerrar R-06 | **aceptado** | 2026-09-27 | [EC-07](#ec-07) |
 | [0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md) | Consumir Groq detrás de un puerto y degradar sin bloquear la autoría | **aceptado** | 2026-10-04 | [EC-08](#ec-08) |
 | [0014](../adr/0014-dejar-constancia-del-ajuste-de-enlaces-en-adr-0007.md) | Dejar constancia del ajuste de enlaces en ADR-0007 | **aceptado** | 2026-10-04 | ninguno declarado |
+| [0015](../adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md) | Limitar el gasto del proveedor de LLM con un presupuesto en la API | **aceptado** | 2026-10-11 | [EC-09](#ec-09) |
 
 **Por qué 0002 reemplaza a 0001.** La revisión de coherencia previa al corte 1 encontró que
 EC-03 y EC-04 no se pueden cumplir a la vez con procesamiento síncrono(200 hojas × 5 s son
@@ -1296,6 +1395,15 @@ solo para mover cuatro referencias a un archivo retirado, y fija qué se puede t
 aceptado: sus decisiones nunca; los ajustes menores que no son de arquitectura (un enlace, una
 errata), solo dejando constancia en el commit y en esta sección. Precisa a 0007 sin reemplazarlo.
 
+**Por qué 0015 no reemplaza a 0013.** Es la respuesta al escenario operativo del segundo corte, de
+límite de costo, y nace de una medición: en el entorno desplegado, una ráfaga de 20 solicitudes
+llegó entera a Groq y 8 terminaron en 503 por cuota (`presupuesto-antes.json`). 0015 pone un
+presupuesto propio delante del adaptador (6 por minuto, 150 por día, 429 si no cabe) y publica su
+estado en `GET /metricas`, con el contrato en 1.2.0. Los nueve puntos de la decisión de 0013 siguen
+vigentes, incluido el 503 ante una falla del proveedor: lo que cambia es la mitigación de R-17, que
+0013 dejaba como consecuencia aceptada. Por eso lo precisa y no lo reemplaza, y ninguno de los dos
+cambia de estado.
+
 **Decisiones previstas (aún no tomadas):**
 
 - La verificación automática de equivalencias en las propuestas de distractores, con SymPy, que
@@ -1365,6 +1473,13 @@ riesgo técnico. Las hojas marcadas con `EC-nn` están formalizadas como escenar
   *(Impacto: Alto | Riesgo técnico: Alto)*
 - Disponibilidad del servicio ≥95% durante los periodos de evaluación.
   *(Impacto: Alto | Riesgo técnico: Medio)*
+
+**Costo** *(atributo secundario, desde el segundo corte)*
+
+- **[EC-09](#ec-09) · Ráfaga contra la ruta de distractores:** una ráfaga de 20 solicitudes no
+  agota la cuota del proveedor de LLM: ninguna termina en 503 por cuota, a lo sumo 6 llegan al
+  proveedor, los rechazos responden en 1 s o menos y `/health` sigue en 200.
+  *(Impacto: Medio | Riesgo técnico: Bajo)*
 
 **Mantenibilidad** *(atributo secundario, dirige ADR-0002)*
 
@@ -1467,8 +1582,9 @@ de carga.
 
 Escenarios formalizados posteriormente para cubrir dos atributos que el árbol de utilidad
 recoge pero que los cinco priorizados no medían: la seguridad (QG-4) y la recuperación ante
-fallos. Desde la S9 se suma EC-08, el de la propuesta opcional de distractores. Se documentan
-aparte para no alterar la priorización original.
+fallos. Desde la S9 se suma EC-08, el de la propuesta opcional de distractores, y desde el segundo
+corte EC-09, el del escenario operativo de límite de costo. Se documentan aparte para no alterar la
+priorización original.
 
 <a id="ec-06"></a>
 
@@ -1522,6 +1638,25 @@ aparte para no alterar la priorización original.
 > algebraica no la detecta el sistema (ADR-0004), y por eso la evaluación mide cuántas veces la
 > propone el modelo.
 
+<a id="ec-09"></a>
+
+### EC-09 · Ráfaga contra la ruta de distractores (límite de costo)
+
+| Atributo | Detalle |
+|---|---|
+| **Fuente** | Cualquier cliente de la URL pública de la API: un profesor que insiste, un script o alguien fuera del curso (R-17). |
+| **Estímulo** | Una ráfaga de 20 solicitudes seguidas, sin pausa, a `POST /distractores`. |
+| **Artefacto** | La ruta `POST /distractores` y el presupuesto de `autoria` (`presupuesto.py`). |
+| **Entorno** | Entorno desplegado en Render, con la API despierta y la capa gratuita de Groq (8 000 tokens por minuto, 200 000 por día). |
+| **Respuesta** | La API corta con 429 y `Retry-After`, sin salir a la red, las solicitudes que no caben en el presupuesto; el proveedor nunca llega a su límite; el resto de la API sigue atendiendo. |
+| **Medida de respuesta** | **M1:** 0 solicitudes de la ráfaga cortadas por el proveedor por cuota (503). **M2:** 6 o menos llegan al proveedor. **M3:** p95 del tiempo de un 429 de la API, desde el cliente, de 1 s o menos. **M4:** `/health` responde 200 durante y después de la ráfaga. |
+| **Relacionado** | RNF-16 · RF-11 · R-17 · [ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md) · [ADR-0015](../adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md) · Aspecto [A-06](../aspectos.md#a-06) |
+
+> **Nota.** Es el escenario operativo del segundo corte. La línea base, medida en el entorno
+> desplegado antes del cambio, lo incumplía en M1 y M2: 8 cortes por cuota y 20 solicitudes en el
+> proveedor. El experimento, con su hipótesis, sus dos montajes y su resultado, está en
+> [`../evidencia/experimento-presupuesto.md`](../evidencia/experimento-presupuesto.md).
+
 ---
 
 # 11. Risks and Technical Debts
@@ -1544,7 +1679,11 @@ aparte para no alterar la priorización original.
 | **R-14** | **Endpoint de carga público sin autenticación.** `POST /examenes/{id}/hojas` está desplegado y accesible por su URL pública; `identidad` sigue sin construir (5.2), así que nada impide que alguien fuera del curso cargue archivos al almacén efímero de la demostración. | Medio | Publicar la URL de la API antes de construir `identidad` (aspecto A-05). | Aceptado para la demostración de la S8 porque solo se cargan hojas sintéticas (ADR-0012) y el disco es efímero. Construir `identidad` antes de cualquier uso con datos reales. |
 | **R-15** | **Dependencia de la capa gratuita de Render, cuyas condiciones pueden cambiar sin aviso.** Las 750 horas de servicio web son compartidas por todo el workspace, y el monitor que mitiga R-13 ya consume entre 720 y 744 de esas 750: quedan entre 6 horas (mes de 31 días) y 30 (mes de 30) de margen. Se suman el límite de 5 GB de ancho de banda y 500 minutos de build. | Alto | Agotar el cupo compartido en la semana de sustentación, con más tráfico del habitual, o que Render cambie las condiciones de su capa gratuita. | Punto de ruptura por recurso documentado en [`docs/despliegue/costo-mensual.md`](../despliegue/costo-mensual.md). Verificar la capa gratuita vigente antes de cada sustentación, como pide la guía del curso. |
 | **R-16** | **Solo una persona puede operar el workspace de Render** (el plan gratuito da un único puesto); si Sebastián no está disponible, nadie más del equipo puede redesplegar, cambiar variables o revisar logs en Render. Es el criterio 7 de la guía del curso: «¿Puede operarlo el equipo entero? Si solo una persona sabe redesplegarlo, eso es un riesgo de la sección 11 de arc42, no un detalle.» | Medio | Que Sebastián no esté disponible cuando el equipo necesite redesplegar o depurar algo en producción. | El entorno completo se recrea desde `render.yaml` (Blueprint) en la cuenta de cualquier integrante; los pasos quedan en el README, «Cómo se despliega». No depende de configuración manual guardada solo en la cuenta de Sebastián. |
-| **R-17** | **La ruta `POST /distractores` es pública y sin autenticación** en el entorno desplegado, y cada solicitud gasta cuota del proveedor de LLM. | Bajo | Que alguien fuera del curso la use en bucle y agote la cuota diaria de la capa gratuita de Groq (1 000 solicitudes y 200 000 tokens por día para el modelo, consultado el 4-oct-2026 en https://console.groq.com/docs/rate-limits). | Sin tarjeta, el peor caso es agotar la cuota y nunca una factura (RNF-16): la ruta responde 503 y nada más se afecta (EC-08). Se cierra con `identidad` (A-05), igual que R-14. |
+| **R-17** | **La ruta `POST /distractores` es pública y sin autenticación** en el entorno desplegado, y cada solicitud gasta cuota del proveedor de LLM. | Bajo | Que alguien fuera del curso la use en bucle y agote la cuota diaria de la capa gratuita de Groq (1 000 solicitudes y 200 000 tokens por día para el modelo, consultado el 4-oct-2026 en https://console.groq.com/docs/rate-limits). | Sin tarjeta, el peor caso es agotar la cuota y nunca una factura (RNF-16): la ruta responde 503 y nada más se afecta (EC-08). Se cierra con `identidad` (A-05), igual que R-14. **Mitigado en el segundo corte** ([ADR-0015](../adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md)): la línea base mostró que una ráfaga de 20 agotaba el límite por minuto para todos (8 cortes por cuota); con un presupuesto de 6 por minuto y 150 por día, lo que no cabe se responde con 429 sin gastar cuota ([EC-09](#ec-09)). |
+| **R-18** | **El presupuesto del proveedor de LLM vive en la memoria del proceso de la API** ([ADR-0015](../adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md)). Se vacía en cada despliegue y cada reinicio, y con más de una instancia o más de un proceso de uvicorn cada uno tendría el suyo. | Bajo | Un reinicio a mitad del día, que devuelve el cupo diario completo (hasta 300 solicitudes en 24 h, más de las que caben en la cuota diaria de Groq); o escalar la API horizontalmente. | Mientras haya una instancia y un proceso, se acepta: el último freno sigue siendo el 503 del proveedor. Si la API escala, el presupuesto pasa a Redis detrás del mismo adaptador `GeneradorConPresupuesto`. |
+| **R-19** | **El presupuesto es global, no por profesor.** Un cliente puede gastar el cupo de los demás: un minuto si lanza una ráfaga, un día si insiste 150 veces. | Medio | Que alguien fuera del curso use la URL pública en bucle. | Lo cierra `identidad` (A-05), con un cupo por profesor autenticado, igual que R-14 y R-17. Mientras tanto, el presupuesto protege la cuota del proveedor, aunque no la reparte. |
+| **R-20** | **Divergencias conocidas entre esta documentación y lo desplegado**, anotadas en vez de esconderse. (1) La pantalla de carga muestra «En cola» para toda hoja aceptada, también para las `pendiente_de_encolar`: el frontend no lee el campo `estado` (`frontend/lib/pantalla_carga.dart:188`), aunque la API sí lo devuelve. (2) `POST /distractores` y `GET /metricas` no tienen pantalla: se usan por la API. (3) La cifra de 1,744 s de EC-07 que citan 6.2, `aspectos.md` y ADR-0006 no está en el informe crudo `medicion-ec07-despues.json`, que registra 1,491 s como peor de tres corridas; las dos cumplen el umbral de 10 s. | Bajo | Que un docente vea «En cola» en una hoja que quedó pendiente y crea que ya se procesará sola; o que un revisor busque 1,744 en el informe crudo. | (1) Mostrar el `estado` en el reporte de la pantalla de carga. (2) Pantalla de distractores cuando se construya A-04. (3) Repetir la medición de EC-07 con `medir_ec07.py` y citar la cifra del informe que quede versionado. |
+| **R-21** | **Mientras se confirma un lote, el proceso de la API no atiende otras peticiones.** `cargar_hojas` es `async def`, pero `recibir_lote` escribe en disco con `fsync` de forma bloqueante, así que el lote entero ocupa el bucle de eventos. Con un solo proceso de uvicorn en Render, un lote de 200 hojas (1,5 s en local) detiene `/health` y `/distractores` durante ese tiempo. | Bajo | Un lote grande cuando el monitor consulta `/health`, o dos docentes cargando a la vez. | Declarar la ruta como `def`, como ya se hizo con `/distractores` por la misma razón, para que FastAPI la corra en su grupo de hilos. Se deja para cuando se trabaje A-02, que vuelve a tocar la recepción. |
 
 ---
 
