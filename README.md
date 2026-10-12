@@ -12,6 +12,39 @@ Sebastián Cañas Plata (`scp1109`) · Josué David Ortega De Arco (`josueacadem
 María Del Mar Restrepo Licona (`Mariadelmar-restrepo`) · Susana Marcela Rosales Castellar
 (`SusanaRosales`).
 
+## Segundo corte: límite de costo
+
+Escenario operativo del segundo corte: **límite de costo**. `POST /distractores` es pública y cada
+solicitud gasta cuota de la capa gratuita de Groq (R-17). La pregunta es qué hace el MVP desplegado
+cuando alguien la golpea con una ráfaga.
+
+- **Línea base, en el entorno desplegado:** de 20 solicitudes seguidas, las 20 llegaron a Groq y 8
+  terminaron en 503 porque el proveedor cortó por cuota. Durante ese minuto la ruta quedó inutilizable
+  para cualquier otro profesor.
+- **Decisión, [ADR-0015](docs/adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md):**
+  un presupuesto de 6 solicitudes por minuto y 150 por día en la memoria de la API, delante del
+  adaptador de Groq. Lo que no cabe se responde con 429 y `Retry-After`, sin salir a la red. Precisa
+  a ADR-0013 sin reemplazarlo.
+- **Observabilidad:** el evento `presupuesto_agotado` en el registro JSON y `GET /metricas`, con el
+  contrato en 1.2.0.
+- **Experimento, con hipótesis, montaje, ejecución y conclusión:**
+  [`experimento-presupuesto.md`](docs/evidencia/experimento-presupuesto.md). En local, con un
+  proveedor que aplica el límite publicado de Groq: de 20 solicitudes en el proveedor y 11 cortes
+  por cuota a 6 y 0, y los 14 rechazos de la API en 2 ms de mediana.
+- **CI:** el paso «Escenario del segundo corte (presupuesto del proveedor de LLM)» de
+  [`ci.yml`](.github/workflows/ci.yml).
+
+| Fila del reto | Dónde está |
+|---|---|
+| Escenario y su medida | [EC-09 en el arc42](docs/arc42/arc42-template-ES.md#ec-09) · recorrido en [§6.5](docs/arc42/arc42-template-ES.md#65-ráfaga-contra-la-ruta-de-distractores-ec-09--adr-0015) |
+| Decisión | [ADR-0015](docs/adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md), que precisa a [ADR-0013](docs/adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md) |
+| Código | [`autoria/presupuesto.py`](backend/autoria/presupuesto.py) · [`api/main.py`](backend/api/main.py) (429 y `GET /metricas`) · [`api/esquemas.py`](backend/api/esquemas.py) (contrato 1.2.0) |
+| Pruebas y pipeline | [`test_presupuesto.py`](backend/tests/test_presupuesto.py) · [`test_ruta_distractores.py`](backend/tests/test_ruta_distractores.py) · paso propio en [`ci.yml`](.github/workflows/ci.yml) |
+| Experimento | [`experimento-presupuesto.md`](docs/evidencia/experimento-presupuesto.md), con los informes [`presupuesto-antes.json`](docs/evidencia/presupuesto-antes.json), [`presupuesto-despues.json`](docs/evidencia/presupuesto-despues.json), [`presupuesto-local-antes.json`](docs/evidencia/presupuesto-local-antes.json) y [`presupuesto-local-despues.json`](docs/evidencia/presupuesto-local-despues.json) |
+| Observabilidad | https://quantia-utb-api.onrender.com/metricas y el evento `presupuesto_agotado` en los logs de `quantia-utb-api` |
+| Documentación sincronizada | arc42 §3, §5, §6.5, §7, §8, §9, §10 ([EC-09](docs/arc42/arc42-template-ES.md#ec-09)) y §11 (R-17 mitigado; R-18 a R-21, con las divergencias conocidas en R-20) · [C4](docs/c4/doc-c4.md) Nivel 2, relación 8, y Nivel 3, relación 12 · [`aspectos.md`](docs/aspectos.md#a-06) |
+| Uso de IA | [`docs/ia.md`, entrada 13](docs/ia.md#entrada-13) |
+
 ## Evidencia S9
 
 Porción construida con IA: **RF-11, distractores diagnósticos** (aspecto A-06), en
@@ -64,6 +97,7 @@ qué archivo y en qué sección está.
 | S7 | Flujos de interacción | [arc42 §6](docs/arc42/arc42-template-ES.md#6-runtime-view) |
 | S7 | C4 Nivel 2 con protocolo y formato en cada relación | [`docs/c4/doc-c4.md`](docs/c4/doc-c4.md#nivel-2--diagrama-de-contenedores) |
 | S9 | Porción construida con IA, prueba que falla, EC-08, auditoría y componente generativo | [Evidencia S9](#evidencia-s9) |
+| Corte 2 | Escenario operativo de límite de costo: decisión, experimento, CI, observabilidad y documentación sincronizada | [Segundo corte](#segundo-corte-límite-de-costo) |
 | Todas | Pipeline de integración continua | [Runs de GitHub Actions](https://github.com/ISCOUTB/AS_202620_Sistema-de-calificacion-automatica/actions) |
 | Todas | Análisis estático y su *Quality Gate* | [SonarQube Cloud](https://sonarcloud.io/summary/new_code?id=ISCOUTB_AS_202620_Sistema-de-calificacion-automatica) |
 | Todas | Respuesta a la retroalimentación automática | [`correcciones.md`](correcciones.md) |
@@ -87,6 +121,7 @@ lo cargado se pierde en cada despliegue ([ADR-0012](docs/adr/0012-mantener-el-al
 | Costo mensual | US$0 al volumen supuesto. Primer punto de ruptura: las 750 h de instancia al mes del workspace, de las que la API despierta gasta 720 a 744; un segundo servicio web despierto lo rompe ([estimación](docs/despliegue/costo-mensual.md)) |
 | arc42 | [§7 Deployment View](docs/arc42/arc42-template-ES.md#7-deployment-view) · [§2.2, RNF-16](docs/arc42/arc42-template-ES.md#22-restricciones-organizativas) |
 | ADR de plataforma | [0009](docs/adr/0009-desplegar-la-api-en-el-servicio-web-gratuito-de-render-y-mantenerla-despierta.md) API · [0010](docs/adr/0010-servir-el-sitio-como-archivos-estaticos-en-render.md) sitio · [0011](docs/adr/0011-consumir-la-cola-desde-la-instancia-de-la-api-con-el-key-value-gratuito.md) cola y worker · [0012](docs/adr/0012-mantener-el-almacen-en-el-disco-efimero-de-la-instancia-hasta-cerrar-r-06.md) ficheros |
+| Escenario del segundo corte | Límite de costo sobre `POST /distractores`: presupuesto de 6 por minuto y 150 por día, 429 si no cabe, y su estado en https://quantia-utb-api.onrender.com/metricas ([ADR-0015](docs/adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md)) |
 | Taller de despliegue | Condición: **patrón de carga**, definida por el equipo por indicación del docente. Pieza: **la API**. Arranque en frío medido: **12,5 s** frente a los 10 s de EC-07; con el monitor que la mantiene despierta, 0,2 a 0,4 s ([comparación](docs/despliegue/taller-despliegue-api.md) · [medición](docs/evidencia/medicion-arranque-en-frio.json) · [ADR-0009](docs/adr/0009-desplegar-la-api-en-el-servicio-web-gratuito-de-render-y-mantenerla-despierta.md)) |
 
 Líneas reales del log en el entorno desplegado (worker y API):
@@ -99,7 +134,8 @@ Líneas reales del log en el entorno desplegado (worker y API):
 Requiere Docker (con el plugin Compose). Antes de la primera vez, copiar `.env.example` a `.env`.
 Solo hace falta editarlo para probar la ruta de distractores: ahí va `LLM_API_KEY`, la clave del
 proveedor de LLM, que nunca se versiona (RNF-11). Sin ella, esa ruta responde 503 y lo demás
-funciona igual.
+funciona igual. Ahí están también `LLM_SOLICITUDES_POR_MINUTO` y `LLM_SOLICITUDES_POR_DIA`, el
+presupuesto del proveedor (ADR-0015), que no hace falta tocar.
 
 Desde la raíz del repositorio:
 
@@ -237,7 +273,7 @@ Backend (dentro de `backend/`, con Redis disponible vía `docker compose up -d r
 pytest
 ```
 
-Son 106. Verifican: que la aplicación FastAPI arranca y su endpoint de salud responde
+Son 118. Verifican: que la aplicación FastAPI arranca y su endpoint de salud responde
 200; que los siete módulos del dominio se importan sin error ni ciclos; que ningún módulo
 importa por fuera de lo declarado en el docstring de su `__init__.py` (la prueba de fronteras
 entre módulos); que un trabajo encolado en Redis se recupera igual al desencolarlo; y, para el
@@ -258,11 +294,18 @@ al proveedor de LLM solo le llega la pregunta (RNF-13); que el tiempo agotado, l
 la clave rechazada y una respuesta ilegible terminan en un 503 con su motivo; y que ningún
 módulo del dominio importa `api` ni `worker`. Ninguna sale a la red.
 
+Doce llegaron con el segundo corte (EC-09, ADR-0015). Verifican que el presupuesto admite hasta su
+límite por minuto y corta la siguiente, que la ventana se libera de a una solicitud, que el límite
+por día corta aunque el minuto tenga cupo, que una solicitud cortada no llama al proveedor, que el
+429 trae `Retry-After`, que sin proveedor configurado no se gasta cupo, y que `GET /metricas` publica
+lo mismo que vio el cliente. Usan un reloj falso, así que no esperan un minuto, y tampoco salen a la
+red.
+
 Seis son la **prueba de contrato** ([`backend/tests/test_contrato.py`](backend/tests/test_contrato.py)),
 y verifican que el documento de `docs/contrato/openapi.json` y la API que corre no se puedan
 separar: que el archivo versionado sea exactamente el que genera la aplicación de hoy, que su
-número de versión sea el declarado en el código, que sigan estando las tres rutas (y que la de
-distractores publique su 503), que la
+número de versión sea el declarado en el código, que sigan estando las cuatro rutas (y que la de
+distractores publique su 503 y su 429), que la
 respuesta de carga exija sus cuatro campos, que los estados publicados sean los dos del dominio,
 y que una respuesta real traiga exactamente los campos que el contrato anuncia, ni uno más ni
 uno menos.
@@ -324,9 +367,9 @@ El resultado, el procedimiento y sus límites están en
 ## El contrato de la API
 
 Lo que la API promete devolver está escrito en un documento OpenAPI versionado en el
-repositorio: [`docs/contrato/openapi.json`](docs/contrato/openapi.json), en la versión 1.1.0.
-Describe las tres rutas con el esquema de cada respuesta campo por campo, no solo el listado de
-endpoints.
+repositorio: [`docs/contrato/openapi.json`](docs/contrato/openapi.json), en la versión 1.2.0.
+Describe las cuatro rutas con el esquema de cada respuesta campo por campo, no solo el listado de
+endpoints. La 1.2.0 agregó `GET /metricas` y el 429 de `/distractores` (segundo corte, ADR-0015).
 
 Está versionado y no se consulta en caliente por dos razones. `/openapi.json` solo existe
 mientras la API está levantada y describe la versión que esté corriendo en ese momento, así que
@@ -391,6 +434,7 @@ El desarrollo sigue Aspect Driven Development (ADD): cada funcionalidad se decla
 | [0012](docs/adr/0012-mantener-el-almacen-en-el-disco-efimero-de-la-instancia-hasta-cerrar-r-06.md) | Mantener el almacén en el disco efímero de la instancia hasta cerrar R-06 | aceptado |
 | [0013](docs/adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md) | Consumir Groq detrás de un puerto y degradar sin bloquear la autoría | aceptado |
 | [0014](docs/adr/0014-dejar-constancia-del-ajuste-de-enlaces-en-adr-0007.md) | Dejar constancia del ajuste de enlaces en ADR-0007 | aceptado |
+| [0015](docs/adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md) | Limitar el gasto del proveedor de LLM con un presupuesto en la API | aceptado |
 
 Las decisiones de un ADR aceptado no se editan ni se borran: si una decisión cambia, se escribe uno nuevo y el anterior pasa a estado *reemplazado por*. Los ajustes menores que no son de arquitectura, como un enlace roto, se permiten dejando constancia ([ADR-0014](docs/adr/0014-dejar-constancia-del-ajuste-de-enlaces-en-adr-0007.md)).
 
@@ -402,9 +446,9 @@ Las decisiones de un ADR aceptado no se editan ni se borran: si una decisión ca
 - [x] arc42: estrategia de solución, decisiones de arquitectura y riesgos
 - [x] arc42: Building Block View, Runtime View y Cross-cutting Concepts (secciones 5, 6 y 8)
 - [x] arc42: Deployment View (sección 7)
-- [x] Escenarios de calidad: 5 priorizados y 3 complementarios; EC-07 y EC-08 medidos
+- [x] Escenarios de calidad: 5 priorizados y 4 complementarios; EC-07, EC-08 y EC-09 medidos
 - [x] C4 Niveles 1, 2 y 3
-- [x] ADR 0001 a 0014
+- [x] ADR 0001 a 0015
 - [x] Elección de stack: FastAPI en el backend, Flutter en el frontend
 - [x] Esqueleto ejecutable
 - [x] Corte vertical de A-01: `ingesta`, almacén, bitácora, encolado y pantalla de carga
@@ -413,6 +457,7 @@ Las decisiones de un ADR aceptado no se editan ni se borran: si una decisión ca
 - [ ] ADR de persistencia y almacenamiento (riesgo R-06); el adaptador actual es provisional
 - [ ] Modelo de datos compartido más allá de lo que A-01 necesitó
 - [x] Proveedor de LLM: Groq, detrás de un puerto de `autoria` (ADR-0013)
+- [x] Segundo corte: presupuesto del proveedor de LLM, `GET /metricas` y experimento de EC-09 (ADR-0015)
 - [ ] Aspectos A-02 a A-05
 
 ## Documentación
@@ -421,13 +466,13 @@ Las decisiones de un ADR aceptado no se editan ni se borran: si una decisión ca
 docs/
 ├── arc42/
 │   └── arc42-template-ES.md                            # documento de arquitectura (arc42)
-├── adr/                                                # 0001 a 0014; el 0001, reemplazado por el 0002
+├── adr/                                                # 0001 a 0015; el 0001, reemplazado por el 0002
 ├── c4/
 │   └── doc-c4.md                                       # modelo C4 (Niveles 1, 2 y 3)
 ├── contrato/
 │   └── openapi.json                                    # contrato HTTP (OpenAPI 3.1), generado
 ├── despliegue/                                        # estimación de costo y taller de despliegue
-├── evidencia/                                          # EC-07, arranque en frío, prueba de contrato, SonarQube, y de la S9: EC-08, prueba del defecto y auditoría
+├── evidencia/                                          # EC-07, arranque en frío, prueba de contrato, SonarQube; de la S9: EC-08, prueba del defecto y auditoría; del corte 2: experimento de EC-09
 ├── ficha-problema.md                                   # el problema, usuarios y alcance
 ├── aspectos.md                                         # aspectos y tabla de trazabilidad
 └── ia.md                                               # registro de uso de IA
