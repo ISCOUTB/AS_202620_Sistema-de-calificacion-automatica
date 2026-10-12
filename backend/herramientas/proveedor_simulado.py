@@ -21,6 +21,16 @@ Qué imita y qué no
 Escucha solo en `127.0.0.1:8090`, sin cifrar porque no sale de esta máquina. Ningún argumento
 decide la dirección, como en las otras herramientas.
 
+Por qué HTTP y no HTTPS
+-----------------------
+SonarCloud marca `serve_forever()` porque el servidor habla HTTP sin cifrar. Aquí no aplica:
+la dirección está fija en la interfaz de loopback, así que ningún byte cruza la red y no hay a
+quién cifrarle el tráfico. Pasarlo a HTTPS exigiría un certificado autofirmado y que la API
+desactivara la verificación TLS para aceptarlo, que sí sería un problema de seguridad y que
+SonarCloud también marca. Por eso el aviso se suprime en esa línea con su motivo, como el de
+`medir_ec07.py` (AE-12), y `_verificar_que_es_local` impide que alguien cambie `DIRECCION` sin
+darse cuenta de lo que implica.
+
 Uso, desde backend/, en una terminal:
 
     python -m herramientas.proveedor_simulado
@@ -109,6 +119,17 @@ def _manejador(cuota: _Cuota, demora: float) -> type[http.server.BaseHTTPRequest
     return Manejador
 
 
+def _verificar_que_es_local(direccion: tuple[str, int]) -> None:
+    """Falla si la dirección no es la de loopback: lo que justifica servir HTTP sin cifrar es que
+    nada salga de esta máquina, y eso tiene que seguir siendo cierto aunque alguien edite la
+    constante."""
+    if direccion[0] != "127.0.0.1":
+        raise SystemExit(
+            f"El proveedor simulado solo puede escuchar en 127.0.0.1, no en {direccion[0]}: "
+            "sirve HTTP sin cifrar."
+        )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Proveedor de LLM simulado con el límite por minuto de Groq (EC-09).")
@@ -116,14 +137,17 @@ def main(argv: list[str] | None = None) -> int:
                         help="segundos que tarda cada respuesta admitida")
     args = parser.parse_args(argv)
 
+    _verificar_que_es_local(DIRECCION)
     cuota = _Cuota()
     servidor = http.server.ThreadingHTTPServer(DIRECCION, _manejador(cuota, args.demora))
     servidor.daemon_threads = True
     print(f"Proveedor simulado en http://{DIRECCION[0]}:{DIRECCION[1]}/v1 "
-          f"({TOKENS_POR_MINUTO} tokens por minuto, {TOKENS_ENTRADA + TOKENS_SALIDA} por solicitud)",
+          f"({TOKENS_POR_MINUTO} tokens por minuto, "
+          f"{TOKENS_ENTRADA + TOKENS_SALIDA} por solicitud)",
           file=sys.stderr, flush=True)
     try:
-        servidor.serve_forever()
+        # Solo loopback: ver «Por qué HTTP y no HTTPS» en el docstring.
+        servidor.serve_forever()  # NOSONAR
     except KeyboardInterrupt:
         pass
     finally:
