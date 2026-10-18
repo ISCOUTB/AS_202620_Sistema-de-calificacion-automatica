@@ -3,7 +3,7 @@ import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
-import 'servicio_salud.dart' show backendUrl;
+import 'common/api/servicio_salud.dart' show backendUrl;
 
 /// Un archivo elegido por el docente, ya leído a memoria.
 ///

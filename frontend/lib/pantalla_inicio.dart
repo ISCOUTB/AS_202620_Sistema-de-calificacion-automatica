@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'pantalla_carga.dart';
-import 'servicio_salud.dart' as servicio;
+import 'common/api/servicio_salud.dart' as servicio;
 
 const nombreSistema = 'QuantIA';
 

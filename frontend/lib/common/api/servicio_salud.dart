@@ -8,6 +8,9 @@ const backendUrl = String.fromEnvironment(
   defaultValue: 'http://localhost:8000',
 );
 
+/// Estado de la conexión con la API, el que muestra la barra superior.
+enum EstadoApi { verificando, conectada, sinConexion }
+
 /// Consulta el endpoint de salud del backend. Devuelve true si respondió 200.
 Future<bool> verificarSalud() async {
   try {
