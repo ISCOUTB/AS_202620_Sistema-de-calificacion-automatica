@@ -40,7 +40,7 @@ alcanzables desde la fila del aspecto que los realiza.
 | **[A-03](#a-03)** | Calificación contra la clave y publicación | Declarado | RF-04, RF-05, RF-08 | [EC-03](arc42/arc42-template-ES.md#ec-03) · [EC-04](arc42/arc42-template-ES.md#ec-04) | [Rel. 2](c4/doc-c4.md#relaciones): Sistema → Profesor/TA | Pendiente | [0002](adr/0002-procesar-calificacion-de-forma-asincrona.md) | Pendiente | Pendiente | Pendiente |
 | **[A-04](#a-04)** | Registro del banco y habilitación del examen | Declarado | RF-06, RF-07 | [EC-05](arc42/arc42-template-ES.md#ec-05) | [Rel. 1](c4/doc-c4.md#relaciones): Profesor/TA → Sistema | Pendiente | [0003](adr/0003-usar-fastapi-y-flutter.md) · [0004](adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md) · [0005](adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md) | Pendiente | Pendiente | Pendiente |
 | **[A-05](#a-05)** | Identidad y aislamiento por curso | Declarado | RF-09, RF-10 | [EC-06](arc42/arc42-template-ES.md#ec-06) | [Rel. 1 y 2](c4/doc-c4.md#relaciones): transversal a ambas — condición de «docente autenticado» bajo la que operan | Pendiente | ADR de auditoría previsto (RF-10) | Pendiente | Pendiente | Pendiente |
-| **[A-06](#a-06)** | Propuesta de distractores diagnósticos | **Construido** | RF-11 *(opcional)* | [EC-08](arc42/arc42-template-ES.md#ec-08) · [EC-09](arc42/arc42-template-ES.md#ec-09) | [Rel. 3](c4/doc-c4.md#relaciones): Sistema → Proveedor de LLM (opcional) | C1: [Proveedor de LLM](c4/doc-c4.md#nivel-1--diagrama-de-contexto-del-sistema) · C2: [Aplicación web → Proveedor de LLM](c4/doc-c4.md#relaciones-1) (relación 8) · C3: [`autoria`](c4/doc-c4.md#nivel-3--diagrama-de-componentes) | [0005](adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md) · [0013](adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md) · [0015](adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md) | [`autoria/distractores.py`](../backend/autoria/distractores.py) · [`autoria/proveedor_llm.py`](../backend/autoria/proveedor_llm.py) · [`autoria/presupuesto.py`](../backend/autoria/presupuesto.py) · [`api/main.py`](../backend/api/main.py) (`POST /distractores` y `GET /metricas`) | [`test_distractores.py`](../backend/tests/test_distractores.py) · [`test_proveedor_llm.py`](../backend/tests/test_proveedor_llm.py) · [`test_ruta_distractores.py`](../backend/tests/test_ruta_distractores.py) · [`test_presupuesto.py`](../backend/tests/test_presupuesto.py) | [Evaluación de EC-08](evidencia/evaluacion-distractores.md): M1: 0 de 120 propuestas repiten la respuesta correcta · M2: p95 de 2,91 s contra 15 s · M3: 503 en 20,25 s contra 21 s · [la prueba falla ante el defecto](evidencia/prueba-distractores-falla.md) · [auditoría](evidencia/auditoria-s9.md) · [Experimento de EC-09](evidencia/experimento-presupuesto.md) (segundo corte): de 20 solicitudes en el proveedor y 11 cortes por cuota a 6 y 0 |
+| **[A-06](#a-06)** | Propuesta de distractores diagnósticos | **Construido** | RF-11 *(opcional)* | [EC-08](arc42/arc42-template-ES.md#ec-08) · [EC-09](arc42/arc42-template-ES.md#ec-09) | [Rel. 3](c4/doc-c4.md#relaciones): Sistema → Proveedor de LLM (opcional) | C1: [Proveedor de LLM](c4/doc-c4.md#nivel-1--diagrama-de-contexto-del-sistema) · C2: [Aplicación web → Proveedor de LLM](c4/doc-c4.md#relaciones-1) (relación 8) · C3: [`autoria`](c4/doc-c4.md#nivel-3--diagrama-de-componentes) | [0005](adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md) · [0013](adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md) · [0015](adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md) | [`autoria/distractores.py`](../backend/autoria/distractores.py) · [`autoria/proveedor_llm.py`](../backend/autoria/proveedor_llm.py) · [`autoria/presupuesto.py`](../backend/autoria/presupuesto.py) · [`api/main.py`](../backend/api/main.py) (`POST /distractores` y `GET /metricas`) · pantalla: [`pantalla_pauta.dart`](../frontend/lib/features/pauta/views/pantalla_pauta.dart) y [`servicio_distractores.dart`](../frontend/lib/features/pauta/data/servicio_distractores.dart) | [`test_distractores.py`](../backend/tests/test_distractores.py) · [`test_proveedor_llm.py`](../backend/tests/test_proveedor_llm.py) · [`test_ruta_distractores.py`](../backend/tests/test_ruta_distractores.py) · [`test_presupuesto.py`](../backend/tests/test_presupuesto.py) · [`pauta_test.dart`](../frontend/test/features/pauta_test.dart) · [`servicio_distractores_test.dart`](../frontend/test/features/servicio_distractores_test.dart) | [Evaluación de EC-08](evidencia/evaluacion-distractores.md): M1: 0 de 120 propuestas repiten la respuesta correcta · M2: p95 de 2,91 s contra 15 s · M3: 503 en 20,25 s contra 21 s · [la prueba falla ante el defecto](evidencia/prueba-distractores-falla.md) · [auditoría](evidencia/auditoria-s9.md) · [Experimento de EC-09](evidencia/experimento-presupuesto.md) (segundo corte): de 20 solicitudes en el proveedor y 11 cortes por cuota a 6 y 0 |
 
 **Estados:** *Declarado* = pasos 1 y 3 parciales (nombre, para quién, qué resuelve, requisitos
 y escenario asignados). *Especificado* = pasos 1 a 4 completos. *Construido* = pasos 5 a 7.
@@ -83,8 +83,15 @@ de almacenamiento y la retención de RNF-14) depende de R-06, no de A-01.
 
 **Por qué A-06 está en «Construido».** Los pasos 5 a 7 están hechos en la S9: el código, las
 pruebas y la evaluación de EC-08 están en la fila de la tabla, y las tres medidas del escenario
-se midieron con una herramienta versionada: M1, ninguna de las 120 propuestas entregadas repite la respuesta correcta (0 %); M2, p95 de la latencia de 2,91 s contra un techo de 15 s, en 40 solicitudes; M3, con el proveedor caído o lento la ruta responde 503 en 20,25 s como máximo, contra 21 s. Lo que sigue
-abierto es la pantalla del sitio: hoy RF-11 se usa por la API.
+se midieron con una herramienta versionada: M1, ninguna de las 120 propuestas entregadas repite la respuesta correcta (0 %); M2, p95 de la latencia de 2,91 s contra un techo de 15 s, en 40 solicitudes; M3, con el proveedor caído o lento la ruta responde 503 en 20,25 s como máximo, contra 21 s. Desde el
+frontend nuevo, RF-11 también se usa desde el sitio, en la pantalla Pauta y distractores, que
+explica al docente el 503 del proveedor y el 429 del presupuesto.
+
+**Las pantallas de A-02 a A-04 son maquetas.** El sitio tiene cuatro pantallas, pero solo Carga
+(A-01) y el generador de Pauta (A-06) llaman a la API. Panel, Revisión y la clave y el banco de
+Pauta muestran datos de ejemplo bajo un aviso visible, porque la detección (A-02), la calificación
+(A-03) y el registro del banco (A-04) siguen en «Declarado». Muestran cómo se van a ver, no lo que
+el sistema hace hoy.
 
 ---
 
@@ -206,8 +213,9 @@ cuando A-04 llegue solo haya que sumar la comprobación.
 
 ### 6. Verificar
 
-**35 pruebas automatizadas de este aspecto**: 31 en el backend y 4 de widget en el frontend.
-(La suite de widget tiene 6; las otras dos son las de conexión que ya traía el esqueleto.) Trece
+**44 pruebas automatizadas de este aspecto**: 31 en el backend y 13 de widget en el frontend,
+en [`carga_test.dart`](../frontend/test/features/carga_test.dart). (La suite del frontend tiene
+66; las demás son de las otras tres pantallas y del marco de la aplicación.) Trece
 de las del backend llegaron con [ADR-0006](adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md)
 y cubren el caso que antes rompía EC-07: la cola que se cae con el lote a medio procesar.
 
@@ -435,6 +443,12 @@ máquina.
   ([`contrato/openapi.json`](contrato/openapi.json)).
 - [`herramientas/evaluar_distractores.py`](../backend/herramientas/evaluar_distractores.py): la
   medición de EC-08.
+- [`pantalla_pauta.dart`](../frontend/lib/features/pauta/views/pantalla_pauta.dart) y
+  [`servicio_distractores.dart`](../frontend/lib/features/pauta/data/servicio_distractores.dart):
+  la pantalla del sitio. El botón se deshabilita mientras espera; el 503 se muestra como
+  advertencia con «Volver a pedir»; y el 429 muestra el mensaje de la API con una cuenta regresiva
+  que lee `Retry-After` (límite por minuto) o sin botón (límite diario). La API expone esa
+  cabecera al navegador en CORS (`api/main.py`).
 
 ### 6. Verificar
 
@@ -444,7 +458,11 @@ máquina.
 - [`test_proveedor_llm.py`](../backend/tests/test_proveedor_llm.py): RNF-13 sobre el cuerpo
   entero de la solicitud, y la degradación.
 - [`test_ruta_distractores.py`](../backend/tests/test_ruta_distractores.py): la ruta (200, 503 y
-  422).
+  422), y desde el frontend nuevo, que el navegador puede leer `Retry-After` en el 429.
+- [`servicio_distractores_test.dart`](../frontend/test/features/servicio_distractores_test.dart)
+  y [`pauta_test.dart`](../frontend/test/features/pauta_test.dart): 26 pruebas de la pantalla. Cada
+  código de respuesta se traduce a lo que ve el docente, contra un `MockClient`, y un 429 nunca se
+  muestra como «La API respondió 429».
 - [`test_fronteras.py`](../backend/tests/test_fronteras.py): la auditoría de la S9 le agregó la
   prueba de que el dominio no importa `api` ni `worker`
   ([auditoría](evidencia/auditoria-s9.md)).
@@ -462,7 +480,8 @@ y el resultado completo
 - calidad, calificada por el equipo: 44 de 60 propuestas diagnósticas válidas (73 %), ninguna equivalente a la respuesta correcta, y el error más común es la etiqueta (8 incorrectas y 4 a medias);
 - costo: US$0 en la capa gratuita (al precio de pago serían US$0,0004 por solicitud y US$0,008 por examen de 20 preguntas).
 
-**Pendiente:** la pantalla del sitio. Hoy RF-11 se usa por la API.
+**La pantalla del sitio** llegó con el frontend nuevo (paso 5 de esta sección). Sus pruebas son de
+widget; las cifras de M1 a M3 siguen siendo las de la API.
 
 ### Segundo corte: límite de costo (EC-09)
 
