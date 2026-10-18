@@ -48,13 +48,15 @@ Salen del proyecto, no del catálogo del proveedor.
 - Base de datos: 0, porque no se despliega.
 
 **Tráfico de salida**
-- Sitio: 50 primeras visitas × 0,75 MB son unos 38 MB. Los 0,75 MB se midieron sobre el sitio
-  desplegado: `main.dart.js` comprimido. CanvasKit lo baja el navegador del CDN de Google, no de
+- Sitio: 50 primeras visitas × 1,18 MB son unos 59 MB. Los 1,18 MB se midieron sobre el sitio
+  desplegado, con compresión, y son todo lo que Render sirve en una primera visita: `main.dart.js`
+  (0,81 MB), el HTML, los manifiestos, la fuente de íconos y las cinco fuentes del diseño, que el
+  frontend empaqueta desde el 18-oct. CanvasKit lo baja el navegador del CDN de Google, no de
   Render.
 - API: 4 respuestas de lote de unos 50 KB, más las de `/health`: menos de 1 MB.
 - Monitor: respuestas sin cuerpo, del orden de 2 MB al mes.
 - La subida de las hojas (160 MB) es tráfico de entrada.
-- Total: **unos 40 MB de salida, menos del 1 % de los 5 GB incluidos.**
+- Total: **unos 61 MB de salida, alrededor del 1 % de los 5 GB incluidos.**
 
 **Horas de ejecución**
 - API con el worker adentro: 720 h (mes de 30 días) o 744 h (mes de 31), porque el monitor la
@@ -72,7 +74,7 @@ Salen del proyecto, no del catálogo del proveedor.
 
 | Pieza | Plataforma y plan | Consumo al volumen supuesto | Costo |
 |---|---|---|---|
-| Sitio | Sitio estático de Render | unos 38 MB de salida | US$0 |
+| Sitio | Sitio estático de Render | unos 59 MB de salida | US$0 |
 | API y worker | Servicio web Free de Render | 720 a 744 h de las 750 | US$0 |
 | Cola | Key Value Free de Render | unos 60 KB en el peor caso; 50 conexiones | US$0 |
 | Ficheros | Disco efímero de la instancia de la API | hasta 160 MB, que se borran al desplegar | US$0 |
@@ -82,13 +84,13 @@ Salen del proyecto, no del catálogo del proveedor.
 
 ## 4. Dónde se rompe la capa gratuita
 
-**Con un solo servicio web despierto, hasta unas 6 600 primeras visitas al sitio y hasta unos 50
+**Con un solo servicio web despierto, hasta unas 4 200 primeras visitas al sitio y hasta unos 50
 despliegues del sitio al mes, el costo sigue en cero.** A partir de ahí:
 
 | Recurso | Cupo gratuito | Consumo supuesto | Se rompe cuando | Qué pasa y cuánto cuesta después |
 |---|---|---|---|---|
 | **Horas de instancia** (el primero que se rompe) | 750 h al mes por workspace, compartidas por todos los servicios web gratuitos | 720 a 744 h | Un segundo servicio web queda despierto todo el mes: el cupo se agota hacia la mitad del mes | Render suspende los servicios gratuitos hasta el mes siguiente. Para evitarlo, una instancia Starter: US$7 al mes por servicio, con tarjeta |
-| Ancho de banda | 5 GB al mes | unos 40 MB | Unas 6 600 primeras visitas al sitio al mes (a 0,75 MB cada una) | US$0,15 por GB. Por ejemplo, 10 000 primeras visitas son unos 7,5 GB: 2,5 GB de más, unos US$0,38 |
+| Ancho de banda | 5 GB al mes | unos 61 MB | Unas 4 200 primeras visitas al sitio al mes (a 1,18 MB cada una) | US$0,15 por GB. Por ejemplo, 10 000 primeras visitas son unos 11,8 GB: 6,8 GB de más, unos US$1,02 |
 | Minutos de build | 500 al mes | unos 100 | Unos 50 despliegues del sitio al mes, a 10 minutos cada uno | US$5 por cada 1000 minutos |
 | Key Value | 25 MB y 50 conexiones | unos 60 KB en el peor caso | Del orden de 80 000 trabajos pendientes, que solo se acumulan con el worker detenido | Las escrituras fallan (`noeviction`) y las hojas quedan `pendiente_de_encolar`. El plan siguiente cuesta US$10 al mes (256 MB, con persistencia en disco) |
 | Disco persistente | No existe en el plan gratuito | | Cuando haga falta conservar hojas entre despliegues (R-06) | US$0,25 por GB al mes, más la instancia de pago de US$7 |
@@ -127,7 +129,7 @@ Se rompería sin ninguna carga.
 
 - **Horas al mes** = horas del mes × servicios web despiertos todo el mes. Tiene que quedar en 750
   o menos.
-- **Salida al mes (MB)** ≈ primeras visitas × 0,75 + lotes × 0,05 + 2 (monitor). Tiene que
+- **Salida al mes (MB)** ≈ primeras visitas × 1,18 + lotes × 0,05 + 2 (monitor). Tiene que
   quedar en 5 000 o menos.
 - **Minutos de build al mes** ≈ despliegues del sitio × 10 + despliegues de la API × 0,3. Tiene
   que quedar en 500 o menos.
@@ -141,4 +143,4 @@ Se rompería sin ninguna carga.
 - UptimeRobot, plan gratuito (50 monitores, cada 5 minutos, sin tarjeta): https://uptimerobot.com/pricing/
 - Upstash, plan gratuito (500 000 comandos al mes): https://upstash.com/docs/redis/overall/pricing
 - Medición del arranque en frío: [`medicion-arranque-en-frio.json`](../evidencia/medicion-arranque-en-frio.json)
-- Peso del sitio: medido el 27-sep-2026 descargando `main.dart.js` de https://quantia-utb.onrender.com con compresión (724 523 bytes)
+- Peso del sitio: medido el 18-oct-2026 a las 23:25 UTC sobre https://quantia-utb.onrender.com, con `Accept-Encoding: br, gzip`, descargando cada archivo de una primera visita: 1 177 567 bytes en total, de ellos 810 217 de `main.dart.js`. La medición anterior, del 27-sep-2026, contaba solo el `main.dart.js` del sitio de entonces (724 523 bytes)
