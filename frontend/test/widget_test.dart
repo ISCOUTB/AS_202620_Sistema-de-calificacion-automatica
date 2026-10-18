@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:frontend/pantalla_carga.dart';
 import 'package:frontend/pantalla_inicio.dart';
-import 'package:frontend/servicio_carga.dart';
+import 'package:frontend/features/carga/data/servicio_carga.dart';
 
 final _hoja = ArchivoSeleccionado(
   nombre: 'hoja1.jpg',

@@ -32,7 +32,7 @@ Después, incompatible:
 **Por qué es un cambio incompatible y no cosmético.** Un consumidor que hoy lee `nombre_archivo`
 deja de encontrarlo, y nada se lo avisa hasta que su código falla. No es hipotético: el cliente
 Flutter de este mismo repositorio lo lee en
-[`frontend/lib/servicio_carga.dart`](../../frontend/lib/servicio_carga.dart) línea 27, con
+[`frontend/lib/servicio_carga.dart`](https://github.com/ISCOUTB/AS_202620_Sistema-de-calificacion-automatica/blob/2269ca5a1fa1b64787745a55f4d714070192a8f0/frontend/lib/servicio_carga.dart#L27) línea 27, con
 `json['nombre_archivo'] as String`, y ese `as String` sobre un valor ausente revienta en tiempo
 de ejecución.
 

@@ -178,8 +178,8 @@ nada borra lo que se guarda.
 | Endpoint `POST /examenes/{examen_id}/hojas` | [`backend/api/main.py`](../backend/api/main.py) |
 | Consumo del trabajo encolado | [`backend/worker/main.py`](../backend/worker/main.py) |
 | Pantalla de carga y reporte | [`frontend/lib/pantalla_carga.dart`](../frontend/lib/pantalla_carga.dart) |
-| Llamada al endpoint | [`frontend/lib/servicio_carga.dart`](../frontend/lib/servicio_carga.dart) |
-| Diálogo de archivos del navegador | [`frontend/lib/selector_archivos.dart`](../frontend/lib/selector_archivos.dart) |
+| Llamada al endpoint | [`frontend/lib/features/carga/data/servicio_carga.dart`](../frontend/lib/features/carga/data/servicio_carga.dart) |
+| Diálogo de archivos del navegador | [`frontend/lib/features/carga/data/selector_archivos.dart`](../frontend/lib/features/carga/data/selector_archivos.dart) |
 
 Tres decisiones de construcción que conviene poder defender:
 

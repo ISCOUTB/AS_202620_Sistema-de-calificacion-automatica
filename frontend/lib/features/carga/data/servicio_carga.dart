@@ -3,12 +3,12 @@ import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
-import 'common/api/servicio_salud.dart' show backendUrl;
+import '../../../common/api/servicio_salud.dart' show backendUrl;
 
 /// Un archivo elegido por el docente, ya leído a memoria.
 ///
-/// Flutter web no puede pasarle una ruta al backend —el navegador no expone rutas del sistema
-/// de archivos—, así que el contenido viaja en bytes.
+/// Flutter web no puede pasarle una ruta al backend (el navegador no expone rutas del sistema
+/// de archivos), así que el contenido viaja en bytes.
 class ArchivoSeleccionado {
   const ArchivoSeleccionado({required this.nombre, required this.contenido});
 
@@ -16,16 +16,36 @@ class ArchivoSeleccionado {
   final Uint8List contenido;
 }
 
-/// Una hoja que el backend aceptó, almacenó y encoló.
+/// Estado de una hoja aceptada, tal como lo publica el contrato (`HojaAceptadaEnRespuesta`).
+enum EstadoHoja {
+  /// Su trabajo llegó a la cola.
+  encolada,
+
+  /// La hoja está almacenada y en la bitácora, pero su trabajo no llegó a la cola (ADR-0006).
+  /// No es una pérdida, y la pantalla no debe mostrarla como tal. El reintento todavía no está
+  /// automatizado: `bitacora.pendientes()` deja el dato listo y consumirlo es trabajo de A-02.
+  pendienteDeEncolar;
+
+  static EstadoHoja desdeTexto(String? texto) =>
+      texto == 'pendiente_de_encolar' ? pendienteDeEncolar : encolada;
+}
+
+/// Una hoja que el backend aceptó y almacenó.
 class HojaAceptada {
-  const HojaAceptada({required this.nombreArchivo, required this.trabajoId});
+  const HojaAceptada({
+    required this.nombreArchivo,
+    required this.trabajoId,
+    this.estado = EstadoHoja.encolada,
+  });
 
   final String nombreArchivo;
   final String trabajoId;
+  final EstadoHoja estado;
 
   factory HojaAceptada.desdeJson(Map<String, dynamic> json) => HojaAceptada(
         nombreArchivo: json['nombre_archivo'] as String,
         trabajoId: json['trabajo_id'] as String,
+        estado: EstadoHoja.desdeTexto(json['estado'] as String?),
       );
 }
 
@@ -103,18 +123,36 @@ Future<ResultadoCarga> subirHojas(
     flujo = await peticion.send();
   } catch (error) {
     throw const ExcepcionDeCarga(
-      'No se pudo contactar al backend. Revisa que esté levantado y vuelve a intentar.',
+      'No se pudo contactar con la API. Revise su conexión y vuelva a intentarlo.',
     );
   }
 
-  final respuesta = await http.Response.fromStream(flujo);
+  final http.Response respuesta;
+  try {
+    respuesta = await http.Response.fromStream(flujo);
+  } catch (_) {
+    throw const ExcepcionDeCarga(
+      'Se cortó la conexión mientras llegaba la respuesta. Algunas hojas pudieron entrar: '
+      'revise antes de volver a subir el lote.',
+    );
+  }
   if (respuesta.statusCode != 200) {
     throw ExcepcionDeCarga(
-      'El backend respondió ${respuesta.statusCode}. No se recibió ninguna hoja.',
+      'La API respondió ${respuesta.statusCode}. No se recibió ninguna hoja.',
     );
   }
 
-  return ResultadoCarga.desdeJson(
-    jsonDecode(utf8.decode(respuesta.bodyBytes)) as Map<String, dynamic>,
-  );
+  // Un 200 con un cuerpo que no se puede leer es tan grave como no tener respuesta: las hojas
+  // pudieron entrar y el docente no tiene el reporte. Se dice así, en vez de dejar escapar un
+  // error de formato que la pantalla no sabría explicar.
+  try {
+    return ResultadoCarga.desdeJson(
+      jsonDecode(utf8.decode(respuesta.bodyBytes)) as Map<String, dynamic>,
+    );
+  } catch (_) {
+    throw const ExcepcionDeCarga(
+      'La API recibió el lote, pero su reporte no se pudo leer. Algunas hojas pudieron entrar: '
+      'revise antes de volver a subir el lote.',
+    );
+  }
 }

@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 
-import 'selector_archivos.dart' as selector;
-import 'servicio_carga.dart';
+import 'features/carga/data/selector_archivos.dart' as selector;
+import 'features/carga/data/servicio_carga.dart';
 // El mismo archivo se importa otra vez con prefijo, y no es redundancia. Dentro de la
 // expresión de un valor por defecto, los nombres de los parámetros ya están en alcance: un
 // `this.subirHojas = subirHojas` se resolvería al propio parámetro y no a la función, que es
 // el error de compilación que ya apareció una vez con `verificarSalud` en `PantallaInicio`.
 // El prefijo desambigua. Los tipos se siguen usando sin prefijo desde el import de arriba.
-import 'servicio_carga.dart' as servicio;
+import 'features/carga/data/servicio_carga.dart' as servicio;
 
 /// Pantalla de carga de hojas escaneadas: realiza el aspecto A-01 (RF-01) del lado del docente.
 ///
