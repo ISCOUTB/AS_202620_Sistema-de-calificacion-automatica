@@ -1,5 +1,5 @@
 name: frontend
-description: Frontend mínimo de QuantIA (Flutter compilado a web).
+description: Frontend de QuantIA (Flutter compilado a web).
 publish_to: 'none'
 version: 0.1.0
 
@@ -19,3 +19,19 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  # Fuentes empaquetadas (licencia SIL OFL 1.1, texto en assets/fuentes/): el sitio no las
+  # descarga de Google Fonts al cargar, así que se ve igual sin conexión a terceros.
+  fonts:
+    - family: PlusJakartaSans
+      fonts:
+        - asset: assets/fuentes/PlusJakartaSans-Regular.ttf
+        - asset: assets/fuentes/PlusJakartaSans-Medium.ttf
+          weight: 500
+        - asset: assets/fuentes/PlusJakartaSans-SemiBold.ttf
+          weight: 600
+        - asset: assets/fuentes/PlusJakartaSans-Bold.ttf
+          weight: 700
+    - family: JetBrainsMono
+      fonts:
+        - asset: assets/fuentes/JetBrainsMono-Regular.ttf
