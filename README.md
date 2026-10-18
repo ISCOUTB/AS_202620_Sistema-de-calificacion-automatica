@@ -273,7 +273,7 @@ Backend (dentro de `backend/`, con Redis disponible vía `docker compose up -d r
 pytest
 ```
 
-Son 118. Verifican: que la aplicación FastAPI arranca y su endpoint de salud responde
+Son 119. Verifican: que la aplicación FastAPI arranca y su endpoint de salud responde
 200; que los siete módulos del dominio se importan sin error ni ciclos; que ningún módulo
 importa por fuera de lo declarado en el docstring de su `__init__.py` (la prueba de fronteras
 entre módulos); que un trabajo encolado en Redis se recupera igual al desencolarlo; y, para el
@@ -300,6 +300,9 @@ por día corta aunque el minuto tenga cupo, que una solicitud cortada no llama a
 429 trae `Retry-After`, que sin proveedor configurado no se gasta cupo, y que `GET /metricas` publica
 lo mismo que vio el cliente. Usan un reloj falso, así que no esperan un minuto, y tampoco salen a la
 red.
+
+Una llegó con el frontend nuevo: que el navegador puede leer `Retry-After` en el 429. CORS solo
+deja leer las cabeceras que la API declara, y sin esa el sitio no sabría cuánto esperar.
 
 Seis son la **prueba de contrato** ([`backend/tests/test_contrato.py`](backend/tests/test_contrato.py)),
 y verifican que el documento de `docs/contrato/openapi.json` y la API que corre no se puedan
@@ -340,13 +343,23 @@ Frontend (dentro de `frontend/`):
 flutter test
 ```
 
-Son 6 pruebas de widget. Verifican que la pantalla de inicio refleja el estado de conexión con
-el backend y que no ofrece cargar hojas si el backend no responde; y, sobre la pantalla de
-carga, que el botón de subir sigue deshabilitado hasta que haya examen y archivos, que el
-reporte lista las aceptadas y las rechazadas con su motivo, y que una falla de red se muestra
-como aviso y no como rechazo.
+Son 66, una carpeta por pantalla en `test/features/` más `test/app_test.dart`:
 
-Ninguna toca la red ni el diálogo de archivos del navegador: la pantalla recibe esas dos
+- **Marco de la aplicación (6):** la barra superior refleja el estado de conexión con el backend
+  y ofrece volver a comprobar; la navegación es un riel en escritorio y una barra en teléfono; y
+  cambiar de sección no pierde lo escrito en otra.
+- **Carga (13):** el botón de subir sigue deshabilitado hasta que haya examen y archivos, y sin
+  conexión; el reporte lista las aceptadas y las rechazadas con su motivo; una hoja
+  `pendiente_de_encolar` se muestra como pendiente; y una falla de red o una respuesta ilegible
+  se avisan sin dar el lote por perdido ni por recibido.
+- **Pauta y distractores (26):** el 503 y el 429 se muestran como advertencias con el mensaje de
+  la API; con el límite por minuto hay cuenta regresiva y con el diario no se ofrece repetir. Nueve
+  de ellas prueban el servicio contra un `MockClient`, código por código.
+- **Panel (10) y Revisión (11):** avisan que usan datos de ejemplo (en Revisión, también que un
+  veredicto no se guarda) y no se desbordan a 390 px; el Panel tampoco ofrece acciones de IA
+  fuera del alcance.
+
+Ninguna toca la red ni el diálogo de archivos del navegador: las pantallas reciben esas
 operaciones inyectadas y las pruebas les pasan sustitutos.
 
 Estas mismas pruebas corren en cada push y pull request vía `.github/workflows/ci.yml`.
