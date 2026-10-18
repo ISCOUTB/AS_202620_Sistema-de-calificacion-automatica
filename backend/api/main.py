@@ -76,6 +76,10 @@ app.add_middleware(
     allow_origins=[ALLOWED_ORIGIN],
     allow_methods=["*"],
     allow_headers=["*"],
+    # El navegador solo deja leer las cabeceras de respuesta que CORS declara, y `Retry-After`
+    # no está entre las que se leen por omisión: sin esta línea, el sitio recibe el 429 del
+    # presupuesto (ADR-0015) pero no sabe cuánto tiene que esperar el docente.
+    expose_headers=["Retry-After"],
 )
 
 

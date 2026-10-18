@@ -15,6 +15,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api.main import app, obtener_generador, obtener_presupuesto
+from api.settings import ALLOWED_ORIGIN
 from autoria import DistractorPropuesto, PresupuestoDeSolicitudes, ProveedorNoDisponible
 from tests.test_distractores import GeneradorFalso
 
@@ -119,6 +120,22 @@ def test_el_429_dice_cuando_volver_a_pedirlo(cliente: TestClient) -> None:
     assert 1 <= int(respuesta.headers["retry-after"]) <= 60
     assert "por minuto" in respuesta.json()["detail"]
     assert cliente.get("/health").status_code == 200
+
+
+def test_el_sitio_puede_leer_cuanto_esperar_despues_del_429(cliente: TestClient) -> None:
+    """El sitio es otro origen: el navegador le entrega la respuesta, pero solo le deja leer las
+    cabeceras que CORS expone, y `Retry-After` no está entre las de por omisión. Se pide con el
+    `Origin` del sitio, como lo hace el navegador."""
+    _con_presupuesto(por_minuto=1)
+    app.dependency_overrides[obtener_generador] = lambda: GeneradorFalso([])
+    cliente.post("/distractores", json=SOLICITUD, headers={"Origin": ALLOWED_ORIGIN})
+
+    respuesta = cliente.post("/distractores", json=SOLICITUD, headers={"Origin": ALLOWED_ORIGIN})
+
+    assert respuesta.status_code == 429
+    assert respuesta.headers["access-control-allow-origin"] == ALLOWED_ORIGIN
+    expuestas = respuesta.headers["access-control-expose-headers"].lower().split(",")
+    assert "retry-after" in [cabecera.strip() for cabecera in expuestas]
 
 
 def test_sin_proveedor_configurado_no_se_gasta_cupo(cliente: TestClient) -> None:
