@@ -164,3 +164,23 @@ def test_las_metricas_publican_lo_usado_y_lo_cortado(cliente: TestClient) -> Non
     assert presupuesto["usadas_en_el_ultimo_minuto"] == 1
     assert presupuesto["enviadas_desde_el_arranque"] == 1
     assert presupuesto["rechazadas_desde_el_arranque"] == 1
+
+
+def test_la_misma_solicitud_dos_veces_no_deja_estado_y_gasta_su_propio_cupo(
+    cliente: TestClient,
+) -> None:
+    """Responde dos veces, en la integración con el proveedor (S11, MF-09): si el profesor pide lo
+    mismo dos veces, o el navegador reenvía, cada una es una propuesta completa e independiente.
+    La ruta no guarda nada entre solicitudes, así que no hay un estado que pueda quedar a medias
+    ni duplicado: lo único que cuesta la repetida es su cupo, y el presupuesto lo cuenta."""
+    presupuesto = _con_presupuesto(por_minuto=6)
+    generador = GeneradorFalso([DistractorPropuesto("x", "Se bajó el exponente sin multiplicar")])
+    app.dependency_overrides[obtener_generador] = lambda: generador
+
+    primera = cliente.post("/distractores", json=SOLICITUD)
+    segunda = cliente.post("/distractores", json=SOLICITUD)
+
+    assert primera.status_code == segunda.status_code == 200
+    assert primera.json() == segunda.json()
+    assert len(generador.preguntas) == 2
+    assert presupuesto.estado().enviadas_desde_el_arranque == 2
