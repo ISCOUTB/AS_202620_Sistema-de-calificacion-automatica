@@ -12,6 +12,39 @@ Sebastián Cañas Plata (`scp1109`) · Josué David Ortega De Arco (`josueacadem
 María Del Mar Restrepo Licona (`Mariadelmar-restrepo`) · Susana Marcela Rosales Castellar
 (`SusanaRosales`).
 
+## Evidencia S11: fallos parciales y decisión de extracción
+
+La integración principal es la **cola de trabajos** (API → Redis → worker): toda hoja aceptada pasa
+por ella. La S11 la recorrió con los tres casos que pide, y también las otras dos integraciones, el
+proveedor de LLM y el sitio frente a la API.
+
+- **Tabla de modos de fallo** ([`modos-de-fallo.md`](docs/evidencia/modos-de-fallo.md)): 13 modos, MF-01 a MF-13, cada uno con
+  su mitigación, el archivo y la línea, la prueba y su estado. 10 tienen prueba automática; MF-12
+  está implementado sin prueba de su espera, MF-13 está probado solo en el sitio, y MF-06 (el
+  worker que muere a mitad) y la detección de duplicados en la API quedan declarados, con riesgo y
+  plan.
+- **Encontrado al medir:** con Redis lento, un lote de 200 hojas tardaba **10,017 s** en
+  confirmarse, fuera del techo de 10 s de EC-07. Con [ADR-0016](docs/adr/0016-acotar-la-espera-de-la-cola-y-hacer-idempotente-al-worker.md), **2,017 s**.
+- **Idempotencia:** el worker procesa una sola vez el trabajo que la cola entrega dos veces, con
+  `SET trabajo-visto:<id> NX EX`. No hay saga: ninguna transacción cruza servicios, y la recepción
+  se recupera hacia adelante desde la bitácora.
+- **Decisión de extracción:** [ADR-0017](docs/adr/0017-no-extraer-ningun-modulo-del-monolito-todavia.md), **no extraer ningún módulo todavía**, evaluado
+  contra tres opciones de extracción con siete criterios, y con los datos que lo harían revisar.
+- **CI:** el paso «Modos de fallo de las integraciones (S11)» de [`ci.yml`](.github/workflows/ci.yml).
+
+| Lo que pide la S11 | Dónde está |
+|---|---|
+| Tabla de modos de fallo de la integración principal: no responde, responde tarde, responde dos veces | [`modos-de-fallo.md`](docs/evidencia/modos-de-fallo.md), sección 2: MF-01 a MF-06 para la cola, y MF-07 a MF-13 para el proveedor de LLM y el sitio |
+| Una mitigación asignada a cada modo | La misma tabla, columnas «Mitigación asignada», «Dónde está» y «Prueba» |
+| Correspondencia entre lo declarado y lo implementado, o lo pendiente con plan | [`modos-de-fallo.md`](docs/evidencia/modos-de-fallo.md), sección 3 · riesgos R-22 a R-25 en el [arc42 §11](docs/arc42/arc42-template-ES.md#11-risks-and-technical-debts) |
+| Diseño de idempotencia o saga, o por qué no aplica | [`modos-de-fallo.md`](docs/evidencia/modos-de-fallo.md), secciones 4 y 5 · [ADR-0016](docs/adr/0016-acotar-la-espera-de-la-cola-y-hacer-idempotente-al-worker.md) |
+| ADR de extraer o no extraer, con criterios | [ADR-0017](docs/adr/0017-no-extraer-ningun-modulo-del-monolito-todavia.md): cuatro opciones, siete criterios, «no extraer» con sus motivos y sus disparadores |
+| arc42 §11 con los modos de fallo | R-22 a R-25 en el [arc42 §11](docs/arc42/arc42-template-ES.md#11-risks-and-technical-debts), y el recorrido en [§6.6](docs/arc42/arc42-template-ES.md#66-fallos-parciales-de-las-integraciones-s11--adr-0016) |
+| `aspectos.md` al día | Filas [A-01](docs/aspectos.md#a-01) y [A-06](docs/aspectos.md#a-06), con sus subsecciones de la S11 |
+| Los modos de fallo probados, no solo listados | [`test_modos_de_fallo.py`](backend/tests/test_modos_de_fallo.py) (9 pruebas, validadas provocando la falla con 7 mutaciones) y la columna «Prueba» de la tabla |
+| Documentación sincronizada | arc42 §5.1, §6.2, §6.6, §8.4, §9 y §11 · [C4](docs/c4/doc-c4.md) Nivel 2, relaciones 4 y 5, y Nivel 3, relaciones 5 y 6 · [`aspectos.md`](docs/aspectos.md) |
+| Uso de IA | [`docs/ia.md`, entrada 15](docs/ia.md#entrada-15) |
+
 ## Segundo corte: límite de costo
 
 Escenario operativo del segundo corte: **límite de costo**. `POST /distractores` es pública y cada
@@ -98,6 +131,7 @@ qué archivo y en qué sección está.
 | S7 | C4 Nivel 2 con protocolo y formato en cada relación | [`docs/c4/doc-c4.md`](docs/c4/doc-c4.md#nivel-2--diagrama-de-contenedores) |
 | S9 | Porción construida con IA, prueba que falla, EC-08, auditoría y componente generativo | [Evidencia S9](#evidencia-s9) |
 | Corte 2 | Escenario operativo de límite de costo: decisión, experimento, CI, observabilidad y documentación sincronizada | [Segundo corte](#segundo-corte-límite-de-costo) |
+| S11 | Modos de fallo de las integraciones, idempotencia, saga y decisión de no extraer | [Evidencia S11](#evidencia-s11-fallos-parciales-y-decisión-de-extracción) |
 | Todas | Pipeline de integración continua | [Runs de GitHub Actions](https://github.com/ISCOUTB/AS_202620_Sistema-de-calificacion-automatica/actions) |
 | Todas | Análisis estático y su *Quality Gate* | [SonarQube Cloud](https://sonarcloud.io/summary/new_code?id=ISCOUTB_AS_202620_Sistema-de-calificacion-automatica) |
 | Todas | Respuesta a la retroalimentación automática | [`correcciones.md`](correcciones.md) |
@@ -273,7 +307,7 @@ Backend (dentro de `backend/`, con Redis disponible vía `docker compose up -d r
 pytest
 ```
 
-Son 119. Verifican: que la aplicación FastAPI arranca y su endpoint de salud responde
+Son 129. Verifican: que la aplicación FastAPI arranca y su endpoint de salud responde
 200; que los siete módulos del dominio se importan sin error ni ciclos; que ningún módulo
 importa por fuera de lo declarado en el docstring de su `__init__.py` (la prueba de fronteras
 entre módulos); que un trabajo encolado en Redis se recupera igual al desencolarlo; y, para el
@@ -303,6 +337,16 @@ red.
 
 Una llegó con el frontend nuevo: que el navegador puede leer `Retry-After` en el 429. CORS solo
 deja leer las cabeceras que la API declara, y sin esa el sitio no sabría cuánto esperar.
+
+Diez llegaron con la S11 (modos de fallo, ADR-0016), casi todas en
+[`backend/tests/test_modos_de_fallo.py`](backend/tests/test_modos_de_fallo.py). Contra un servidor
+que acepta la conexión y no contesta, verifican que publicar se rinde en menos de 3 s, que un lote
+de 100 hojas confirma dentro de los 10 s con todas pendientes en la bitácora, que el cliente de
+Redis no reintenta por su cuenta, que `desencolar` no se cuelga y que el adaptador del proveedor de
+LLM se corta en su espera. Contra un Redis real, que el mismo trabajo publicado dos veces se procesa
+una sola vez. Y que el worker sobrevive a un fallo de Redis, que procesa igual si no puede comprobar
+la marca, y que la misma solicitud de distractores repetida no deja estado y gasta su propio cupo.
+Se validaron provocando la falla con siete mutaciones, que el docstring del archivo enumera.
 
 Seis son la **prueba de contrato** ([`backend/tests/test_contrato.py`](backend/tests/test_contrato.py)),
 y verifican que el documento de `docs/contrato/openapi.json` y la API que corre no se puedan
@@ -448,6 +492,8 @@ El desarrollo sigue Aspect Driven Development (ADD): cada funcionalidad se decla
 | [0013](docs/adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md) | Consumir Groq detrás de un puerto y degradar sin bloquear la autoría | aceptado |
 | [0014](docs/adr/0014-dejar-constancia-del-ajuste-de-enlaces-en-adr-0007.md) | Dejar constancia del ajuste de enlaces en ADR-0007 | aceptado |
 | [0015](docs/adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md) | Limitar el gasto del proveedor de LLM con un presupuesto en la API | aceptado |
+| [0016](docs/adr/0016-acotar-la-espera-de-la-cola-y-hacer-idempotente-al-worker.md) | Acotar la espera de la cola y hacer idempotente al worker | aceptado |
+| [0017](docs/adr/0017-no-extraer-ningun-modulo-del-monolito-todavia.md) | No extraer ningún módulo del monolito todavía | aceptado |
 
 Las decisiones de un ADR aceptado no se editan ni se borran: si una decisión cambia, se escribe uno nuevo y el anterior pasa a estado *reemplazado por*. Los ajustes menores que no son de arquitectura, como un enlace roto, se permiten dejando constancia ([ADR-0014](docs/adr/0014-dejar-constancia-del-ajuste-de-enlaces-en-adr-0007.md)).
 
@@ -461,7 +507,7 @@ Las decisiones de un ADR aceptado no se editan ni se borran: si una decisión ca
 - [x] arc42: Deployment View (sección 7)
 - [x] Escenarios de calidad: 5 priorizados y 4 complementarios; EC-07, EC-08 y EC-09 medidos
 - [x] C4 Niveles 1, 2 y 3
-- [x] ADR 0001 a 0015
+- [x] ADR 0001 a 0017
 - [x] Elección de stack: FastAPI en el backend, Flutter en el frontend
 - [x] Esqueleto ejecutable
 - [x] Corte vertical de A-01: `ingesta`, almacén, bitácora, encolado y pantalla de carga
@@ -471,6 +517,8 @@ Las decisiones de un ADR aceptado no se editan ni se borran: si una decisión ca
 - [ ] Modelo de datos compartido más allá de lo que A-01 necesitó
 - [x] Proveedor de LLM: Groq, detrás de un puerto de `autoria` (ADR-0013)
 - [x] Segundo corte: presupuesto del proveedor de LLM, `GET /metricas` y experimento de EC-09 (ADR-0015)
+- [x] S11: modos de fallo de las tres integraciones, esperas acotadas de la cola y worker idempotente (ADR-0016); decisión de no extraer (ADR-0017)
+- [ ] Acuse de recibo en la cola y detección de hojas subidas dos veces (R-22 y R-24, con A-02)
 - [ ] Aspectos A-02 a A-05
 
 ## Documentación
@@ -479,13 +527,13 @@ Las decisiones de un ADR aceptado no se editan ni se borran: si una decisión ca
 docs/
 ├── arc42/
 │   └── arc42-template-ES.md                            # documento de arquitectura (arc42)
-├── adr/                                                # 0001 a 0015; el 0001, reemplazado por el 0002
+├── adr/                                                # 0001 a 0017; el 0001, reemplazado por el 0002
 ├── c4/
 │   └── doc-c4.md                                       # modelo C4 (Niveles 1, 2 y 3)
 ├── contrato/
 │   └── openapi.json                                    # contrato HTTP (OpenAPI 3.1), generado
 ├── despliegue/                                        # estimación de costo y taller de despliegue
-├── evidencia/                                          # EC-07, arranque en frío, prueba de contrato, SonarQube; de la S9: EC-08, prueba del defecto y auditoría; del corte 2: experimento de EC-09
+├── evidencia/                                          # EC-07, arranque en frío, prueba de contrato, SonarQube; de la S9: EC-08, prueba del defecto y auditoría; del corte 2: experimento de EC-09; de la S11: modos de fallo
 ├── ficha-problema.md                                   # el problema, usuarios y alcance
 ├── aspectos.md                                         # aspectos y tabla de trazabilidad
 └── ia.md                                               # registro de uso de IA
