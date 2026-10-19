@@ -15,6 +15,9 @@ cubre el resto, de los dos lados de la cola:
 - **No responde y responde tarde, al consumir.** El worker sobrevive a un fallo de Redis, y
   `desencolar` no se cuelga si Redis no contesta.
 
+Al final va el mismo caso de «responde tarde» para la otra integración que sale de la API, el
+proveedor de LLM (ADR-0013), contra el mismo servidor que no contesta.
+
 Todas corren sin Redis salvo la de «responde dos veces», que usa el Redis del CI y se salta con un
 mensaje si no hay uno, como `test_encolado.py`.
 
@@ -27,6 +30,8 @@ Se validaron provocando la falla, una mutación a la vez sobre una copia del có
 - el worker sin la comprobación de `primera_entrega`: fallan la de «responde dos veces», con el
   trabajo repetido procesado dos veces, y la de la marca sin comprobar;
 - `_es_primera_entrega` devolviendo False cuando Redis falla: falla la de la marca sin comprobar.
+- el adaptador del proveedor de LLM esperando ocho veces su tiempo de espera: falla la del
+  proveedor que no contesta.
 """
 
 import logging
@@ -41,6 +46,8 @@ import redis.exceptions
 
 import api.main
 import worker.main as worker_main
+from autoria.distractores import PreguntaParaDistractores, ProveedorNoDisponible
+from autoria.proveedor_llm import TIEMPO_DE_ESPERA_SEGUNDOS, GeneradorCompatibleConOpenAI
 from infraestructura.almacen import AlmacenEnDisco
 from infraestructura.bitacora import BitacoraEnMemoria
 from infraestructura.cola import (
@@ -288,3 +295,31 @@ def test_desencolar_de_una_cola_que_no_contesta_devuelve_nada_en_vez_de_colgarse
     inicio = time.perf_counter()
     assert desencolar(cliente, "procesamiento", timeout=0) is None
     assert time.perf_counter() - inicio < 2.0
+
+
+# --- La otra integración que sale de la API: el proveedor de LLM (ADR-0013) -----------------
+
+
+def test_un_proveedor_que_no_contesta_se_corta_en_su_espera_y_sin_reintentar(
+    redis_lento: RedisQueNoContesta,
+) -> None:
+    """Responde tarde, en la integración con el proveedor de LLM (MF-08). El mismo servidor sirve
+    de proveedor lento: acepta la conexión y no contesta nada, ni a Redis ni a HTTP. El adaptador
+    se corta en su tiempo de espera, responde con un motivo para el profesor y no reintenta: una
+    sola conexión. En operación la espera es de 20 s (ADR-0013); aquí se baja para que la prueba
+    tarde medio segundo."""
+    puerto = redis_lento.url.split(":")[2].split("/")[0]
+    generador = GeneradorCompatibleConOpenAI(
+        url_base=f"http://127.0.0.1:{puerto}/v1", modelo="prueba", clave="prueba",
+        tiempo_de_espera=0.5,
+    )
+
+    inicio = time.perf_counter()
+    with pytest.raises(ProveedorNoDisponible) as falla:
+        generador.proponer(PreguntaParaDistractores("Derivada de x²", "2x"))
+    transcurrido = time.perf_counter() - inicio
+
+    assert "no respondió en 0.5 s" in falla.value.motivo
+    assert transcurrido < 2.0
+    assert redis_lento.conexiones == 1
+    assert TIEMPO_DE_ESPERA_SEGUNDOS == 20
