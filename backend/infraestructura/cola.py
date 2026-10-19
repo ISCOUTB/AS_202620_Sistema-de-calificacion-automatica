@@ -20,6 +20,14 @@ reintenta** (`Retry(NoBackoff(), 0)`). Hoy redis-py ya no reintentaba al crearse
 pero solo por cómo arma la conexión: el constructor de `redis.Redis` sí trae reintentos por
 omisión. Un reintento oculto del `RPUSH`, después de un tiempo agotado en el que Redis sí guardó
 el trabajo, es justamente una forma de que el mismo trabajo llegue dos veces.
+
+El trabajo que llega dos veces (S11, ADR-0016)
+----------------------------------------------
+Aun sin reintentos ocultos, un trabajo puede llegar dos veces al worker: si el `RPUSH` vence en
+el cliente después de que Redis lo guardó, la hoja queda `pendiente_de_encolar` en la bitácora
+aunque su trabajo sí está en la cola, y el reintento de las pendientes la publicaría otra vez con
+el mismo identificador. `primera_entrega` es lo que hace idempotente al worker: deja una marca
+por identificador con `SET NX` y vigencia, y solo la primera entrega la encuentra libre.
 """
 
 import json
@@ -40,6 +48,12 @@ from redis.retry import Retry
 ESPERA_DE_CONEXION_SEGUNDOS = 2.0
 ESPERA_AL_PUBLICAR_SEGUNDOS = 2.0
 ESPERA_AL_CONSUMIR_SEGUNDOS = 10.0
+
+# Cuánto se recuerda que un trabajo ya se entregó (idempotencia del worker, ADR-0016). Una semana
+# cubre de sobra el reintento de una hoja pendiente, que ocurre el mismo día; después la marca
+# vence sola y la memoria de Redis no crece sin límite. Con 800 hojas al mes son unos KB.
+VIGENCIA_DE_UN_TRABAJO_VISTO_SEGUNDOS = 7 * 24 * 60 * 60
+_PREFIJO_TRABAJO_VISTO = "trabajo-visto:"
 
 
 class ColaNoDisponible(RuntimeError):
@@ -101,6 +115,26 @@ def encolar(cliente: redis.Redis, cola: str, payload: dict) -> Trabajo:
     """Acuña y publica en un solo paso. Se conserva para quien no necesita el identificador
     antes de publicar; `ingesta` sí lo necesita y usa las dos mitades por separado."""
     return publicar(cliente, cola, preparar_trabajo(payload))
+
+
+def primera_entrega(cliente: redis.Redis, trabajo_id: str) -> bool:
+    """True si es la primera vez que este trabajo se entrega; False si ya se entregó antes.
+
+    Es la idempotencia del worker (ADR-0016): `SET trabajo-visto:<id> 1 NX EX <vigencia>` es
+    atómico en Redis, así que de dos entregas del mismo identificador, aunque lleguen a dos
+    workers a la vez, solo una encuentra la marca libre. Traduce los fallos de redis-py a
+    `ColaNoDisponible`, como `publicar`: decidir qué hacer si no se pudo comprobar es de quien
+    llama."""
+    try:
+        marcado = cliente.set(
+            f"{_PREFIJO_TRABAJO_VISTO}{trabajo_id}",
+            "1",
+            nx=True,
+            ex=VIGENCIA_DE_UN_TRABAJO_VISTO_SEGUNDOS,
+        )
+    except redis.exceptions.RedisError as error:
+        raise ColaNoDisponible(str(error)) from error
+    return bool(marcado)
 
 
 def desencolar(cliente: redis.Redis, cola: str, timeout: int = 5) -> Trabajo | None:
