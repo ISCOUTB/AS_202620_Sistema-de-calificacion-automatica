@@ -68,6 +68,9 @@ def test_el_worker_registra_la_hoja_recibida_con_los_datos_del_trabajo(
 
     monkeypatch.setattr(worker_main, "cliente_redis", lambda: object())
     monkeypatch.setattr(worker_main, "desencolar", desencolar_una_vez)
+    # La idempotencia del worker (ADR-0016) se prueba en `test_modos_de_fallo.py`; aquí el
+    # trabajo es nuevo.
+    monkeypatch.setattr(worker_main, "primera_entrega", lambda *_args: True)
 
     with caplog.at_level(logging.INFO, logger="worker"), pytest.raises(_FinDeLaPrueba):
         worker_main.ejecutar()
