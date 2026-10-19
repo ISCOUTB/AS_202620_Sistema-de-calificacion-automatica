@@ -49,7 +49,7 @@ from autoria import (
 )
 from infraestructura.almacen import AlmacenDeImagenes, AlmacenEnDisco
 from infraestructura.bitacora import BitacoraDeRecepcion, BitacoraEnDisco
-from infraestructura.cola import cliente_redis
+from infraestructura.cola import ESPERA_AL_PUBLICAR_SEGUNDOS, cliente_redis
 from infraestructura.modelo import PENDIENTE_DE_ENCOLAR, ArchivoCargado
 from infraestructura.registro import configurar_registro
 from ingesta import recibir_lote
@@ -98,8 +98,11 @@ def obtener_bitacora() -> BitacoraDeRecepcion:
 
 def obtener_cliente_cola():
     """Dependencia de la cola. Misma razón que arriba: si el cliente se creara al importar,
-    ninguna prueba de la API podría correr sin un Redis levantado."""
-    return cliente_redis(REDIS_URL)
+    ninguna prueba de la API podría correr sin un Redis levantado.
+
+    La API solo publica, así que usa la espera corta (ADR-0016): un Redis que acepta la conexión
+    y no contesta cuesta 2 s al lote y no los 10 s que necesita el worker para su `BLPOP`."""
+    return cliente_redis(REDIS_URL, espera_segundos=ESPERA_AL_PUBLICAR_SEGUNDOS)
 
 
 # El presupuesto del proveedor de LLM (ADR-0015). A diferencia del almacén y la cola, se crea una
