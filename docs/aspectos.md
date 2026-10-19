@@ -30,17 +30,23 @@ verificar y evidenciar.
 **El escenario operativo del segundo corte es de límite de costo, sobre la misma fila [A-06](#a-06)**
 (escenario [EC-09](arc42/arc42-template-ES.md#ec-09), [ADR-0015](adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md)): una ráfaga contra `POST /distractores`. Medido en local con un proveedor que aplica el límite de Groq, pasa de 20 solicitudes en el proveedor y 11 cortes por cuota a 6 y 0, con los 14 rechazos de la API en 2 ms de mediana ([experimento](evidencia/experimento-presupuesto.md)).
 
+**Los fallos parciales de la S11 caen sobre [A-01](#a-01) y [A-06](#a-06)**, las dos filas
+construidas ([tabla de modos de fallo](evidencia/modos-de-fallo.md)). La integración principal es la cola de A-01: con
+Redis lento, un lote de 200 hojas tardaba 10,017 s en confirmarse, fuera de EC-07, y con
+[ADR-0016](adr/0016-acotar-la-espera-de-la-cola-y-hacer-idempotente-al-worker.md) tarda 2,017 s; el worker procesa una sola vez el trabajo que llega dos veces.
+[ADR-0017](adr/0017-no-extraer-ningun-modulo-del-monolito-todavia.md) decide no extraer ningún módulo todavía, con sus criterios.
+
 Cada fila enlaza a su escenario de calidad en el arc42. Los nueve escenarios documentados son
 alcanzables desde la fila del aspecto que los realiza.
 
 | ID | Aspecto | Estado | Requisito | Escenario de calidad | Contexto C4 (Nivel 1) | C4 | ADR | Código | Pruebas | Evidencia |
 |---|---|---|---|---|---|---|---|---|---|---|
-| **[A-01](#a-01)** | Carga de examen para calificación | **Construido** | RF-01 | [EC-07](arc42/arc42-template-ES.md#ec-07) | [Rel. 1](c4/doc-c4.md#relaciones): Profesor/TA → Sistema | C1: [QuantIA](c4/doc-c4.md#nivel-1--diagrama-de-contexto-del-sistema) · C2: [Aplicación web](c4/doc-c4.md#nivel-2--diagrama-de-contenedores), [Almacén de imágenes](c4/doc-c4.md#nivel-2--diagrama-de-contenedores), [Cola de trabajos](c4/doc-c4.md#nivel-2--diagrama-de-contenedores) | [0002](adr/0002-procesar-calificacion-de-forma-asincrona.md) · [0006](adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md) | [`ingesta/recepcion.py`](../backend/ingesta/recepcion.py) · [`infraestructura/almacen.py`](../backend/infraestructura/almacen.py) · [`infraestructura/bitacora.py`](../backend/infraestructura/bitacora.py) · [`infraestructura/modelo.py`](../backend/infraestructura/modelo.py) · [`api/main.py`](../backend/api/main.py) · [`frontend/lib/features/carga/views/pantalla_carga.dart`](../frontend/lib/features/carga/views/pantalla_carga.dart) | [`test_recepcion.py`](../backend/tests/test_recepcion.py) · [`test_durabilidad_recepcion.py`](../backend/tests/test_durabilidad_recepcion.py) · [`test_carga_hojas.py`](../backend/tests/test_carga_hojas.py) · [`carga_test.dart`](../frontend/test/features/carga_test.dart) | [Medición de EC-07](evidencia/medicion-ec07.md): 1,744 s contra ≤10 s · 0 % de pérdida silenciosa · [captura](#a-01-evidencia) |
+| **[A-01](#a-01)** | Carga de examen para calificación | **Construido** | RF-01 | [EC-07](arc42/arc42-template-ES.md#ec-07) | [Rel. 1](c4/doc-c4.md#relaciones): Profesor/TA → Sistema | C1: [QuantIA](c4/doc-c4.md#nivel-1--diagrama-de-contexto-del-sistema) · C2: [Aplicación web](c4/doc-c4.md#nivel-2--diagrama-de-contenedores), [Almacén de imágenes](c4/doc-c4.md#nivel-2--diagrama-de-contenedores), [Cola de trabajos](c4/doc-c4.md#nivel-2--diagrama-de-contenedores) | [0002](adr/0002-procesar-calificacion-de-forma-asincrona.md) · [0006](adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md) · [0016](adr/0016-acotar-la-espera-de-la-cola-y-hacer-idempotente-al-worker.md) | [`ingesta/recepcion.py`](../backend/ingesta/recepcion.py) · [`infraestructura/almacen.py`](../backend/infraestructura/almacen.py) · [`infraestructura/bitacora.py`](../backend/infraestructura/bitacora.py) · [`infraestructura/modelo.py`](../backend/infraestructura/modelo.py) · [`api/main.py`](../backend/api/main.py) · [`frontend/lib/features/carga/views/pantalla_carga.dart`](../frontend/lib/features/carga/views/pantalla_carga.dart) · [`infraestructura/cola.py`](../backend/infraestructura/cola.py) · [`worker/main.py`](../backend/worker/main.py) | [`test_recepcion.py`](../backend/tests/test_recepcion.py) · [`test_durabilidad_recepcion.py`](../backend/tests/test_durabilidad_recepcion.py) · [`test_carga_hojas.py`](../backend/tests/test_carga_hojas.py) · [`carga_test.dart`](../frontend/test/features/carga_test.dart) · [`test_modos_de_fallo.py`](../backend/tests/test_modos_de_fallo.py) | [Medición de EC-07](evidencia/medicion-ec07.md): 1,744 s contra ≤10 s · 0 % de pérdida silenciosa · [captura](#a-01-evidencia) · [Modos de fallo](evidencia/modos-de-fallo.md) (S11): con la cola lenta, el lote de 200 confirma en 2,017 s (antes 10,017 s) |
 | **[A-02](#a-02)** | Detección de marcas y nivel de confianza | Declarado | RF-02, RF-03 | [EC-01](arc42/arc42-template-ES.md#ec-01) · [EC-02](arc42/arc42-template-ES.md#ec-02) | **Sin contexto propio** — proceso interno, no cruza la frontera del sistema (ver nota abajo) | Pendiente | ADR de umbral previsto (R-04) | Pendiente | Pendiente | Pendiente |
 | **[A-03](#a-03)** | Calificación contra la clave y publicación | Declarado | RF-04, RF-05, RF-08 | [EC-03](arc42/arc42-template-ES.md#ec-03) · [EC-04](arc42/arc42-template-ES.md#ec-04) | [Rel. 2](c4/doc-c4.md#relaciones): Sistema → Profesor/TA | Pendiente | [0002](adr/0002-procesar-calificacion-de-forma-asincrona.md) | Pendiente | Pendiente | Pendiente |
 | **[A-04](#a-04)** | Registro del banco y habilitación del examen | Declarado | RF-06, RF-07 | [EC-05](arc42/arc42-template-ES.md#ec-05) | [Rel. 1](c4/doc-c4.md#relaciones): Profesor/TA → Sistema | Pendiente | [0003](adr/0003-usar-fastapi-y-flutter.md) · [0004](adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md) · [0005](adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md) | Pendiente | Pendiente | Pendiente |
 | **[A-05](#a-05)** | Identidad y aislamiento por curso | Declarado | RF-09, RF-10 | [EC-06](arc42/arc42-template-ES.md#ec-06) | [Rel. 1 y 2](c4/doc-c4.md#relaciones): transversal a ambas — condición de «docente autenticado» bajo la que operan | Pendiente | ADR de auditoría previsto (RF-10) | Pendiente | Pendiente | Pendiente |
-| **[A-06](#a-06)** | Propuesta de distractores diagnósticos | **Construido** | RF-11 *(opcional)* | [EC-08](arc42/arc42-template-ES.md#ec-08) · [EC-09](arc42/arc42-template-ES.md#ec-09) | [Rel. 3](c4/doc-c4.md#relaciones): Sistema → Proveedor de LLM (opcional) | C1: [Proveedor de LLM](c4/doc-c4.md#nivel-1--diagrama-de-contexto-del-sistema) · C2: [Aplicación web → Proveedor de LLM](c4/doc-c4.md#relaciones-1) (relación 8) · C3: [`autoria`](c4/doc-c4.md#nivel-3--diagrama-de-componentes) | [0005](adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md) · [0013](adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md) · [0015](adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md) | [`autoria/distractores.py`](../backend/autoria/distractores.py) · [`autoria/proveedor_llm.py`](../backend/autoria/proveedor_llm.py) · [`autoria/presupuesto.py`](../backend/autoria/presupuesto.py) · [`api/main.py`](../backend/api/main.py) (`POST /distractores` y `GET /metricas`) · pantalla: [`pantalla_pauta.dart`](../frontend/lib/features/pauta/views/pantalla_pauta.dart) y [`servicio_distractores.dart`](../frontend/lib/features/pauta/data/servicio_distractores.dart) | [`test_distractores.py`](../backend/tests/test_distractores.py) · [`test_proveedor_llm.py`](../backend/tests/test_proveedor_llm.py) · [`test_ruta_distractores.py`](../backend/tests/test_ruta_distractores.py) · [`test_presupuesto.py`](../backend/tests/test_presupuesto.py) · [`pauta_test.dart`](../frontend/test/features/pauta_test.dart) · [`servicio_distractores_test.dart`](../frontend/test/features/servicio_distractores_test.dart) | [Evaluación de EC-08](evidencia/evaluacion-distractores.md): M1: 0 de 120 propuestas repiten la respuesta correcta · M2: p95 de 2,91 s contra 15 s · M3: 503 en 20,25 s contra 21 s · [la prueba falla ante el defecto](evidencia/prueba-distractores-falla.md) · [auditoría](evidencia/auditoria-s9.md) · [Experimento de EC-09](evidencia/experimento-presupuesto.md) (segundo corte): de 20 solicitudes en el proveedor y 11 cortes por cuota a 6 y 0 |
+| **[A-06](#a-06)** | Propuesta de distractores diagnósticos | **Construido** | RF-11 *(opcional)* | [EC-08](arc42/arc42-template-ES.md#ec-08) · [EC-09](arc42/arc42-template-ES.md#ec-09) | [Rel. 3](c4/doc-c4.md#relaciones): Sistema → Proveedor de LLM (opcional) | C1: [Proveedor de LLM](c4/doc-c4.md#nivel-1--diagrama-de-contexto-del-sistema) · C2: [Aplicación web → Proveedor de LLM](c4/doc-c4.md#relaciones-1) (relación 8) · C3: [`autoria`](c4/doc-c4.md#nivel-3--diagrama-de-componentes) | [0005](adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md) · [0013](adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md) · [0015](adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md) · [0017](adr/0017-no-extraer-ningun-modulo-del-monolito-todavia.md) | [`autoria/distractores.py`](../backend/autoria/distractores.py) · [`autoria/proveedor_llm.py`](../backend/autoria/proveedor_llm.py) · [`autoria/presupuesto.py`](../backend/autoria/presupuesto.py) · [`api/main.py`](../backend/api/main.py) (`POST /distractores` y `GET /metricas`) · pantalla: [`pantalla_pauta.dart`](../frontend/lib/features/pauta/views/pantalla_pauta.dart) y [`servicio_distractores.dart`](../frontend/lib/features/pauta/data/servicio_distractores.dart) | [`test_distractores.py`](../backend/tests/test_distractores.py) · [`test_proveedor_llm.py`](../backend/tests/test_proveedor_llm.py) · [`test_ruta_distractores.py`](../backend/tests/test_ruta_distractores.py) · [`test_presupuesto.py`](../backend/tests/test_presupuesto.py) · [`pauta_test.dart`](../frontend/test/features/pauta_test.dart) · [`servicio_distractores_test.dart`](../frontend/test/features/servicio_distractores_test.dart) · [`test_modos_de_fallo.py`](../backend/tests/test_modos_de_fallo.py) | [Evaluación de EC-08](evidencia/evaluacion-distractores.md): M1: 0 de 120 propuestas repiten la respuesta correcta · M2: p95 de 2,91 s contra 15 s · M3: 503 en 20,25 s contra 21 s · [la prueba falla ante el defecto](evidencia/prueba-distractores-falla.md) · [auditoría](evidencia/auditoria-s9.md) · [Experimento de EC-09](evidencia/experimento-presupuesto.md) (segundo corte): de 20 solicitudes en el proveedor y 11 cortes por cuota a 6 y 0 · [Modos de fallo MF-07 a MF-10](evidencia/modos-de-fallo.md) (S11) |
 
 **Estados:** *Declarado* = pasos 1 y 3 parciales (nombre, para quién, qué resuelve, requisitos
 y escenario asignados). *Especificado* = pasos 1 a 4 completos. *Construido* = pasos 5 a 7.
@@ -306,6 +312,30 @@ prueba de caídas** lo responde la medición de EC-07 de la tabla anterior. Lo q
 dos cubre es la caída del sistema operativo, que solo se comprobaría cortándole la corriente a la
 máquina.
 
+### S11: fallos parciales de la cola (EC-07)
+
+La cola de trabajos es la integración principal del sistema: toda hoja aceptada pasa por ella. La
+S11 la recorrió con los tres casos que pide (que Redis no responda, que responda tarde y que
+responda dos veces), de los dos lados, en la [tabla de modos de fallo](evidencia/modos-de-fallo.md) (MF-01 a MF-06).
+
+- **Encontrado al medir:** con Redis lento, una publicación tardaba 10,012 s y el lote de 200
+  hojas 10,017 s, porque la API usaba la espera de 10 s del worker. Es el dato que ADR-0006 dejó
+  escrito para revisarse.
+- **Decidir:** [ADR-0016](adr/0016-acotar-la-espera-de-la-cola-y-hacer-idempotente-al-worker.md), que precisa a ADR-0006: la API espera 2 s, el worker 10 s, el
+  cliente no reintenta solo, y el worker procesa cada `trabajo_id` una sola vez con
+  `SET NX EX`.
+- **Construir:** [`infraestructura/cola.py`](../backend/infraestructura/cola.py)
+  (`cliente_redis` y `primera_entrega`), [`api/main.py`](../backend/api/main.py)
+  (`obtener_cliente_cola`) y [`worker/main.py`](../backend/worker/main.py).
+- **Verificar:** ocho pruebas del backend en
+  [`test_modos_de_fallo.py`](../backend/tests/test_modos_de_fallo.py), que se suman a las del
+  paso 6 y se validaron provocando la falla con seis mutaciones. Después del cambio, el lote de 200
+  confirma en 2,017 s con la cola lenta.
+- **Sigue abierto:** el worker que muere después de retirar el trabajo lo pierde, porque la lista
+  no tiene acuse de recibo (MF-06, R-22); la marca de idempotencia pasa a después de procesar
+  cuando exista A-02 (R-23); y la API no detecta una hoja subida dos veces (MF-13, R-24). Los tres
+  tienen su plan en la tabla.
+
 ### Por qué se eligió este aspecto primero
 
 - Es el punto de entrada del flujo completo: sin una hoja cargada no hay nada sobre lo cual
@@ -505,6 +535,23 @@ en 503 por cuota ([`presupuesto-antes.json`](evidencia/presupuesto-antes.json)).
   que el pipeline corre como paso propio.
 - **Evidenciar:** el [experimento](evidencia/experimento-presupuesto.md), con hipótesis, dos montajes
   (local con un proveedor simulado y el entorno desplegado con Groq), resultado y conclusión.
+
+### S11: fallos parciales del proveedor de LLM
+
+La propuesta de distractores es la segunda integración de la [tabla de modos de fallo](evidencia/modos-de-fallo.md)
+(MF-07 a MF-10). Las mitigaciones ya estaban decididas en ADR-0013 (20 s, sin reintentos, 503 con
+motivo) y ADR-0015 (el presupuesto acota cuántas solicitudes esperan a la vez); la S11 agregó lo que
+faltaba probar:
+
+- **Responde tarde:** el adaptador apuntado a un servidor que acepta la conexión y no contesta se
+  corta en su tiempo de espera, en una sola conexión
+  ([`test_modos_de_fallo.py`](../backend/tests/test_modos_de_fallo.py)).
+- **Responde dos veces:** la misma solicitud repetida no deja estado y gasta su propio cupo
+  ([`test_ruta_distractores.py`](../backend/tests/test_ruta_distractores.py)).
+- **Sin *circuit breaker*, con motivo:** con 6 solicitudes por minuto como máximo, el peor caso son
+  6 hilos esperando 20 s; la tabla dice qué dato lo haría necesario.
+- **No se extrae a un servicio propio:** [ADR-0017](adr/0017-no-extraer-ningun-modulo-del-monolito-todavia.md) lo evaluó como opción y lo descartó
+  por ahora, con los datos que lo harían revisar.
 
 ---
 
