@@ -54,6 +54,7 @@ su frontera.
   - [6.3 Escenarios pendientes](#63-escenarios-pendientes)
   - [6.4 Solicitud de distractores (RF-11 · aspecto A-06 · EC-08)](#64-solicitud-de-distractores-rf-11--aspecto-a-06--ec-08)
   - [6.5 Ráfaga contra la ruta de distractores (EC-09 · ADR-0015)](#65-ráfaga-contra-la-ruta-de-distractores-ec-09--adr-0015)
+  - [6.6 Fallos parciales de las integraciones (S11 · ADR-0016)](#66-fallos-parciales-de-las-integraciones-s11--adr-0016)
 - [7. Deployment View](#7-deployment-view)
   - [7.1 Las seis piezas del despliegue](#71-las-seis-piezas-del-despliegue)
   - [7.2 Entorno local](#72-entorno-local)
@@ -63,6 +64,7 @@ su frontera.
   - [8.1 Mapa de contextos](#81-mapa-de-contextos)
   - [8.2 Lenguaje ubicuo](#82-lenguaje-ubicuo)
   - [8.3 Propiedad de datos](#83-propiedad-de-datos)
+  - [8.4 Resiliencia de las integraciones](#84-resiliencia-de-las-integraciones)
   - [Conceptos transversales todavía sin desarrollar](#conceptos-transversales-todavía-sin-desarrollar)
 - [9. Architecture Decisions](#9-architecture-decisions)
 - [10. Quality Requirements](#10-quality-requirements)
@@ -313,8 +315,8 @@ los dos documentos juntos:
 |---|---|---|---|
 | **Aplicación web** *(lado servidor)* | Autenticación, cursos, preguntas, exámenes, carga de escaneos y consulta de resultados; inicia los trabajos de procesamiento. | FastAPI (`backend/api/main.py`), Uvicorn (servicio `api`). | Expone `GET /health`, `POST /examenes/{examen_id}/hojas` (RF-01, aspecto A-01), `POST /distractores` (RF-11, aspecto A-06) y `GET /metricas` (EC-09, ADR-0015). El resto de responsabilidades del contenedor (cursos, preguntas, resultados) siguen sin ruta. |
 | **Interfaz web** *(parte de «Aplicación web» en el C4)* | Presenta al docente el dashboard, la carga de escaneos y la resolución de marcas ambiguas. | Flutter compilado a web, servido por nginx (servicio `frontend`). | Cuatro pantallas, una carpeta por funcionalidad en `frontend/lib/features/`, con el estado de conexión en la barra superior. **Carga** (A-01) y **Pauta y distractores** (A-06) llaman a la API. **Panel**, **Revisión** y la clave de Pauta muestran datos de ejemplo bajo un aviso visible, porque A-02 a A-04 no están construidos: el dashboard de RNF-04 y la resolución de marcas ambiguas siguen sin datos reales. |
-| **Worker de procesamiento** | Ejecuta el OMR, calcula calificaciones y genera alertas de revisión. | Proceso Python (`backend/worker/main.py`), misma imagen que la aplicación web. | Consume la cola y confirma que la hoja encolada por `ingesta` le llegó, registrando en log su identificador, examen, archivo y referencia. **No ejecuta todavía** el pipeline `omr → calificacion`: ese es el aspecto A-02, aún declarado. |
-| **Cola de trabajos** | Desacopla la aplicación web del procesamiento OMR. | Redis 7, adaptador FIFO en `infraestructura/cola.py` (RPUSH/BLPOP). | Implementado y probado contra un Redis real (`backend/tests/test_encolado.py`); sigue siendo, según su propio docstring, «el germen» de lo que EC-07 exige, no una cola de producción con reintentos o acuses de recibo. |
+| **Worker de procesamiento** | Ejecuta el OMR, calcula calificaciones y genera alertas de revisión. | Proceso Python (`backend/worker/main.py`), misma imagen que la aplicación web. | Consume la cola y confirma que la hoja encolada por `ingesta` le llegó, registrando en log su identificador, examen, archivo y referencia. **No ejecuta todavía** el pipeline `omr → calificacion`: ese es el aspecto A-02, aún declarado. Desde la S11 procesa cada trabajo una sola vez aunque la cola lo entregue dos veces ([ADR-0016](../adr/0016-acotar-la-espera-de-la-cola-y-hacer-idempotente-al-worker.md)), y sigue en la instancia de la API por decisión, no por omisión ([ADR-0017](../adr/0017-no-extraer-ningun-modulo-del-monolito-todavia.md)). |
+| **Cola de trabajos** | Desacopla la aplicación web del procesamiento OMR. | Redis 7, adaptador FIFO en `infraestructura/cola.py` (RPUSH/BLPOP). | Implementado y probado contra un Redis real (`backend/tests/test_encolado.py`); sigue siendo, según su propio docstring, «el germen» de lo que EC-07 exige, no una cola de producción con reintentos o acuses de recibo. Desde la S11 la API la espera 2 s y el worker 10 s, sin reintentos ocultos del cliente ([ADR-0016](../adr/0016-acotar-la-espera-de-la-cola-y-hacer-idempotente-al-worker.md)); el acuse de recibo sigue pendiente (R-22). |
 | **Base de datos** | Almacena usuarios, cursos, preguntas, claves, exámenes y resultados. | PostgreSQL 16, volumen `datos_postgres`. | Declarada en `docker-compose.yml` y `.env.example`; **ningún módulo la usa todavía** — sin esquema ni migraciones. |
 | **Almacén de imágenes** | Conserva las hojas escaneadas, la bitácora de recepción y archivos asociados. | Volumen Docker `almacen_imagenes`, montado en `api` y `worker`. | **Implementado como dos puertos con adaptadores provisionales**: `infraestructura/almacen.py` define el puerto `AlmacenDeImagenes` y el adaptador `AlmacenEnDisco`, que escribe en el volumen con nombres saneados (`nombre_seguro`) para evitar escapes de directorio; `infraestructura/bitacora.py` define `BitacoraDeRecepcion` y `BitacoraEnDisco`, de solo agregado y con `fsync` por línea ([ADR-0006](../adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md)). Los dos son deliberadamente provisionales: el riesgo R-06 (decisión de persistencia) sigue abierto, y cuando se resuelva solo cambian los adaptadores, no los puertos ni quien los consume. La política de retención de RNF-14 aterrizará aquí y hoy no está implementada. |
 | **Proveedor de LLM** *(externo y opcional)* | Propone distractores diagnósticos durante la autoría. | Groq, modelo `openai/gpt-oss-120b`, con el protocolo de chat de OpenAI ([ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)). | Lo llama `autoria/proveedor_llm.py` desde la aplicación web, nunca desde el worker (RNF-13). Sin clave, la ruta de distractores responde 503 y nada más cambia. Desde el segundo corte, cada llamada pasa antes por el presupuesto de `autoria/presupuesto.py`: 6 por minuto y 150 por día, y 429 sin salir a la red si no hay cupo (ADR-0015). |
@@ -468,6 +470,10 @@ backend no responde, que el reporte distingue una falla de red de un rechazo y q
 de verdad ante un cambio incompatible está comprobado en
 [`../evidencia/prueba-de-contrato-falla.md`](../evidencia/prueba-de-contrato-falla.md).
 
+**Desde la S11**, el paso 3 tiene un techo propio para la cola lenta (la API se rinde en 2 s, no en
+10) y el paso 5 descarta el trabajo que llega dos veces. Lo que pasa en cada caso de fallo de este
+recorrido está en [6.6](#66-fallos-parciales-de-las-integraciones-s11--adr-0016).
+
 ## 6.3 Escenarios pendientes
 
 | Escenario | Recorre | Verifica | Bloqueado por |
@@ -572,6 +578,63 @@ que no existe (R-19), ni el comportamiento tras un reinicio, que vacía el presu
 **Pruebas que lo verifican:** `backend/tests/test_presupuesto.py` (las ventanas, con un reloj falso)
 y `backend/tests/test_ruta_distractores.py` (el 429, `Retry-After` y `/metricas` vistos desde fuera),
 que el pipeline corre como paso propio, «Escenario del segundo corte».
+
+## 6.6 Fallos parciales de las integraciones (S11 · ADR-0016)
+
+Es el recorrido de 6.2 cuando la cola no se porta bien. La S11 pide los tres casos de la
+integración principal (que el otro lado no responda, que responda tarde y que responda dos veces),
+y la tabla completa, con las tres integraciones y trece modos, está en
+[`modos-de-fallo.md`](../evidencia/modos-de-fallo.md). Aquí van los dos que cambiaron el código.
+
+```mermaid
+sequenceDiagram
+    actor D as Docente
+    participant API as api e ingesta
+    participant B as bitácora
+    participant R as Redis, lento
+    participant W as worker
+    D->>API: lote de 200 hojas
+    API->>B: registrar(hoja 1)
+    API->>R: RPUSH trabajo 1
+    Note over API,R: no contesta: la API se rinde a los 2 s
+    API->>B: hoja 1 pendiente_de_encolar
+    API->>B: hojas 2 a 200 registradas y pendientes, sin insistir
+    API-->>D: 200 con el lote completo, en 2,0 s
+    Note over R: el RPUSH de la hoja 1 sí había entrado
+    API->>R: reintento desde la bitácora (A-02), mismo trabajo_id
+    R-->>W: trabajo 1
+    W->>R: SET trabajo-visto:1 NX EX
+    R-->>W: OK, primera vez
+    W->>W: procesa la hoja
+    R-->>W: trabajo 1, otra vez
+    W->>R: SET trabajo-visto:1 NX EX
+    R-->>W: ya estaba
+    W->>W: registra trabajo_repetido y no procesa
+```
+
+1. **Responde tarde (MF-02).** La API pide el cliente de la cola con 2 s de espera para conectar y
+   para responder, y sin reintentos propios. Contra un Redis que acepta la conexión y no contesta,
+   la primera hoja se rinde a los 2 s y el lote deja de insistir (ADR-0006): las 200 quedan
+   pendientes en la bitácora y el docente recibe la confirmación en 2,017 s. Antes de ADR-0016, con
+   la espera de 10 s del worker, tardaba 10,017 s, fuera del techo de EC-07.
+2. **Responde dos veces (MF-03).** Un `RPUSH` que venció en el cliente pudo haber entrado. Cuando la
+   hoja se republique desde la bitácora, llevará el mismo `trabajo_id`, y el worker recibirá dos
+   veces el mismo trabajo. Antes de procesar, el worker hace `SET trabajo-visto:<id> NX EX` de 7
+   días: la primera entrega se procesa, la segunda se registra como `trabajo_repetido`. Si Redis
+   falla en ese momento, el trabajo se procesa igual y queda `idempotencia_sin_comprobar`.
+3. **No responde, de los dos lados (MF-01 y MF-04).** Lo resolvía ya ADR-0006 para la API; el
+   worker captura el error, espera 5 s y vuelve a pedir.
+4. **El worker muere después de retirar el trabajo (MF-06).** No está resuelto: la lista no tiene
+   acuse de recibo. Es R-22, con su plan para A-02.
+
+**Por qué no hay saga.** No hay una transacción que cruce servicios: si la publicación falla, no
+hay nada que deshacer, sino algo que terminar después desde la bitácora (recuperación hacia
+adelante). El argumento completo está en la [sección 5 de la tabla](../evidencia/modos-de-fallo.md#saga).
+
+**Pruebas que lo verifican:** `backend/tests/test_modos_de_fallo.py` (nueve pruebas; la de «responde
+dos veces» corre contra un Redis real) y `backend/tests/test_durabilidad_recepcion.py`, que el
+pipeline corre como paso propio, «Modos de fallo de las integraciones (S11)». Se validaron
+provocando la falla con las mutaciones que lista el docstring del primero.
 
 ---
 
@@ -1268,6 +1331,20 @@ externo. **En el mapa de contextos de §8.1, en cambio, A-02 sí tiene contexto 
 usos de la palabra «contexto» en esta documentación significan cosas distintas, y esta es la fila
 donde más se nota.
 
+## 8.4 Resiliencia de las integraciones
+
+Desde la S11 es un concepto transversal y no una decisión de un módulo: atraviesa `infraestructura`,
+`ingesta`, `autoria`, los dos puntos de entrada y el sitio. Son cinco reglas, y cada una tiene su
+caso en la [tabla de modos de fallo](../evidencia/modos-de-fallo.md):
+
+| Regla | Dónde se aplica hoy |
+|---|---|
+| **Toda llamada fuera del proceso tiene una espera explícita**, elegida para el escenario que la mide, no el valor por omisión de la biblioteca | Cola: 2 s al publicar y conectar, 10 s al consumir (ADR-0016). Proveedor de LLM: 20 s (ADR-0013). Sitio: 5 s para `/health` y 25 s para los distractores; la carga, sin espera en el navegador y con su motivo |
+| **Ningún reintento a ciegas.** El reintento es un estado visible: la hoja pendiente en la bitácora, el `Retry-After` del 429, el aviso que le dice al docente qué pudo haber entrado | `Retry(NoBackoff(), 0)` en el cliente de Redis; el adaptador del proveedor no reintenta; el presupuesto responde 429 con `Retry-After` (ADR-0015) |
+| **El consumidor es idempotente por identificador**, no por contenido | El worker, con `SET trabajo-visto:<id> NX EX` (ADR-0016). Previsto para la carga, con la huella del archivo (R-24) |
+| **Degradar con motivo, nunca con 500.** Cada falla se traduce a un estado que el dominio entiende | `pendiente_de_encolar`, 503 con motivo, 429 con `Retry-After` |
+| **Cada mitigación tiene una prueba que falla sin ella** | `test_modos_de_fallo.py`, `test_durabilidad_recepcion.py`, `test_proveedor_llm.py` y `test_ruta_distractores.py`, en el paso «Modos de fallo de las integraciones (S11)» del pipeline |
+
 ## Conceptos transversales todavía sin desarrollar
 
 Un concepto transversal se documenta cuando ya atraviesa más de un módulo del código, y hoy seis
@@ -1321,6 +1398,8 @@ constancia en el commit y en esta sección ([0014](../adr/0014-dejar-constancia-
 | [0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md) | Consumir Groq detrás de un puerto y degradar sin bloquear la autoría | **aceptado** | 2026-10-04 | [EC-08](#ec-08) |
 | [0014](../adr/0014-dejar-constancia-del-ajuste-de-enlaces-en-adr-0007.md) | Dejar constancia del ajuste de enlaces en ADR-0007 | **aceptado** | 2026-10-04 | ninguno declarado |
 | [0015](../adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md) | Limitar el gasto del proveedor de LLM con un presupuesto en la API | **aceptado** | 2026-10-11 | [EC-09](#ec-09) |
+| [0016](../adr/0016-acotar-la-espera-de-la-cola-y-hacer-idempotente-al-worker.md) | Acotar la espera de la cola y hacer idempotente al worker | **aceptado** | 2026-10-18 | [EC-07](#ec-07) |
+| [0017](../adr/0017-no-extraer-ningun-modulo-del-monolito-todavia.md) | No extraer ningún módulo del monolito todavía | **aceptado** | 2026-10-18 | [EC-04](#ec-04), [EC-07](#ec-07), [EC-08](#ec-08) |
 
 **Por qué 0002 reemplaza a 0001.** La revisión de coherencia previa al corte 1 encontró que
 EC-03 y EC-04 no se pueden cumplir a la vez con procesamiento síncrono(200 hojas × 5 s son
@@ -1404,6 +1483,20 @@ estado en `GET /metricas`, con el contrato en 1.2.0. Los nueve puntos de la deci
 vigentes, incluido el 503 ante una falla del proveedor: lo que cambia es la mitigación de R-17, que
 0013 dejaba como consecuencia aceptada. Por eso lo precisa y no lo reemplaza, y ninguno de los dos
 cambia de estado.
+
+**Por qué 0016 no reemplaza a 0006.** Nace de la tabla de modos de fallo de la S11 y de una
+medición: con Redis lento, un lote de 200 hojas tardaba 10,017 s en confirmarse, porque la API usaba
+la espera de 10 s que necesita el worker. Es el dato que 0006 dejó escrito en «Qué dato haría
+revisar esta decisión». 0016 separa las esperas (2 s la API, 10 s el worker), quita los reintentos
+ocultos del cliente y hace idempotente al worker. La bitácora, el orden de los pasos y el corte del
+lote de 0006 siguen igual: lo precisa, y ninguno de los dos cambia de estado.
+
+**Por qué 0017 no cambia ningún ADR.** Es la reconsideración que 0011 dejó para cuando el worker
+fuera idempotente, y la decisión de extracción que pide la S11. Evalúa cuatro opciones con siete
+criterios y decide no extraer: el aislamiento ya está medido, no hay carga que escalar sin OMR, las
+hojas están en el disco efímero de la instancia (0012) y un segundo servicio rompe RNF-16 o las
+horas de Render. Confirma la forma de 0002 sin tocarla, y deja escritos los datos que la harían
+revisar (R-25).
 
 **Decisiones previstas (aún no tomadas):**
 
@@ -1685,6 +1778,10 @@ priorización original.
 | **R-19** | **El presupuesto es global, no por profesor.** Un cliente puede gastar el cupo de los demás: un minuto si lanza una ráfaga, un día si insiste 150 veces. | Medio | Que alguien fuera del curso use la URL pública en bucle. | Lo cierra `identidad` (A-05), con un cupo por profesor autenticado, igual que R-14 y R-17. Mientras tanto, el presupuesto protege la cuota del proveedor, aunque no la reparte. |
 | **R-20** | **Divergencias conocidas entre esta documentación y lo desplegado**, anotadas en vez de esconderse. (1) Corregida con el frontend nuevo: la pantalla de carga mostraba «En cola» para toda hoja aceptada, también para las `pendiente_de_encolar`; ahora lee el campo `estado` (`frontend/lib/features/carga/data/servicio_carga.dart:48`) y la muestra como pendiente. (2) `POST /distractores` ya tiene pantalla (Pauta y distractores); `GET /metricas` sigue sin pantalla y se consulta por la API. (3) La cifra de 1,744 s de EC-07 que citan 6.2, `aspectos.md` y ADR-0006 no está en el informe crudo `medicion-ec07-despues.json`, que registra 1,491 s como peor de tres corridas; las dos cumplen el umbral de 10 s. | Bajo | Que un revisor busque 1,744 en el informe crudo, o la pantalla de `/metricas`. | (1) Hecho: el reporte de la pantalla de carga muestra el `estado`. (2) Una vista de `GET /metricas` solo si la operación la necesita. (3) Repetir la medición de EC-07 con `medir_ec07.py` y citar la cifra del informe que quede versionado. |
 | **R-21** | **Mientras se confirma un lote, el proceso de la API no atiende otras peticiones.** `cargar_hojas` es `async def`, pero `recibir_lote` escribe en disco con `fsync` de forma bloqueante, así que el lote entero ocupa el bucle de eventos. Con un solo proceso de uvicorn en Render, un lote de 200 hojas (1,5 s en local) detiene `/health` y `/distractores` durante ese tiempo. | Bajo | Un lote grande cuando el monitor consulta `/health`, o dos docentes cargando a la vez. | Declarar la ruta como `def`, como ya se hizo con `/distractores` por la misma razón, para que FastAPI la corra en su grupo de hilos. Se deja para cuando se trabaje A-02, que vuelve a tocar la recepción. |
+| **R-22** | **La cola no tiene acuse de recibo** (modo de fallo MF-06 de la [tabla de la S11](../evidencia/modos-de-fallo.md)). Si el worker muere después del `BLPOP` y antes de terminar, el trabajo sale de la lista y no vuelve. La hoja sigue en el almacén y en la bitácora, pero marcada como encolada, así que nada la reintenta. | Bajo hoy, porque procesar es escribir una línea de log; **Alto** con A-02 | Un despliegue o un reinicio de la instancia mientras el worker tiene un trabajo en la mano: en Render pasa con cada push que cambia `backend/`. | Con A-02: `BLMOVE` a una lista de trabajos en curso y `LREM` al terminar, con un barrido que devuelva a la cola los que lleven demasiado tiempo en curso; o Redis Streams con `XACK` y `XAUTOCLAIM`. Lo decide un ADR propio. Mientras tanto, la hoja se puede recuperar a mano desde la bitácora. |
+| **R-23** | **La marca de idempotencia del worker va antes de procesar y vive en un Redis sin persistencia** ([ADR-0016](../adr/0016-acotar-la-espera-de-la-cola-y-hacer-idempotente-al-worker.md)). Hoy es correcto, porque procesar es registrar. Con A-02, una caída a mitad dejaría el trabajo marcado y sin hacer; y un reinicio del Key Value borra las marcas, así que un duplicado posterior pasaría. | Bajo | Construir A-02 sin mover la marca; o un reinicio del Key Value seguido de un reintento desde la bitácora. | Con A-02, la marca pasa a después de terminar, o a dos estados (en curso, con vencimiento corto, y hecho). La persistencia de las marcas se resuelve con la de la cola, cuando se cierre R-06. Está escrito en el docstring del worker. |
+| **R-24** | **La API no detecta una hoja subida dos veces** (MF-13). Si la respuesta de una carga se corta, el docente no sabe qué entró y puede volver a subir el lote; las hojas repetidas se almacenan y se encolan otra vez, con otro `trabajo_id`, así que la idempotencia del worker no las ve. | Medio | Una carga con la red inestable seguida de un reenvío; con A-02, dos calificaciones de la misma hoja. | Diseñado en la [sección 4 de la tabla](../evidencia/modos-de-fallo.md): clave `(examen_id, SHA-256 del contenido)` en la bitácora y un estado `ya_recibida` con el `trabajo_id` original, como cambio menor del contrato. Se construye antes de que A-02 califique. Mientras tanto, el sitio quita de la selección lo recibido y avisa cuando la respuesta no llegó. |
+| **R-25** | **El worker comparte 0,1 CPU y 512 MB con la API** y no se extrae ([ADR-0017](../adr/0017-no-extraer-ningun-modulo-del-monolito-todavia.md)). Hoy no pesa, porque el worker solo registra. Con el OMR, un lote grande puede hacer más lenta la API mientras se procesa, y EC-04 puede no cumplirse. | Bajo hoy; **Medio** con A-02 | Que EC-04 se mida con el OMR y no se cumpla, o que `/health` pase de 1 s mientras se procesa un lote. | Extraer el worker a un servicio propio, como describe la reversión de ADR-0017, después de cerrar R-06 con un almacén de objetos (sin eso, otro servicio no ve las hojas). |
 
 ---
 
