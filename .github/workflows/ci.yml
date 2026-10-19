@@ -46,6 +46,15 @@ jobs:
         run: pytest -v tests/test_presupuesto.py tests/test_ruta_distractores.py
         working-directory: backend
 
+      # Mismo criterio, para los modos de fallo de la S11 (ADR-0016): que las integraciones
+      # aguanten que el otro lado no responda, responda tarde o responda dos veces es la tabla de
+      # `docs/evidencia/modos-de-fallo.md` hecha prueba. La suite completa la vuelve a correr.
+      - name: Modos de fallo de las integraciones (S11)
+        run: >-
+          pytest -v tests/test_modos_de_fallo.py tests/test_durabilidad_recepcion.py
+          tests/test_proveedor_llm.py tests/test_ruta_distractores.py
+        working-directory: backend
+
       - name: Suite completa del backend
         run: pytest -v
         working-directory: backend
