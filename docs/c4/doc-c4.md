@@ -269,8 +269,8 @@ flowchart TB
 | 1 | Profesor / TA → Aplicación web | Gestiona cursos, bancos de preguntas, exámenes, escaneos y consulta resultados. | HTTPS · frontend Flutter compilado a web · respuestas en JSON; la carga de hojas viaja como `multipart/form-data`. Descrita campo por campo en [`../contrato/openapi.json`](../contrato/openapi.json). | **Construido** |
 | 2 | Aplicación web → Base de datos | Consulta y persiste la información estructurada de QuantIA. | SQL sobre PostgreSQL | **Previsto.** El contenedor se levanta, pero no tiene esquema y ningún componente lo consulta. Depende del ADR que cierre el riesgo R-06. |
 | 3 | Aplicación web → Almacén de imágenes | Almacena las hojas de respuesta escaneadas. | Llamada en proceso al puerto `AlmacenDeImagenes`, no una API de objetos. El adaptador actual escribe los bytes en un volumen local. | **Construido**, con adaptador provisional (riesgo R-06). |
-| 4 | Aplicación web → Cola de trabajos | Crea los trabajos que deben ser procesados de forma asíncrona. | Redis · `RPUSH` sobre una lista · JSON con la forma `{"id": ..., "payload": {...}}` | **Construido** |
-| 5 | Cola de trabajos → Worker de procesamiento | Entrega los trabajos pendientes para su procesamiento. | Redis · `BLPOP`, bloqueante con timeout de 5 s · el mismo JSON | **Construido** |
+| 4 | Aplicación web → Cola de trabajos | Crea los trabajos que deben ser procesados de forma asíncrona. | Redis · `RPUSH` sobre una lista · JSON con la forma `{"id": ..., "payload": {...}}`; desde la S11, la aplicación web espera a Redis 2 s para conectar y 2 s para responder, sin reintentos del cliente ([ADR-0016](../adr/0016-acotar-la-espera-de-la-cola-y-hacer-idempotente-al-worker.md)) | **Construido**. Si la cola no responde o responde tarde, la hoja queda `pendiente_de_encolar` en la bitácora (ADR-0006) |
+| 5 | Cola de trabajos → Worker de procesamiento | Entrega los trabajos pendientes para su procesamiento. | Redis · `BLPOP`, bloqueante con timeout de 5 s · el mismo JSON; desde la S11, el worker espera 10 s al socket y procesa cada `id` una sola vez, con `SET trabajo-visto:<id> NX EX` ([ADR-0016](../adr/0016-acotar-la-espera-de-la-cola-y-hacer-idempotente-al-worker.md)) | **Construido**. Sin acuse de recibo: un worker que muere después del `BLPOP` pierde el trabajo (R-22) |
 | 6 | Worker de procesamiento → Base de datos | Consulta información necesaria y persiste las calificaciones y resultados del procesamiento. | SQL sobre PostgreSQL | **Previsto**, por la misma razón que la relación 2. |
 | 7 | Worker de procesamiento → Almacén de imágenes | Recupera las hojas escaneadas que debe procesar. | Lectura de la imagen desde el worker | **Previsto.** Depende del aspecto A-02; hoy el worker solo registra el trabajo en su log. |
 | 8 | Aplicación web → Proveedor de LLM *(opcional)* | Solicita distractores diagnósticos para una pregunta durante la autoría. | HTTPS · JSON · `POST /chat/completions` compatible con OpenAI; clave en la variable de entorno `LLM_API_KEY`; 20 s de espera, sin reintentos; a lo sumo 6 solicitudes por minuto y 150 por día ([ADR-0015](../adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md)) | **Construido** ([ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)). Opcional: sin clave o con el proveedor caído, la ruta `/distractores` responde 503; sin cupo en el presupuesto, 429 sin llegar a esta relación |
@@ -305,6 +305,14 @@ del código de la aplicación web, en la memoria de su proceso: no se despliega 
 protocolo propio y no guarda nada fuera del proceso. Por eso no aparece como contenedor, y la
 relación 8 conserva su protocolo; lo que cambia es cuántas veces por minuto puede ocurrir, que se
 anota en su columna de protocolo y formato. Se ve como componente en el Nivel 3.
+
+**Por qué la cola tiene dos esperas y una marca, y nada de eso es un contenedor.** Desde la S11
+([ADR-0016](../adr/0016-acotar-la-espera-de-la-cola-y-hacer-idempotente-al-worker.md)), la aplicación web y el worker esperan a la cola tiempos distintos: la aplicación web, 2 s,
+porque un lote de 200 hojas tiene que confirmarse en 10 s aunque Redis esté lento (EC-07); el
+worker, 10 s, porque su `BLPOP` bloquea 5 s en el servidor. Y el worker deja en la misma cola una
+marca por trabajo para no procesarlo dos veces. Las dos cosas son parámetros y claves de las
+relaciones 4 y 5, no piezas desplegadas aparte, así que se anotan en su columna de protocolo. Los
+modos de fallo de cada relación están en [`modos-de-fallo.md`](../evidencia/modos-de-fallo.md).
 
 **Qué información se envía al LLM.** De acuerdo con RNF-13, la interacción con el proveedor de LLM se limita a especificaciones de preguntas matemáticas necesarias para generar distractores. No deben enviarse nombres de estudiantes, calificaciones ni hojas escaneadas. Lo verifica [`test_proveedor_llm.py`](../../backend/tests/test_proveedor_llm.py), que compara el cuerpo entero de la solicitud.
 
@@ -557,8 +565,8 @@ flowchart TB
 | 2 | `api` → `ingesta` | `recibir_lote()`, con el almacén, la bitácora y el cliente de cola ya construidos | Llamada en proceso | Construido |
 | 3 | `ingesta` → `infraestructura` | Guarda la imagen por el puerto `AlmacenDeImagenes`, la registra por `BitacoraDeRecepcion`, acuña y publica el trabajo | Llamada en proceso | Construido |
 | 4 | `infraestructura` → Almacén de imágenes | Escribe el archivo y la bitácora | Escritura en el volumen `almacen_imagenes` | Construido, con adaptador provisional (R-06) |
-| 5 | `infraestructura` → Cola de trabajos | Publica el trabajo | Redis · `RPUSH` · JSON | Construido |
-| 6 | `worker` → `infraestructura` → Cola de trabajos | Retira el trabajo más antiguo | Redis · `BLPOP` (timeout 5 s) · JSON | Construido |
+| 5 | `infraestructura` → Cola de trabajos | Publica el trabajo | Redis · `RPUSH` · JSON; 2 s de espera y sin reintentos ([ADR-0016](../adr/0016-acotar-la-espera-de-la-cola-y-hacer-idempotente-al-worker.md)) | Construido |
+| 6 | `worker` → `infraestructura` → Cola de trabajos | Retira el trabajo más antiguo y comprueba que sea la primera entrega | Redis · `BLPOP` (timeout 5 s) · JSON; `SET NX EX` por `id` ([ADR-0016](../adr/0016-acotar-la-espera-de-la-cola-y-hacer-idempotente-al-worker.md)) | Construido |
 | 7 | `worker` → `omr` → `calificacion` | Procesa la hoja y calcula la nota | Llamada en proceso | Previsto (A-02, A-03) |
 | 8 | `ingesta`, `autoria`, `dashboard`, `omr`, `calificacion` → `identidad` | Verifican acceso y curso | Llamada en proceso | Previsto (A-05) |
 | 9 | `infraestructura` → Base de datos | Persistencia estructurada | SQL sobre PostgreSQL | Previsto: depende del ADR que cierre R-06 |
