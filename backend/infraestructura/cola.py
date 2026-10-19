@@ -1,6 +1,26 @@
 """Adaptador minimalista de cola sobre Redis: una lista FIFO, sin reintentos ni acuses de
 recibo. Basta para lo que EC-07 mide, la recepción; el acuse de recibo que exigirá procesar
-cada hoja sin perderla es trabajo de A-02, así que no es todavía una cola de producción."""
+cada hoja sin perderla es trabajo de A-02, así que no es todavía una cola de producción.
+
+Cuánto se espera a Redis (S11, ADR-0016)
+----------------------------------------
+Es la integración principal del sistema, y su modo de fallo más caro no era que Redis estuviera
+caído (eso se rechaza al instante) sino que estuviera **lento**: aceptaba la conexión y no
+contestaba. Medido con la versión del lock, publicar una sola hoja tardaba 10,0 s antes de
+rendirse, que es el `socket_timeout` que necesita el worker para su `BLPOP`, y con eso solo ya se
+pasaba el techo de 10 s de EC-07. Por eso las esperas son dos y no una:
+
+- quien **publica** (la API) espera como máximo `ESPERA_AL_PUBLICAR_SEGUNDOS`: un `RPUSH` sano
+  tarda milisegundos, y el lote no puede quedarse esperando a la cola;
+- quien **consume** (el worker) espera `ESPERA_AL_CONSUMIR_SEGUNDOS`, por encima del bloqueo de
+  5 s de `desencolar`, para que el socket no venza justo cuando Redis contesta que no hay nada.
+
+La conexión se rinde en `ESPERA_DE_CONEXION_SEGUNDOS` en los dos casos, y el cliente **no
+reintenta** (`Retry(NoBackoff(), 0)`). Hoy redis-py ya no reintentaba al crearse con `from_url`,
+pero solo por cómo arma la conexión: el constructor de `redis.Redis` sí trae reintentos por
+omisión. Un reintento oculto del `RPUSH`, después de un tiempo agotado en el que Redis sí guardó
+el trabajo, es justamente una forma de que el mismo trabajo llegue dos veces.
+"""
 
 import json
 import os
@@ -11,6 +31,15 @@ import redis
 # Se importa el submódulo explícitamente: `redis.exceptions` solo queda disponible como
 # efecto secundario de los imports internos de redis-py, y depender de eso es frágil.
 import redis.exceptions
+from redis.backoff import NoBackoff
+from redis.retry import Retry
+
+# Las tres esperas del cliente de Redis (ADR-0016). Las de publicar y conectar son cortas porque
+# EC-07 tiene un techo de 10 s para todo el lote; la de consumir es larga porque el worker
+# bloquea a propósito en `desencolar`.
+ESPERA_DE_CONEXION_SEGUNDOS = 2.0
+ESPERA_AL_PUBLICAR_SEGUNDOS = 2.0
+ESPERA_AL_CONSUMIR_SEGUNDOS = 10.0
 
 
 class ColaNoDisponible(RuntimeError):
@@ -28,12 +57,22 @@ class Trabajo:
     payload: dict
 
 
-def cliente_redis(url: str | None = None) -> redis.Redis:
-    """Crea el cliente Redis a partir de REDIS_URL (o el valor pasado). `socket_timeout` se fija
-    por encima del timeout de bloqueo que usa `desencolar` para que el socket no expire justo
-    cuando el servidor está por responder nil al vencer el BLPOP."""
+def cliente_redis(
+    url: str | None = None, espera_segundos: float = ESPERA_AL_CONSUMIR_SEGUNDOS
+) -> redis.Redis:
+    """Crea el cliente Redis a partir de REDIS_URL (o el valor pasado).
+
+    `espera_segundos` es el `socket_timeout`: cuánto se espera una respuesta antes de rendirse.
+    Por omisión es la del worker, por encima del timeout de bloqueo que usa `desencolar` para que
+    el socket no expire justo cuando el servidor está por responder nil al vencer el BLPOP. La API
+    pasa `ESPERA_AL_PUBLICAR_SEGUNDOS`. La conexión se rinde en `ESPERA_DE_CONEXION_SEGUNDOS` y
+    el cliente no reintenta en ningún caso (ver el docstring del módulo)."""
     return redis.Redis.from_url(
-        url or os.environ["REDIS_URL"], decode_responses=True, socket_timeout=10
+        url or os.environ["REDIS_URL"],
+        decode_responses=True,
+        socket_timeout=espera_segundos,
+        socket_connect_timeout=ESPERA_DE_CONEXION_SEGUNDOS,
+        retry=Retry(NoBackoff(), 0),
     )
 
 
