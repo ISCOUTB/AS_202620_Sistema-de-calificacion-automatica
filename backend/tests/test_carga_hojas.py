@@ -8,14 +8,16 @@ Las dependencias del almacén y de la cola se sustituyen con `dependency_overrid
 razón por la que `api/main.py` las declara con `Depends` en lugar de construirlas al importar:
 así esta prueba corre sin Redis y sin escribir en el volumen real."""
 
+import asyncio
 from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
-from api.main import app, obtener_almacen, obtener_cliente_cola
+from api.main import app, obtener_almacen, obtener_bitacora, obtener_cliente_cola
 from infraestructura.almacen import AlmacenEnDisco
+from infraestructura.bitacora import BitacoraEnMemoria
 from tests.test_recepcion import JPG, PDF, PNG, ColaFalsa
 
 
@@ -87,3 +89,40 @@ def test_una_peticion_sin_archivos_es_un_error_de_la_peticion(cliente):
     respuesta = cliente.post("/examenes/CALC-2026-01/hojas", files=[])
 
     assert respuesta.status_code == 422
+
+
+class AlmacenQueMiraSuHilo(AlmacenEnDisco):
+    """Almacén que anota si `guardar` corrió en el hilo del event loop de la API."""
+
+    def __init__(self, raiz) -> None:
+        super().__init__(raiz)
+        self.en_el_event_loop: list[bool] = []
+
+    def guardar(self, examen_id: str, nombre_archivo: str, contenido: bytes) -> str:
+        try:
+            asyncio.get_running_loop()
+            self.en_el_event_loop.append(True)
+        except RuntimeError:
+            self.en_el_event_loop.append(False)
+        return super().guardar(examen_id, nombre_archivo, contenido)
+
+
+def test_el_lote_se_confirma_fuera_del_event_loop(tmp_path):
+    """Riesgo R-21: `recibir_lote` escribe con `fsync` y
+    espera a Redis, y llamada dentro de la ruta `async` congelaba la API durante el lote. Si
+    `guardar` encuentra un event loop corriendo en su hilo, es que la API no puede atender nada
+    más mientras tanto. Sin `run_in_threadpool`, esta prueba falla."""
+    almacen = AlmacenQueMiraSuHilo(tmp_path)
+    app.dependency_overrides[obtener_almacen] = lambda: almacen
+    app.dependency_overrides[obtener_cliente_cola] = lambda: ColaFalsa()
+    app.dependency_overrides[obtener_bitacora] = lambda: BitacoraEnMemoria()
+    try:
+        respuesta = TestClient(app).post(
+            "/examenes/CALC-2026-01/hojas",
+            files=[_archivo("h1.jpg", JPG), _archivo("h2.jpg", JPG)],
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert respuesta.status_code == 200
+    assert almacen.en_el_event_loop == [False, False]

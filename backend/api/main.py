@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, HTTPException, Response, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.esquemas import (
@@ -182,7 +183,15 @@ async def cargar_hojas(
         for archivo in archivos
     ]
 
-    resultado = recibir_lote(
+    # El lote se confirma en un hilo aparte, no en el que atiende las peticiones. La ruta es
+    # `async` para leer los archivos subidos, pero `recibir_lote` bloquea: escribe con `fsync` dos
+    # veces por hoja y espera a Redis hasta 2 s por publicación. Llamarla aquí directamente
+    # congelaba el único proceso de uvicorn durante todo el lote, y con él `GET` y `HEAD /health`
+    # (el chequeo de Render y el del monitor), `/distractores` y el lote de cualquier otro
+    # docente: era el riesgo R-21. (Va en un comentario y no en el docstring porque el docstring
+    # se publica en el contrato, y esto no cambia nada de lo que ve quien llama a la ruta.)
+    resultado = await run_in_threadpool(
+        recibir_lote,
         examen_id=examen_id,
         archivos=cargados,
         almacen=almacen,
