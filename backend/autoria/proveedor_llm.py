@@ -190,11 +190,18 @@ def _leer_propuestas(datos: dict[str, Any]) -> list[DistractorPropuesto]:
         )
     return [
         DistractorPropuesto(
-            expresion=str(item.get("expresion") or "").strip(),
-            error=str(item.get("error") or "").strip(),
+            expresion=_como_texto(item.get("expresion")),
+            error=_como_texto(item.get("error")),
         )
         for item in lista
     ]
+
+
+def _como_texto(valor: object) -> str:
+    """El campo como texto, o vacío si no vino. Solo `None` cuenta como ausente: el modelo puede
+    devolver el número 0, un distractor típico en derivadas («se derivó como si fuera
+    constante»), y con `valor or ""` se convertía en una propuesta vacía."""
+    return "" if valor is None else str(valor).strip()
 
 
 def _milisegundos_desde(inicio: float) -> float:

@@ -97,6 +97,19 @@ def test_traduce_la_respuesta_del_modelo_a_propuestas_del_dominio() -> None:
     ]
 
 
+def test_un_distractor_que_vale_cero_llega_como_cero() -> None:
+    """El modelo puede devolver el número 0 (se derivó
+    como si fuera constante), y `str(0 or "")` lo volvía una propuesta vacía que la regla
+    descartaba. Sin el cambio, esta prueba falla."""
+    contenido = json.dumps({"distractores": [
+        {"expresion": 0, "error": "Se derivó como si fuera constante"},
+    ]})
+
+    propuestas = _generador(lambda _: _respuesta_del_modelo(contenido)).proponer(PREGUNTA)
+
+    assert [p.expresion for p in propuestas] == ["0"]
+
+
 def test_registra_la_metrica_de_ec08_con_duracion_y_tokens(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
