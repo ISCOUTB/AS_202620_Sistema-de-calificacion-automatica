@@ -82,8 +82,9 @@ class _PantallaPautaState extends State<PantallaPauta> {
   bool _proveedorNoDisponible = false;
 
   /// El 429 del presupuesto (ADR-0015). Con el límite por minuto, [_segundosParaReintentar]
-  /// cuenta hacia atrás desde lo que dijo `Retry-After`; con el diario no hay a qué volver en
-  /// esta sesión y no se ofrece repetir.
+  /// cuenta hacia atrás desde lo que dijo `Retry-After`. Con el diario no se ofrece repetir, y el
+  /// botón principal tampoco se puede usar hasta que pase esa espera: cada clic sería otro 429
+  /// que no llega al proveedor, pero que suma en los rechazos que publica `/metricas` (EC-09).
   bool _presupuestoAgotado = false;
   bool _cupoDiarioAgotado = false;
   int _segundosParaReintentar = 0;
@@ -106,6 +107,14 @@ class _PantallaPautaState extends State<PantallaPauta> {
       if (!mounted) return;
       setState(() => _segundosParaReintentar--);
       if (_segundosParaReintentar <= 0) temporizador.cancel();
+    });
+  }
+
+  /// La espera del límite diario dura horas: no hace falta contarla de a un segundo, basta con
+  /// volver a habilitar el botón cuando termine.
+  void _esperarCupoDiario(Duration espera) {
+    _cuentaRegresiva = Timer(espera, () {
+      if (mounted) setState(() => _cupoDiarioAgotado = false);
     });
   }
 
@@ -182,8 +191,12 @@ class _PantallaPautaState extends State<PantallaPauta> {
         _cupoDiarioAgotado = e.cupoDiarioAgotado;
         _segundosParaReintentar = 0;
         final espera = e.reintentarEn;
-        if (e.presupuestoAgotado && !e.cupoDiarioAgotado && espera != null) {
-          _contarHastaReintentar(espera);
+        if (e.presupuestoAgotado && espera != null) {
+          if (e.cupoDiarioAgotado) {
+            _esperarCupoDiario(espera);
+          } else {
+            _contarHastaReintentar(espera);
+          }
         }
       });
     } catch (_) {
@@ -285,10 +298,11 @@ class _PantallaPautaState extends State<PantallaPauta> {
 
   Widget _bloqueGenerador({required bool sinConexion}) {
     final cargando = _fase == _Fase.cargando;
-    // Mientras corre la cuenta del 429, pedir de nuevo solo traería otro 429: el aviso de abajo
-    // dice cuánto falta.
-    final esperandoCupo =
-        _fase == _Fase.error && _presupuestoAgotado && _segundosParaReintentar > 0;
+    // Mientras corre la cuenta del 429, o mientras dura el límite diario, pedir de nuevo solo
+    // traería otro 429: el aviso de abajo dice cuánto falta.
+    final esperandoCupo = _fase == _Fase.error &&
+        _presupuestoAgotado &&
+        (_segundosParaReintentar > 0 || _cupoDiarioAgotado);
     final puedeProponer = _camposCompletos && !cargando && !sinConexion && !esperandoCupo;
     final sinAnimacion = MediaQuery.disableAnimationsOf(context);
 

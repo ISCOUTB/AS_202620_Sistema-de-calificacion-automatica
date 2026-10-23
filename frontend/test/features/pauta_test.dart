@@ -294,7 +294,12 @@ void main() {
     expect(find.byKey(const Key('aviso-presupuesto')), findsOneWidget);
     expect(find.text(_mensaje429Dia), findsOneWidget);
     expect(find.byKey(const Key('boton-volver-a-pedir')), findsNothing);
-    // El formulario sigue disponible: el docente puede volver más tarde sin recargar.
+    // Antes, el botón principal seguía activo, y cada clic era
+    // otro 429 contado en los rechazos de /metricas. Ahora espera lo que dijo Retry-After...
+    expect(_accionProponer(tester), isNull);
+
+    // ...y vuelve solo cuando pasa: el docente no tiene que recargar la página.
+    await tester.pump(const Duration(hours: 5));
     expect(_accionProponer(tester), isNotNull);
   });
 
