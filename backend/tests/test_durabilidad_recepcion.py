@@ -224,6 +224,52 @@ def test_el_lote_agota_la_cola_sana_antes_de_cortar(tmp_path):
     assert len([h for h in resultado.aceptadas if h.estado == PENDIENTE_DE_ENCOLAR]) == 80
 
 
+class RelojFalso:
+    """Un reloj que solo avanza cuando la cola lenta lo empuja: la prueba no espera nada."""
+
+    def __init__(self) -> None:
+        self.ahora = 0.0
+
+    def __call__(self) -> float:
+        return self.ahora
+
+
+class ColaLenta:
+    """Cola que acepta todo, pero cada publicación tarda `segundos`: justo por debajo de la
+    espera de ADR-0016, así que ninguna llamada falla."""
+
+    def __init__(self, reloj: RelojFalso, segundos: float) -> None:
+        self.reloj = reloj
+        self.segundos = segundos
+        self.intentos = 0
+
+    def rpush(self, cola: str, valor: str) -> int:
+        self.intentos += 1
+        self.reloj.ahora += self.segundos
+        return self.intentos
+
+
+def test_una_cola_lenta_no_lleva_el_lote_fuera_del_techo_de_ec07(tmp_path):
+    """La espera de 2 s es por llamada, y una cola que
+    contesta cada `RPUSH` en 1,9 s nunca falla. Sin el plazo del lote, las 200 hojas quedaban
+    encoladas tras unos 380 s; con el plazo de 8 s, se publican las 5 que caben (en 0, 1,9,
+    3,8, 5,7 y 7,6 s) y las 195 restantes quedan pendientes. Se validó provocando la falla: sin
+    el plazo, `intentos` llega a 200."""
+    reloj = RelojFalso()
+    cola = ColaLenta(reloj, segundos=1.9)
+    bitacora = BitacoraEnMemoria()
+
+    resultado = recibir_lote(
+        EXAMEN, _lote(200), AlmacenEnDisco(tmp_path), cola, COLA, bitacora, reloj=reloj
+    )
+
+    assert cola.intentos == 5
+    assert reloj.ahora < 10
+    assert resultado.total_procesados == 200
+    assert len([h for h in resultado.aceptadas if h.estado == ENCOLADA]) == 5
+    assert len(bitacora.pendientes()) == 195
+
+
 class AlmacenQueFallaEn(AlmacenEnDisco):
     """Almacén en disco que falla al guardar las hojas de las posiciones dadas (desde 1), como
     un disco que se llena a mitad del lote."""

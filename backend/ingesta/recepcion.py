@@ -14,12 +14,19 @@ De ahí las dos decisiones de forma de este módulo:
 """
 
 import logging
+import time
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import PurePosixPath
 
 from infraestructura.almacen import AlmacenDeImagenes
 from infraestructura.bitacora import BitacoraDeRecepcion
-from infraestructura.cola import ColaNoDisponible, preparar_trabajo, publicar
+from infraestructura.cola import (
+    ESPERA_AL_PUBLICAR_SEGUNDOS,
+    ColaNoDisponible,
+    preparar_trabajo,
+    publicar,
+)
 from infraestructura.modelo import (
     ENCOLADA,
     PENDIENTE_DE_ENCOLAR,
@@ -42,6 +49,13 @@ NO_SE_PUDO_GUARDAR = (
 NO_SE_PUDO_REGISTRAR = (
     "No se pudo registrar su recepción. La hoja no entró: vuelva a subirla."
 )
+
+# Cuánto del lote se puede gastar publicando en la cola. EC-07 pide confirmar el lote en 10 s, y
+# la última publicación que empiece antes del plazo puede tardar hasta la espera de ADR-0016 en
+# terminar: 10 - 2 = 8 s. Vencido el plazo, las hojas que faltan se reportan pendientes, igual
+# que tras el primer fallo de la cola.
+TECHO_DE_CONFIRMACION_SEGUNDOS = 10.0
+PLAZO_PARA_ENCOLAR_SEGUNDOS = TECHO_DE_CONFIRMACION_SEGUNDOS - ESPERA_AL_PUBLICAR_SEGUNDOS
 
 # RNF-02: la entrada es una hoja de respuestas estructurada, escaneada o fotografiada.
 FIRMAS_POR_EXTENSION: dict[str, tuple[bytes, ...]] = {
@@ -89,6 +103,8 @@ def recibir_lote(
     cliente_cola,
     nombre_cola: str,
     bitacora: BitacoraDeRecepcion,
+    plazo_para_encolar_segundos: float = PLAZO_PARA_ENCOLAR_SEGUNDOS,
+    reloj: Callable[[], float] = time.monotonic,
 ) -> ResultadoRecepcion:
     """Procesa un lote completo y devuelve el reporte de recepción.
 
@@ -113,6 +129,13 @@ def recibir_lote(
     mantiene alcanzable el techo de 10 s del escenario: reintentar 200 veces contra un servidor
     ausente cuesta el timeout de conexión en cada intento y lleva el lote a más de veinte
     minutos, para terminar exactamente en el mismo estado.
+
+    **Y deja de insistir con una cola lenta.** La espera corta de ADR-0016 es por llamada, así
+    que una cola que contesta cada publicación justo antes de los 2 s nunca falla y lleva el lote
+    de 200 a unos 380 s. Por eso hay además un plazo para todo el lote
+    (`PLAZO_PARA_ENCOLAR_SEGUNDOS`): vencido, las hojas que faltan se reportan pendientes sin
+    tocar la cola, y el lote se confirma dentro del techo de EC-07. `reloj` existe para que las
+    pruebas lo comprueben sin esperar.
 
     **Un fallo del almacén o de la bitácora tampoco tumba el lote.** Es el mismo caso con otro
     colaborador: un disco lleno en la hoja ciento uno devolvía un 500, aunque las cien primeras
@@ -139,6 +162,7 @@ def recibir_lote(
     # veinte minutos de espera para llegar al mismo sitio: las mismas 200 hojas almacenadas,
     # registradas y pendientes. El primer fallo ya contestó la pregunta.
     cola_disponible = True
+    inicio = reloj()
 
     for archivo in archivos:
         motivo = motivo_de_rechazo(archivo)
@@ -178,6 +202,13 @@ def recibir_lote(
                 ArchivoRechazado(nombre_archivo=archivo.nombre, motivo=NO_SE_PUDO_REGISTRAR)
             )
             continue
+
+        if cola_disponible and reloj() - inicio > plazo_para_encolar_segundos:
+            cola_disponible = False
+            logger.warning(
+                "Plazo del lote vencido: las hojas que faltan quedan pendientes de encolar",
+                extra={"evento": "plazo_de_encolado_vencido", "examen": examen_id},
+            )
 
         if not cola_disponible:
             estado = PENDIENTE_DE_ENCOLAR
