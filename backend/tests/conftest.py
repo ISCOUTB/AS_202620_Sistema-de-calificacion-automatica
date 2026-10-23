@@ -16,7 +16,11 @@ def cliente() -> Iterator[redis.Redis]:
     cliente = cliente_redis(url)
     try:
         cliente.ping()
-    except redis.ConnectionError:
+    # Las dos formas en que falta Redis. Con la espera de conexión de ADR-0016, en Windows un
+    # `localhost` sin servidor no rechaza la conexión sino que la deja vencer, y eso es
+    # `TimeoutError`, que no hereda de `ConnectionError`: sin atraparlo, la prueba terminaba en
+    # error de preparación en vez de omitirse con este mensaje.
+    except (redis.ConnectionError, redis.TimeoutError):
         pytest.skip(
             f"No se pudo conectar a Redis en {url}. "
             "Levanta 'docker compose up -d redis' antes de correr esta prueba."
