@@ -15,7 +15,7 @@ import pytest
 from infraestructura.almacen import AlmacenEnDisco
 from infraestructura.bitacora import BitacoraEnMemoria
 from infraestructura.modelo import ArchivoCargado
-from ingesta import recibir_lote
+from ingesta import TAMANO_MAXIMO_DE_UNA_HOJA_BYTES, recibir_lote
 
 JPG = b"\xff\xd8\xff" + b"\x00" * 32
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
@@ -86,6 +86,14 @@ def test_acepta_los_formatos_declarados(nombre, contenido, almacen, cola):
         ("notas.txt", b"texto plano", "Extensión no admitida"),
         ("hoja", JPG, "Extensión no admitida"),
         ("hoja.jpg", b"", "vacío"),
+        # Con `id` propio: sin él, pytest arma el nombre del caso con los 20 MB de bytes y la
+        # recolección tarda minutos.
+        pytest.param(
+            "hoja.jpg",
+            JPG + b"\x00" * TAMANO_MAXIMO_DE_UNA_HOJA_BYTES,
+            "MB por hoja",
+            id="pasa-del-tope",
+        ),
         ("hoja.jpg", b"esto no es un JPG", "no corresponde"),
         ("hoja.pdf", PNG, "no corresponde"),
     ],

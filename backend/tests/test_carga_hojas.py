@@ -18,6 +18,7 @@ from fastapi.testclient import TestClient
 from api.main import app, obtener_almacen, obtener_bitacora, obtener_cliente_cola
 from infraestructura.almacen import AlmacenEnDisco
 from infraestructura.bitacora import BitacoraEnMemoria
+from ingesta import TAMANO_MAXIMO_DE_UNA_HOJA_BYTES
 from tests.test_recepcion import JPG, PDF, PNG, ColaFalsa
 
 
@@ -126,3 +127,45 @@ def test_el_lote_se_confirma_fuera_del_event_loop(tmp_path):
 
     assert respuesta.status_code == 200
     assert almacen.en_el_event_loop == [False, False]
+
+
+def test_una_hoja_que_pasa_del_tope_se_rechaza_y_el_lote_sigue(cliente):
+    """No había tope por archivo en una ruta pública. La
+    hoja grande se rechaza con su motivo; la otra entra."""
+    grande = JPG + b"\x00" * TAMANO_MAXIMO_DE_UNA_HOJA_BYTES
+
+    respuesta = cliente.post(
+        "/examenes/CALC-2026-01/hojas",
+        files=[_archivo("enorme.jpg", grande), _archivo("normal.jpg", JPG)],
+    )
+
+    assert respuesta.status_code == 200
+    cuerpo = respuesta.json()
+    assert [h["nombre_archivo"] for h in cuerpo["aceptadas"]] == ["normal.jpg"]
+    assert cuerpo["rechazados"][0]["nombre_archivo"] == "enorme.jpg"
+    assert "MB por hoja" in cuerpo["rechazados"][0]["motivo"]
+
+
+def test_las_hojas_llegan_a_recibir_lote_de_a_una(cliente, monkeypatch):
+    """La API leía el lote entero a una lista antes de procesar la primera hoja, y
+    200 escaneos a la vez no caben en una instancia de 512 MB. Ahora le pasa a `recibir_lote` un
+    iterador que lee cada hoja cuando le toca. Con la lista de antes, esta prueba falla."""
+    import api.main as modulo_api
+
+    recibidos = []
+    original = modulo_api.recibir_lote
+
+    def espia(**argumentos):
+        recibidos.append(argumentos["archivos"])
+        return original(**argumentos)
+
+    monkeypatch.setattr(modulo_api, "recibir_lote", espia)
+
+    respuesta = cliente.post(
+        "/examenes/CALC-2026-01/hojas",
+        files=[_archivo("h1.jpg", JPG), _archivo("h2.jpg", JPG)],
+    )
+
+    assert respuesta.status_code == 200
+    assert len(recibidos) == 1
+    assert isinstance(recibidos[0], Iterator)

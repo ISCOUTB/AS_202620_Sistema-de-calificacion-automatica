@@ -15,7 +15,7 @@ De ahí las dos decisiones de forma de este módulo:
 
 import logging
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from datetime import datetime, timezone
 from pathlib import PurePosixPath
 
@@ -37,7 +37,12 @@ from infraestructura.modelo import (
     ResultadoRecepcion,
 )
 
-__all__ = ["recibir_lote", "motivo_de_rechazo", "EXTENSIONES_ACEPTADAS"]
+__all__ = [
+    "recibir_lote",
+    "motivo_de_rechazo",
+    "EXTENSIONES_ACEPTADAS",
+    "TAMANO_MAXIMO_DE_UNA_HOJA_BYTES",
+]
 
 logger = logging.getLogger("ingesta")
 
@@ -69,6 +74,12 @@ EXTENSIONES_ACEPTADAS = tuple(sorted(FIRMAS_POR_EXTENSION))
 
 NOMBRES_LEGIBLES = {".jpg": "JPG", ".jpeg": "JPG", ".png": "PNG", ".pdf": "PDF"}
 
+# El tope de una hoja, para que la memoria de la API no dependa de lo que alguien decida subir a
+# una ruta pública. El valor es un punto de partida y no una medida: no hay todavía hojas reales
+# que pesar (R-01), y se dejó holgado para que quepa una foto de celular. `api` lee como máximo un
+# byte más que esto, así que un archivo enorme no llega a cargarse entero para ser rechazado.
+TAMANO_MAXIMO_DE_UNA_HOJA_BYTES = 20 * 1024 * 1024
+
 
 def motivo_de_rechazo(archivo: ArchivoCargado) -> str | None:
     """Devuelve el motivo por el que el archivo no se admite, o None si es válido.
@@ -86,6 +97,10 @@ def motivo_de_rechazo(archivo: ArchivoCargado) -> str | None:
     if not archivo.contenido:
         return "El archivo está vacío (0 bytes)."
 
+    if len(archivo.contenido) > TAMANO_MAXIMO_DE_UNA_HOJA_BYTES:
+        maximo_mb = TAMANO_MAXIMO_DE_UNA_HOJA_BYTES // (1024 * 1024)
+        return f"El archivo pasa del máximo de {maximo_mb} MB por hoja."
+
     firmas = FIRMAS_POR_EXTENSION[extension]
     if not any(archivo.contenido.startswith(firma) for firma in firmas):
         return (
@@ -98,7 +113,7 @@ def motivo_de_rechazo(archivo: ArchivoCargado) -> str | None:
 
 def recibir_lote(
     examen_id: str,
-    archivos: list[ArchivoCargado],
+    archivos: Iterable[ArchivoCargado],
     almacen: AlmacenDeImagenes,
     cliente_cola,
     nombre_cola: str,

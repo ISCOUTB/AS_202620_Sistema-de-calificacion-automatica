@@ -5,6 +5,7 @@ vuelta, y ese es todo su trabajo. La validación, el almacenamiento y el encolad
 
 import logging
 import time
+from collections.abc import Iterator
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, HTTPException, Response, UploadFile
@@ -53,7 +54,7 @@ from infraestructura.bitacora import BitacoraDeRecepcion, BitacoraEnDisco
 from infraestructura.cola import ESPERA_AL_PUBLICAR_SEGUNDOS, cliente_redis
 from infraestructura.modelo import PENDIENTE_DE_ENCOLAR, ArchivoCargado
 from infraestructura.registro import configurar_registro
-from ingesta import recibir_lote
+from ingesta import TAMANO_MAXIMO_DE_UNA_HOJA_BYTES, recibir_lote
 
 configurar_registro()
 logger = logging.getLogger("api")
@@ -178,22 +179,30 @@ async def cargar_hojas(
     haya que sumar la comprobación, sin migrar el frontend.
     """
     inicio = time.perf_counter()
-    cargados = [
-        ArchivoCargado(nombre=archivo.filename or "sin-nombre", contenido=await archivo.read())
-        for archivo in archivos
-    ]
 
-    # El lote se confirma en un hilo aparte, no en el que atiende las peticiones. La ruta es
-    # `async` para leer los archivos subidos, pero `recibir_lote` bloquea: escribe con `fsync` dos
-    # veces por hoja y espera a Redis hasta 2 s por publicación. Llamarla aquí directamente
-    # congelaba el único proceso de uvicorn durante todo el lote, y con él `GET` y `HEAD /health`
-    # (el chequeo de Render y el del monitor), `/distractores` y el lote de cualquier otro
-    # docente: era el riesgo R-21. (Va en un comentario y no en el docstring porque el docstring
-    # se publica en el contrato, y esto no cambia nada de lo que ve quien llama a la ruta.)
+    # Las hojas se leen de a una, cuando `recibir_lote` llega a cada una, y no todas antes de
+    # empezar: leer el lote entero a una lista eran 200 escaneos a la vez en la memoria de una
+    # instancia de 512 MB. Starlette ya dejó cada archivo subido en un temporal (en disco pasado
+    # 1 MB), así que en memoria queda solo la hoja en curso. Y de cada una se lee como máximo un
+    # byte más que el tope de `ingesta`: alcanza para que la regla la rechace sin cargarla entera.
+    def leer_de_a_una() -> Iterator[ArchivoCargado]:
+        for archivo in archivos:
+            yield ArchivoCargado(
+                nombre=archivo.filename or "sin-nombre",
+                contenido=archivo.file.read(TAMANO_MAXIMO_DE_UNA_HOJA_BYTES + 1),
+            )
+
+    # El lote se confirma en un hilo aparte, no en el que atiende las peticiones, y ahí también
+    # se leen las hojas. `recibir_lote` bloquea: escribe con `fsync` dos veces por hoja y espera
+    # a Redis hasta 2 s por publicación. Llamarla aquí directamente congelaba el único proceso de
+    # uvicorn durante todo el lote, y con él `GET` y `HEAD /health` (el chequeo de Render y el del
+    # monitor), `/distractores` y el lote de cualquier otro docente: era el riesgo R-21. (Va en un
+    # comentario y no en el docstring porque el docstring se publica en el contrato, y esto no
+    # cambia nada de lo que ve quien llama a la ruta.)
     resultado = await run_in_threadpool(
         recibir_lote,
         examen_id=examen_id,
-        archivos=cargados,
+        archivos=leer_de_a_una(),
         almacen=almacen,
         cliente_cola=cliente_cola,
         nombre_cola=NOMBRE_COLA,
