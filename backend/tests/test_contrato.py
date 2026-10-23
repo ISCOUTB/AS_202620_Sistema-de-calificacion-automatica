@@ -36,13 +36,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api.esquemas import VERSION_DEL_CONTRATO
-from api.main import app, obtener_almacen, obtener_cliente_cola
+from api.main import app, obtener_almacen, obtener_bitacora, obtener_cliente_cola
 from herramientas.exportar_contrato import (
     RUTA_CONTRATO,
     documento_openapi,
     serializar,
 )
 from infraestructura.almacen import AlmacenEnDisco
+from infraestructura.bitacora import BitacoraEnMemoria
 from infraestructura.modelo import ENCOLADA, PENDIENTE_DE_ENCOLAR
 from tests.test_recepcion import JPG, ColaFalsa
 
@@ -67,10 +68,11 @@ def contrato_publicado() -> dict:
 
 @pytest.fixture
 def cliente_http(tmp_path) -> Iterator[TestClient]:
-    """Cliente contra la app real, con almacen y cola sustituidos, igual que en
+    """Cliente contra la app real, con almacen, bitacora y cola sustituidos, igual que en
     `test_carga_hojas.py`: la prueba de contrato no necesita Redis ni el volumen real."""
     app.dependency_overrides[obtener_almacen] = lambda: AlmacenEnDisco(tmp_path)
     app.dependency_overrides[obtener_cliente_cola] = lambda: ColaFalsa()
+    app.dependency_overrides[obtener_bitacora] = lambda: BitacoraEnMemoria()
     yield TestClient(app)
     app.dependency_overrides.clear()
 

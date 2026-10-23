@@ -4,9 +4,11 @@ Complementa a `test_recepcion.py` sin repetirla. Allí se verifica la regla de n
 que la ruta exista con la forma acordada, que acepte varios archivos en una sola petición y que
 el cuerpo de la respuesta le diga al docente qué entró y qué no.
 
-Las dependencias del almacén y de la cola se sustituyen con `dependency_overrides`, que es la
-razón por la que `api/main.py` las declara con `Depends` en lugar de construirlas al importar:
-así esta prueba corre sin Redis y sin escribir en el volumen real."""
+Las dependencias del almacén, la bitácora y la cola se sustituyen con `dependency_overrides`, que
+es la razón por la que `api/main.py` las declara con `Depends` en lugar de construirlas al
+importar: así esta prueba corre sin Redis y sin escribir en el volumen real. La bitácora faltaba
+hasta los arreglos del 19-oct, y cada corrida agregaba líneas a la de
+verdad, en `RUTA_BITACORA`."""
 
 import asyncio
 from collections.abc import Iterator
@@ -27,6 +29,7 @@ def cliente(tmp_path) -> Iterator[TestClient]:
     cola = ColaFalsa()
     app.dependency_overrides[obtener_almacen] = lambda: AlmacenEnDisco(tmp_path)
     app.dependency_overrides[obtener_cliente_cola] = lambda: cola
+    app.dependency_overrides[obtener_bitacora] = lambda: BitacoraEnMemoria()
     yield TestClient(app)
     app.dependency_overrides.clear()
 

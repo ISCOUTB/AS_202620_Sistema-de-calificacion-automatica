@@ -53,6 +53,7 @@ from infraestructura.bitacora import BitacoraEnMemoria
 from infraestructura.cola import (
     ESPERA_AL_PUBLICAR_SEGUNDOS,
     ESPERA_DE_CONEXION_SEGUNDOS,
+    REDIS_URL_POR_OMISION,
     VIGENCIA_DE_UN_TRABAJO_VISTO_SEGUNDOS,
     ColaNoDisponible,
     Trabajo,
@@ -189,6 +190,20 @@ def test_la_conexion_se_rinde_en_la_espera_de_conexion() -> None:
     assert ESPERA_DE_CONEXION_SEGUNDOS + ESPERA_AL_PUBLICAR_SEGUNDOS < UMBRAL_EC07_SEGUNDOS
 
 
+def test_el_worker_y_la_api_buscan_a_redis_en_el_mismo_lugar_sin_redis_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Sin `REDIS_URL`, la API caía en `localhost` y el
+    worker, que llama a `cliente_redis()` sin URL, moría con `KeyError` al arrancar. Sin el
+    valor por omisión, esta prueba termina en ese `KeyError`."""
+    monkeypatch.delenv("REDIS_URL", raising=False)
+
+    del_worker = cliente_redis().connection_pool.connection_kwargs
+
+    assert REDIS_URL_POR_OMISION == "redis://localhost:6379/0"
+    assert (del_worker["host"], del_worker["port"]) == ("localhost", 6379)
+
+
 def test_la_api_reusa_un_solo_cliente_de_la_cola(monkeypatch: pytest.MonkeyPatch) -> None:
     """Un cliente nuevo por petición repetía la conexión y
     el saludo inicial de redis-py en cada lote. Sin la caché, cada llamada da un objeto distinto
@@ -226,7 +241,10 @@ def _correr_worker(
 
     monkeypatch.setattr(worker_main, "cliente_redis", lambda: cliente)
     monkeypatch.setattr(worker_main, "desencolar", desencolar_siguiente)
-    monkeypatch.setattr(worker_main.time, "sleep", lambda _segundos: None)
+    # La pausa del worker, y no `time.sleep`: `worker_main.time` es el módulo `time` de todo el
+    # proceso, y reemplazar su `sleep` apagaba cualquier otra espera mientras durara la prueba,
+    # también las que no son del worker.
+    monkeypatch.setattr(worker_main, "ESPERA_TRAS_ERROR_SEGUNDOS", 0)
     with pytest.raises(_FinDeLaPrueba):
         worker_main.ejecutar()
 
@@ -250,20 +268,24 @@ def test_el_trabajo_que_llega_dos_veces_se_procesa_una_sola_vez(
     vez. El otro trabajo, con su propio identificador, se procesa normal."""
     cola = f"prueba-repetidos-{uuid.uuid4()}"
     repetido, otro = _trabajo(str(uuid.uuid4())), _trabajo(str(uuid.uuid4()))
-    for trabajo in (repetido, repetido, otro):
-        publicar(cliente, cola, trabajo)
-    entregas = [desencolar(cliente, cola, timeout=1) for _ in range(3)]
+    try:
+        for trabajo in (repetido, repetido, otro):
+            publicar(cliente, cola, trabajo)
+        entregas = [desencolar(cliente, cola, timeout=1) for _ in range(3)]
 
-    with caplog.at_level(logging.INFO, logger="worker"):
-        _correr_worker(monkeypatch, cliente, entregas)
+        with caplog.at_level(logging.INFO, logger="worker"):
+            _correr_worker(monkeypatch, cliente, entregas)
 
-    procesados = [vars(r)["trabajo"] for r in _eventos(caplog, "hoja_recibida")]
-    repetidos = [vars(r)["trabajo"] for r in _eventos(caplog, "trabajo_repetido")]
-    assert procesados == [repetido.id, otro.id]
-    assert repetidos == [repetido.id]
-    vigencia = cliente.ttl(f"trabajo-visto:{repetido.id}")
-    assert 0 < vigencia <= VIGENCIA_DE_UN_TRABAJO_VISTO_SEGUNDOS
-    cliente.delete(f"trabajo-visto:{repetido.id}", f"trabajo-visto:{otro.id}", cola)
+        procesados = [vars(r)["trabajo"] for r in _eventos(caplog, "hoja_recibida")]
+        repetidos = [vars(r)["trabajo"] for r in _eventos(caplog, "trabajo_repetido")]
+        assert procesados == [repetido.id, otro.id]
+        assert repetidos == [repetido.id]
+        vigencia = cliente.ttl(f"trabajo-visto:{repetido.id}")
+        assert 0 < vigencia <= VIGENCIA_DE_UN_TRABAJO_VISTO_SEGUNDOS
+    finally:
+        # Aunque una aserción falle: si no, las marcas quedan 7 días en el Redis de desarrollo o
+        # del CI.
+        cliente.delete(f"trabajo-visto:{repetido.id}", f"trabajo-visto:{otro.id}", cola)
 
 
 def test_si_no_se_puede_comprobar_la_marca_el_trabajo_se_procesa_igual(
@@ -282,12 +304,22 @@ def test_si_no_se_puede_comprobar_la_marca_el_trabajo_se_procesa_igual(
     assert len(_eventos(caplog, "hoja_recibida")) == 1
 
 
+@pytest.mark.parametrize(
+    "falla",
+    [
+        redis.exceptions.ConnectionError("Connection refused."),
+        redis.exceptions.TimeoutError("Timeout reading from socket"),
+    ],
+    ids=["no-responde", "responde-tarde"],
+)
 def test_el_worker_sigue_vivo_si_la_cola_no_responde(
-    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    falla: Exception, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """No responde, del lado del worker: un fallo de Redis no lo tumba; espera y vuelve a pedir."""
+    """No responde o responde tarde, del lado del worker: un fallo de Redis no lo tumba; lo
+    registra, espera y vuelve a pedir. La espera vencida cuenta como fallo y no como cola vacía
+    (antes, `desencolar` la convertía en `None`)."""
     monkeypatch.setattr(worker_main, "primera_entrega", lambda *_args: True)
-    entregas = [redis.exceptions.ConnectionError("Connection refused."), _trabajo("t-1")]
+    entregas = [falla, _trabajo("t-1")]
 
     with caplog.at_level(logging.INFO, logger="worker"):
         _correr_worker(monkeypatch, object(), entregas)
@@ -296,15 +328,18 @@ def test_el_worker_sigue_vivo_si_la_cola_no_responde(
     assert len(_eventos(caplog, "hoja_recibida")) == 1
 
 
-def test_desencolar_de_una_cola_que_no_contesta_devuelve_nada_en_vez_de_colgarse(
+def test_desencolar_de_una_cola_que_no_contesta_avisa_en_vez_de_colgarse(
     redis_lento: RedisQueNoContesta,
 ) -> None:
     """Responde tarde, del lado del worker: si Redis no contesta dentro de la espera del socket,
-    `desencolar` devuelve None y el ciclo sigue, en vez de quedarse esperando para siempre."""
+    `desencolar` no se queda esperando para siempre ni lo hace pasar por una cola vacía: levanta
+    el `TimeoutError`, que el worker registra como `fallo_de_la_cola`. Antes devolvía None, y una
+    cola caída se veía como un worker sin trabajo."""
     cliente = cliente_redis(redis_lento.url, espera_segundos=0.5)
 
     inicio = time.perf_counter()
-    assert desencolar(cliente, "procesamiento", timeout=0) is None
+    with pytest.raises(redis.exceptions.TimeoutError):
+        desencolar(cliente, "procesamiento", timeout=0)
     assert time.perf_counter() - inicio < 2.0
 
 
