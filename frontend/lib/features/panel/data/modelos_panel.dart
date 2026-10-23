@@ -90,7 +90,9 @@ class ResumenExamen {
   /// Marcas leídas con confianza menor a [umbralConfianzaPorcentaje].
   final int revisionPendiente;
 
-  double get porcentajeAprobacion => aprobados * 100 / estudiantes;
+  /// Cero si no hay estudiantes: un examen recién creado, o sin hojas calificadas todavía,
+  /// mostraría «NaN %».
+  double get porcentajeAprobacion => estudiantes == 0 ? 0 : aprobados * 100 / estudiantes;
 }
 
 /// Una opción de respuesta de la pregunta analizada y cuántas marcas recibió.

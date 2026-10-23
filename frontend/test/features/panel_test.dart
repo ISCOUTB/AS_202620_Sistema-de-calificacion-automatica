@@ -47,6 +47,21 @@ Finder _leyendaDe(AnalisisPregunta analisis, OpcionRespuesta opcion) {
 }
 
 void main() {
+  test('Sin estudiantes, el porcentaje de aprobación es 0 y no NaN', () {
+    // La división no protegía el cero, a diferencia de
+    // los otros porcentajes del panel. Sin el cambio, da NaN y esta prueba falla.
+    const vacio = ResumenExamen(
+      promedio: 0,
+      estudiantes: 0,
+      aprobados: 0,
+      hojasRecibidas: 0,
+      revisionPendiente: 0,
+    );
+
+    expect(vacio.porcentajeAprobacion, 0);
+    expect(formatearPorcentaje(vacio.porcentajeAprobacion), isNot(contains('NaN')));
+  });
+
   test('Los datos de ejemplo son coherentes entre sí', () {
     final resumen = _parcial2.resumen;
     expect(formatearPorcentaje(resumen.porcentajeAprobacion, decimales: 1), '74,4 %');
