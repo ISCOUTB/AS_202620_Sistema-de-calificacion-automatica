@@ -112,17 +112,41 @@ _EQUIVALENCIAS_DE_ESCRITURA = {
 _SUPERINDICES = str.maketrans("⁰¹²³⁴⁵⁶⁷⁸⁹⁻ˣ", "0123456789-x")
 _EXPONENTE_EN_SUPERINDICE = re.compile("[⁰¹²³⁴⁵⁶⁷⁸⁹⁻ˣ]+")
 
+# El profesor escribe `sen(x)` y el modelo `sin(x)`. Solo delante de un paréntesis y sin una
+# letra antes, para no tocar `cos`, `senh` (que tiene su propia entrada) ni nada más.
+_FUNCIONES_EN_ESPANOL = {
+    "arcsen": "arcsin",
+    "senh": "sinh",
+    "sen": "sin",
+    "arctg": "arctan",
+    "cotg": "cot",
+    "ctg": "cot",
+    "tg": "tan",
+}
+_FUNCION_EN_ESPANOL = re.compile(
+    r"(?<![a-z])(" + "|".join(_FUNCIONES_EN_ESPANOL) + r")(?=\()"
+)
+
+# La multiplicación sin signo: `2x` y `2·x` son la misma expresión, y `x·cos(x)` es `xcos(x)`.
+# Se quita el `*` salvo entre dos números, donde sí separa: `2*3` no es `23`.
+_MULTIPLICACION_ESCRITA = re.compile(r"(?<!\d)\*|\*(?!\d)")
+
 
 def normalizar(expresion: str) -> str:
     """Forma de comparación de una expresión: sin espacios, en minúsculas y con una sola
-    escritura para la multiplicación, la resta y la potencia."""
+    escritura para la multiplicación, la resta, la potencia y el nombre de las funciones
+    trigonométricas.
+
+    Sigue siendo una comparación de escritura, no de valor (ADR-0004): `sin(2x)` y
+    `2·sin(x)·cos(x)` siguen pasando por distintas. Igualarlas exige cálculo simbólico."""
     texto = "".join(expresion.split()).lower()
     texto = _EXPONENTE_EN_SUPERINDICE.sub(
         lambda exponente: "^" + exponente.group().translate(_SUPERINDICES), texto
     )
     for escrita, comun in _EQUIVALENCIAS_DE_ESCRITURA.items():
         texto = texto.replace(escrita, comun)
-    return texto
+    texto = _FUNCION_EN_ESPANOL.sub(lambda nombre: _FUNCIONES_EN_ESPANOL[nombre.group()], texto)
+    return _MULTIPLICACION_ESCRITA.sub("", texto)
 
 
 def filtrar_propuestas(

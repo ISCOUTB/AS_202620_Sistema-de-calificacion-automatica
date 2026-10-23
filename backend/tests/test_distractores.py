@@ -91,6 +91,29 @@ def test_un_exponente_escrito_con_circunflejo_es_el_mismo_que_en_superindice() -
     assert _expresiones(resultado) == ["x^4"]
 
 
+def test_la_multiplicacion_sin_signo_y_sen_no_burlan_la_regla() -> None:
+    """Con la respuesta correcta `2x`, el modelo podía
+    proponer `2·x` y pasaba, porque `normalizar` dejaba `2*x` contra `2x`. Y el profesor
+    escribe `sen(x)` donde el modelo escribe `sin(x)`. Sin el cambio, esta prueba falla."""
+    generador = GeneradorFalso([
+        DistractorPropuesto("2·x", "Ninguno"),
+        DistractorPropuesto("x", "Se bajó el exponente sin multiplicar"),
+    ])
+    resultado = proponer_distractores(
+        PreguntaParaDistractores("Derivada de x²", "2x", cantidad=2), generador
+    )
+    assert _expresiones(resultado) == ["x"]
+
+    generador = GeneradorFalso([
+        DistractorPropuesto("2*sin(x)*cos(x)", "Ninguno"),
+        DistractorPropuesto("2·sen(x)", "Se olvidó la regla de la cadena"),
+    ])
+    resultado = proponer_distractores(
+        PreguntaParaDistractores("Derivada de sen²(x)", "2·sen(x)·cos(x)", cantidad=2), generador
+    )
+    assert _expresiones(resultado) == ["2·sen(x)"]
+
+
 def test_una_propuesta_repetida_o_sin_etiqueta_se_descarta_con_su_motivo() -> None:
     generador = GeneradorFalso([
         DistractorPropuesto("cos(x)", "Se omitió la regla del producto"),
@@ -145,12 +168,22 @@ def test_la_falla_del_proveedor_llega_a_quien_llama_con_su_motivo() -> None:
 @pytest.mark.parametrize(
     ("escrita", "comun"),
     [
-        ("x · cos(x)", "x*cos(x)"),
+        ("x · cos(x)", "xcos(x)"),
         ("1 − cos²(x)", "1-cos^2(x)"),
         ("X**2", "x^2"),
         ("5x⁴", "5x^4"),
         ("eˣ", "e^x"),
         ("x⁻¹", "x^-1"),
+        ("2·x", "2x"),
+        ("2 * x", "2x"),
+        ("2*3", "2*3"),
+        ("sen(x)", "sin(x)"),
+        ("2sen(x)", "2sin(x)"),
+        ("arcsen(x)", "arcsin(x)"),
+        ("senh(x)", "sinh(x)"),
+        ("tg(x)", "tan(x)"),
+        ("ctg(x)", "cot(x)"),
+        ("cos(x)", "cos(x)"),
     ],
 )
 def test_normalizar_quita_solo_diferencias_de_escritura(escrita: str, comun: str) -> None:
