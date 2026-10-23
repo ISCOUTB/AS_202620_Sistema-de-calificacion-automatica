@@ -37,4 +37,7 @@ def test_la_medicion_de_perdida_reporta_todas_las_hojas_con_la_cola_caida() -> N
     assert informe["hojas_sin_reportar"] == 0
     assert informe["trabajos_encolados"] == 2
     assert informe["hojas_recuperables_desde_la_bitacora"] == 2
+    # Las cuatro hojas y no la bitácora, que vive en la misma carpeta (antes la contaba y
+    # daba 5).
+    assert informe["archivos_escritos_en_el_almacen"] == 4
     assert informe["cumple"] is True

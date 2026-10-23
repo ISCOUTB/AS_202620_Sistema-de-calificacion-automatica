@@ -234,6 +234,12 @@ def medir_normal(pasadas: int, pausa: float) -> dict[str, Any]:
 
     respondidas = [m for m in muestras if m["codigo"] == 200]
     latencias = [m["segundos"] for m in respondidas]
+    # Este conteo usa el mismo `normalizar` que la regla que descarta las repeticiones, así que no
+    # es una medida independiente de M1: todo lo que `normalizar` iguala ya lo descartó la regla,
+    # y el resultado solo puede ser 0. Sirve como prueba de regresión de la regla. Lo que la regla
+    # detuvo está en `descartados_por_motivo`, y lo que se le escapa (una equivalencia que no es de
+    # escritura) solo lo ve una revisión humana o una comparación simbólica: así se midió en la
+    # S9, con tres calificadores y un prototipo con SymPy (evaluacion-distractores.md).
     repiten_la_correcta = sum(
         1
         for m in respondidas

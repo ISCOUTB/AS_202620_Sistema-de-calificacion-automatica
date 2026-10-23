@@ -194,7 +194,13 @@ def medir_perdida_silenciosa(
             if HAY_BITACORA
             else 0
         )
-        en_disco = sum(1 for _ in raiz.rglob("*") if _.is_file())
+        # Solo las hojas: la bitácora vive en la misma raíz, y contarla daba 201 archivos para un
+        # lote de 200 (así quedó en medicion-ec07-despues.json y medicion-ec07-cola-caida.json).
+        en_disco = sum(
+            1
+            for archivo in raiz.rglob("*")
+            if archivo.is_file() and archivo.name != "bitacora-de-recepcion.jsonl"
+        )
     finally:
         app.dependency_overrides.clear()
         shutil.rmtree(raiz, ignore_errors=True)

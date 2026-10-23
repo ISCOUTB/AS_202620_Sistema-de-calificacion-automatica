@@ -224,6 +224,15 @@ def _entorno(args: argparse.Namespace, url: str) -> dict[str, Any]:
     }
 
 
+def segundos_de_las_respondidas(muestras: list[dict[str, Any]]) -> list[float]:
+    """Las latencias de las muestras que respondieron 200, y solo esas.
+
+    Un 502 rápido mientras la instancia despierta, o un `error: ...`, no es un lote confirmado,
+    y antes entraba en la latencia y en el veredicto de EC-07 como si lo fuera. Las que fallaron
+    se cuentan aparte, en el resumen."""
+    return [m["segundos"] for m in muestras if m["codigo"] == 200]
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Mide el arranque en frío de la API desplegada frente a EC-07.")
@@ -251,10 +260,13 @@ def main(argv: list[str] | None = None) -> int:
         caliente = medir_en_caliente(cliente, url, args.caliente, args.caliente_lotes,
                                      args.lote_hojas, args.kb)
 
-    frio_salud = [m["segundos"] for m in frio if m["peticion"] == "GET /health"]
-    frio_lote = [m["segundos"] for m in frio if m["peticion"].startswith("POST")]
-    caliente_salud = [m["segundos"] for m in caliente["salud"]]
-    caliente_lote = [m["segundos"] for m in caliente["lotes"]]
+    frio_salud = segundos_de_las_respondidas([m for m in frio if m["peticion"] == "GET /health"])
+    frio_lote = segundos_de_las_respondidas([m for m in frio if m["peticion"].startswith("POST")])
+    caliente_salud = segundos_de_las_respondidas(caliente["salud"])
+    caliente_lote = segundos_de_las_respondidas(caliente["lotes"])
+    fallidas = [
+        m for m in frio + caliente["salud"] + caliente["lotes"] if m["codigo"] != 200
+    ]
     base_lote = statistics.median(caliente_lote) if caliente_lote else None
 
     informe: dict[str, Any] = {
@@ -267,6 +279,7 @@ def main(argv: list[str] | None = None) -> int:
         "muestras_en_frio": frio,
         "muestras_en_caliente": caliente,
         "resumen": {
+            "muestras_que_no_respondieron_200": len(fallidas),
             "salud_en_frio": _resumen(frio_salud),
             "salud_en_caliente": _resumen(caliente_salud),
             "lote_en_frio": _resumen(frio_lote),
