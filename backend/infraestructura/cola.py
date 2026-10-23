@@ -49,6 +49,11 @@ ESPERA_DE_CONEXION_SEGUNDOS = 2.0
 ESPERA_AL_PUBLICAR_SEGUNDOS = 2.0
 ESPERA_AL_CONSUMIR_SEGUNDOS = 10.0
 
+# Dónde está Redis si no lo dice `REDIS_URL`. Es el mismo valor para la API y para el worker, y
+# por eso se declara una sola vez aquí, que es lo que los dos importan (la lección de V-2 con
+# `NOMBRE_COLA`): antes la API caía en este valor y el worker moría con `KeyError`.
+REDIS_URL_POR_OMISION = "redis://localhost:6379/0"
+
 # Cuánto se recuerda que un trabajo ya se entregó (idempotencia del worker, ADR-0016). Una semana
 # cubre de sobra el reintento de una hoja pendiente, que ocurre el mismo día; después la marca
 # vence sola y la memoria de Redis no crece sin límite. Con 800 hojas al mes son unos KB.
@@ -74,7 +79,8 @@ class Trabajo:
 def cliente_redis(
     url: str | None = None, espera_segundos: float = ESPERA_AL_CONSUMIR_SEGUNDOS
 ) -> redis.Redis:
-    """Crea el cliente Redis a partir de REDIS_URL (o el valor pasado).
+    """Crea el cliente Redis a partir del valor pasado, o de `REDIS_URL`, o de
+    `REDIS_URL_POR_OMISION` si no hay ninguno.
 
     `espera_segundos` es el `socket_timeout`: cuánto se espera una respuesta antes de rendirse.
     Por omisión es la del worker, por encima del timeout de bloqueo que usa `desencolar` para que
@@ -82,7 +88,7 @@ def cliente_redis(
     pasa `ESPERA_AL_PUBLICAR_SEGUNDOS`. La conexión se rinde en `ESPERA_DE_CONEXION_SEGUNDOS` y
     el cliente no reintenta en ningún caso (ver el docstring del módulo)."""
     return redis.Redis.from_url(
-        url or os.environ["REDIS_URL"],
+        url or os.environ.get("REDIS_URL", REDIS_URL_POR_OMISION),
         decode_responses=True,
         socket_timeout=espera_segundos,
         socket_connect_timeout=ESPERA_DE_CONEXION_SEGUNDOS,
@@ -139,12 +145,17 @@ def primera_entrega(cliente: redis.Redis, trabajo_id: str) -> bool:
 
 def desencolar(cliente: redis.Redis, cola: str, timeout: int = 5) -> Trabajo | None:
     """Retira el trabajo más antiguo (BLPOP, bloqueante hasta `timeout` segundos). None si no
-    llegó nada en ese tiempo, ya sea porque Redis devolvió nil o porque el socket del cliente
-    expiró esperando esa respuesta (mismo caso desde el punto de vista del dominio)."""
-    try:
-        resultado = cliente.blpop(cola, timeout=timeout)
-    except redis.exceptions.TimeoutError:
-        return None
+    llegó nada en ese tiempo.
+
+    **Un `TimeoutError` del cliente no es una cola vacía, y sube como error.** Con la espera del
+    worker por encima del bloqueo del `BLPOP` (ADR-0016), Redis siempre contesta antes de que
+    venza el socket, con un trabajo o con nil. Si el socket vence igual, es que Redis no contesta
+    o que la conexión no se pudo abrir (en Windows, un `localhost` sin servidor da `TimeoutError`
+    y no `ConnectionError`). Antes se devolvía None, y una cola caída se veía como un worker sin
+    trabajo, sin aviso ni pausa; y si Redis ya había sacado el trabajo cuando la respuesta llegó
+    tarde, se perdía sin dejar rastro. Ahora el error llega al worker, que lo registra como
+    `fallo_de_la_cola` y espera antes de volver a pedir."""
+    resultado = cliente.blpop(cola, timeout=timeout)
     if resultado is None:
         return None
     _, crudo = resultado
