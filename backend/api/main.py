@@ -3,6 +3,7 @@ vuelta, y ese es todo su trabajo. La validación, el almacenamiento y el encolad
 `ingesta` e `infraestructura`; la regla de los distractores y el presupuesto del proveedor, en
 `autoria`."""
 
+import functools
 import logging
 import time
 from collections.abc import Iterator
@@ -98,13 +99,24 @@ def obtener_bitacora() -> BitacoraDeRecepcion:
     return BitacoraEnDisco(Path(RUTA_BITACORA))
 
 
+@functools.lru_cache(maxsize=4)
+def _cliente_cola_para(url: str):
+    return cliente_redis(url, espera_segundos=ESPERA_AL_PUBLICAR_SEGUNDOS)
+
+
 def obtener_cliente_cola():
     """Dependencia de la cola. Misma razón que arriba: si el cliente se creara al importar,
     ninguna prueba de la API podría correr sin un Redis levantado.
 
     La API solo publica, así que usa la espera corta (ADR-0016): un Redis que acepta la conexión
-    y no contesta cuesta 2 s al lote y no los 10 s que necesita el worker para su `BLPOP`."""
-    return cliente_redis(REDIS_URL, espera_segundos=ESPERA_AL_PUBLICAR_SEGUNDOS)
+    y no contesta cuesta 2 s al lote y no los 10 s que necesita el worker para su `BLPOP`.
+
+    **El cliente se crea la primera vez y después se reusa**, uno por URL. Crear uno por
+    petición abría una conexión nueva en cada lote y repetía el saludo inicial de redis-py (un
+    `HELLO` y dos `CLIENT SETINFO`), cada paso con su propia espera, antes de la primera hoja. El
+    cliente de redis-py es seguro entre hilos, que es como lo usan los lotes desde que se
+    confirman fuera del event loop. Crearlo no toca la red: conecta con el primer comando."""
+    return _cliente_cola_para(REDIS_URL)
 
 
 # El presupuesto del proveedor de LLM (ADR-0015). A diferencia del almacén y la cola, se crea una
