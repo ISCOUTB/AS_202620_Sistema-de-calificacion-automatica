@@ -191,3 +191,38 @@ def test_un_nombre_con_rutas_no_escapa_del_directorio_del_examen(tmp_path, cola)
     destino = (tmp_path / hoja.referencia).resolve()
     assert destino.is_relative_to((tmp_path / EXAMEN).resolve())
     assert hoja.nombre_archivo == nombre_hostil
+
+
+def test_un_nombre_largo_se_acorta_en_disco_y_conserva_la_extension(tmp_path, cola):
+    """Con 300 caracteres, el nombre en disco pasaba de
+    255 bytes y escribirlo fallaba. Sin el recorte, esta prueba termina en `OSError`."""
+    almacen = AlmacenEnDisco(tmp_path)
+    nombre_largo = "h" * 300 + ".jpg"
+
+    resultado = _recibir([ArchivoCargado(nombre_largo, JPG)], almacen, cola)
+
+    hoja = resultado.aceptadas[0]
+    en_disco = hoja.referencia.rsplit("/", 1)[1]
+    assert len(en_disco.encode()) <= 255
+    assert en_disco.endswith(".jpg")
+    assert (tmp_path / hoja.referencia).read_bytes() == JPG
+    assert hoja.nombre_archivo == nombre_largo
+
+
+def test_dos_examenes_que_se_limpian_igual_no_comparten_directorio(tmp_path, cola):
+    """«Cálculo 1» y «Calculo_1» terminaban en el mismo directorio. Un
+    identificador ya limpio conserva el suyo, para no mover lo que ya estaba guardado."""
+    almacen = AlmacenEnDisco(tmp_path)
+    hoja = [ArchivoCargado("hoja.jpg", JPG)]
+
+    directorios = {
+        examen: recibir_lote(examen, hoja, almacen, cola, COLA, BitacoraEnMemoria())
+        .aceptadas[0]
+        .referencia.split("/", 1)[0]
+        for examen in ("Cálculo 1", "Calculo_1", "..", "CALC-2026-01")
+    }
+
+    assert len(set(directorios.values())) == 4
+    assert directorios["Calculo_1"] == "Calculo_1"
+    assert directorios["CALC-2026-01"] == "CALC-2026-01"
+    assert directorios["Cálculo 1"].startswith("Calculo_1-")

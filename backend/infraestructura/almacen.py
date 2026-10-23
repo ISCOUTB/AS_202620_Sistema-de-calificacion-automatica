@@ -15,18 +15,26 @@ Cuando se escriba el ADR de persistencia, lo que cambia es esta clase o la que l
 RNF-14 también aterriza aquí, y todavía no está implementada: hoy nada borra lo que se guarda.
 """
 
+import hashlib
 import re
 import unicodedata
 import uuid
 from pathlib import Path
 from typing import Protocol
 
-__all__ = ["AlmacenDeImagenes", "AlmacenEnDisco", "nombre_seguro"]
+__all__ = ["AlmacenDeImagenes", "AlmacenEnDisco", "directorio_del_examen", "nombre_seguro"]
 
 _CARACTERES_PERMITIDOS = re.compile(r"[^A-Za-z0-9._-]")
 
+# Casi todos los sistemas de archivos admiten 255 bytes por componente de la ruta. El nombre en
+# disco le suma al nombre limpio un UUID de 36 caracteres y un guion, y el directorio del examen
+# un guion y 8 caracteres de resumen: con 100 queda holgura de sobra. El nombre limpio es ASCII,
+# así que caracteres y bytes coinciden.
+LARGO_MAXIMO_DEL_NOMBRE = 100
+_LARGO_MAXIMO_DE_LA_EXTENSION = 10
 
-def nombre_seguro(nombre: str) -> str:
+
+def nombre_seguro(nombre: str, largo_maximo: int = LARGO_MAXIMO_DEL_NOMBRE) -> str:
     """Reduce un nombre de archivo a algo que no pueda escapar del directorio del examen.
 
     Se queda con el último segmento (descarta `../..` y rutas absolutas de Windows o POSIX),
@@ -37,11 +45,35 @@ def nombre_seguro(nombre: str) -> str:
     Las dos defensas son redundantes a propósito: la lista blanca sola ya neutraliza `/` y `\\`,
     y quedarse con el último segmento sola también. Se conservan ambas porque el costo es nulo
     y porque una de las dos podría relajarse en el futuro (por ejemplo, admitir acentos) sin
-    que la otra deje de proteger."""
+    que la otra deje de proteger.
+
+    **Y lo acorta a `largo_maximo`, conservando la extensión.** Sin el recorte, un nombre de más
+    de unos 218 caracteres pasaba de 255 bytes con el UUID delante, y escribirlo fallaba con un
+    error del sistema operativo."""
     ultimo = re.split(r"[\\/]", nombre)[-1]
     sin_acentos = unicodedata.normalize("NFKD", ultimo).encode("ascii", "ignore").decode()
-    limpio = _CARACTERES_PERMITIDOS.sub("_", sin_acentos).lstrip(".")
-    return limpio or "archivo"
+    limpio = _CARACTERES_PERMITIDOS.sub("_", sin_acentos).lstrip(".") or "archivo"
+    if len(limpio) <= largo_maximo:
+        return limpio
+    raiz, punto, extension = limpio.rpartition(".")
+    if punto and raiz and len(extension) <= _LARGO_MAXIMO_DE_LA_EXTENSION:
+        return f"{raiz[: largo_maximo - len(extension) - 1]}.{extension}"
+    return limpio[:largo_maximo]
+
+
+def directorio_del_examen(examen_id: str) -> str:
+    """El nombre del directorio de un examen, que no comparte con ningún otro examen.
+
+    Limpiar el identificador con `nombre_seguro` puede llevar dos exámenes distintos al mismo
+    nombre: «Cálculo 1» y «Calculo_1» quedan los dos en `Calculo_1`, y `..` queda en `archivo`.
+    Sus hojas se mezclarían en un directorio, y una retención por examen (RNF-14) borraría las del
+    otro. Por eso, si limpiar cambió algo, se suma un resumen del identificador original. Un
+    identificador que ya estaba limpio, como `CALC-2026-01`, conserva su directorio de siempre."""
+    limpio = nombre_seguro(examen_id)
+    if limpio == examen_id:
+        return limpio
+    resumen = hashlib.sha256(examen_id.encode("utf-8")).hexdigest()[:8]
+    return f"{limpio}-{resumen}"
 
 
 class AlmacenDeImagenes(Protocol):
@@ -68,10 +100,11 @@ class AlmacenEnDisco:
         self.raiz = Path(raiz)
 
     def guardar(self, examen_id: str, nombre_archivo: str, contenido: bytes) -> str:
-        directorio = self.raiz / nombre_seguro(examen_id)
+        carpeta = directorio_del_examen(examen_id)
+        directorio = self.raiz / carpeta
         directorio.mkdir(parents=True, exist_ok=True)
 
         nombre_en_disco = f"{uuid.uuid4()}-{nombre_seguro(nombre_archivo)}"
         (directorio / nombre_en_disco).write_bytes(contenido)
 
-        return f"{nombre_seguro(examen_id)}/{nombre_en_disco}"
+        return f"{carpeta}/{nombre_en_disco}"
