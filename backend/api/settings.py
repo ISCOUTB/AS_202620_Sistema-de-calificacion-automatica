@@ -1,8 +1,10 @@
 import os
 
 from autoria import SOLICITUDES_POR_DIA, SOLICITUDES_POR_MINUTO
+from infraestructura.cola import REDIS_URL_POR_OMISION
 
-REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+# El valor por omisión viene de `infraestructura/cola.py`, el mismo que usa el worker.
+REDIS_URL = os.environ.get("REDIS_URL", REDIS_URL_POR_OMISION)
 ALLOWED_ORIGIN = os.environ.get("ALLOWED_ORIGIN", "http://localhost:8080")
 
 # Raíz del almacén de hojas escaneadas. En Docker apunta al volumen `almacen_imagenes`, que el
