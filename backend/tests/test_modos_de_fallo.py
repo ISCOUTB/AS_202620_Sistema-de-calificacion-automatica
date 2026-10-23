@@ -189,6 +189,17 @@ def test_la_conexion_se_rinde_en_la_espera_de_conexion() -> None:
     assert ESPERA_DE_CONEXION_SEGUNDOS + ESPERA_AL_PUBLICAR_SEGUNDOS < UMBRAL_EC07_SEGUNDOS
 
 
+def test_la_api_reusa_un_solo_cliente_de_la_cola(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Un cliente nuevo por petición repetía la conexión y
+    el saludo inicial de redis-py en cada lote. Sin la caché, cada llamada da un objeto distinto
+    y esta prueba falla. No toca la red: el cliente conecta con el primer comando."""
+    monkeypatch.setattr(api.main, "REDIS_URL", "redis://127.0.0.1:1/0")
+
+    primero = api.main.obtener_cliente_cola()
+
+    assert api.main.obtener_cliente_cola() is primero
+
+
 # --- El lado del worker: la cola entrega el trabajo, tarde, nunca o dos veces ---------------
 
 
