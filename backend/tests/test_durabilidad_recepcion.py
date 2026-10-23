@@ -222,3 +222,111 @@ def test_el_lote_agota_la_cola_sana_antes_de_cortar(tmp_path):
     assert cola.intentos == 121
     assert len([h for h in resultado.aceptadas if h.estado == ENCOLADA]) == 120
     assert len([h for h in resultado.aceptadas if h.estado == PENDIENTE_DE_ENCOLAR]) == 80
+
+
+class AlmacenQueFallaEn(AlmacenEnDisco):
+    """Almacén en disco que falla al guardar las hojas de las posiciones dadas (desde 1), como
+    un disco que se llena a mitad del lote."""
+
+    def __init__(self, raiz, en: set[int]) -> None:
+        super().__init__(raiz)
+        self.en = en
+        self.llamadas = 0
+
+    def guardar(self, examen_id: str, nombre_archivo: str, contenido: bytes) -> str:
+        self.llamadas += 1
+        if self.llamadas in self.en:
+            raise OSError(28, "No space left on device")
+        return super().guardar(examen_id, nombre_archivo, contenido)
+
+
+class BitacoraQueFalla(BitacoraEnMemoria):
+    """Bitácora que falla al registrar o al confirmar las hojas de las posiciones dadas."""
+
+    def __init__(
+        self, al_registrar: frozenset[int] = frozenset(), al_confirmar: frozenset[int] = frozenset()
+    ) -> None:
+        super().__init__()
+        self.al_registrar = al_registrar
+        self.al_confirmar = al_confirmar
+        self.registros = 0
+        self.confirmaciones = 0
+
+    def registrar(self, entrada) -> None:
+        self.registros += 1
+        if self.registros in self.al_registrar:
+            raise OSError(5, "Input/output error")
+        super().registrar(entrada)
+
+    def confirmar_encolada(self, trabajo_id: str) -> None:
+        self.confirmaciones += 1
+        if self.confirmaciones in self.al_confirmar:
+            raise OSError(5, "Input/output error")
+        super().confirmar_encolada(trabajo_id)
+
+
+def test_un_error_del_almacen_rechaza_esa_hoja_y_no_el_lote(tmp_path):
+    """Antes, el disco lleno en la hoja 2 subía como
+    excepción, la API respondía 500 y la hoja 1, ya almacenada y en la cola, quedaba sin
+    reportar. Se validó provocando la falla: sin el `try` alrededor de `guardar`, la excepción
+    llega a la prueba."""
+    cola = ColaQueSeCae(hasta=200)
+
+    resultado = recibir_lote(
+        EXAMEN, _lote(3), AlmacenQueFallaEn(tmp_path, en={2}), cola, COLA, BitacoraEnMemoria()
+    )
+
+    assert resultado.total_procesados == 3
+    assert [h.nombre_archivo for h in resultado.aceptadas] == ["hoja-001.jpg", "hoja-003.jpg"]
+    assert [r.nombre_archivo for r in resultado.rechazados] == ["hoja-002.jpg"]
+    assert "vuelva a subirla" in resultado.rechazados[0].motivo
+    assert len(cola.empujados) == 2
+
+
+def test_si_la_bitacora_no_registra_la_hoja_se_rechaza_sin_encolarla(tmp_path):
+    """Sin entrada en la bitácora, la hoja no se publica (ADR-0006): se rechaza y el lote sigue."""
+    cola = ColaQueSeCae(hasta=200)
+    bitacora = BitacoraQueFalla(al_registrar=frozenset({2}))
+
+    resultado = recibir_lote(EXAMEN, _lote(3), AlmacenEnDisco(tmp_path), cola, COLA, bitacora)
+
+    assert resultado.total_procesados == 3
+    assert [r.nombre_archivo for r in resultado.rechazados] == ["hoja-002.jpg"]
+    assert len(cola.empujados) == 2
+    assert all(json.loads(valor)["payload"]["nombre_archivo"] != "hoja-002.jpg"
+               for valor in cola.empujados)
+
+
+def test_la_hoja_publicada_sigue_encolada_aunque_no_se_confirme_en_la_bitacora(tmp_path):
+    """La hoja está en la cola, así que se reporta encolada. La bitácora la sigue dando por
+    pendiente, y un reintento la publicaría con el mismo `trabajo_id`, que el worker procesa
+    una sola vez (ADR-0016)."""
+    bitacora = BitacoraQueFalla(al_confirmar=frozenset({1}))
+
+    resultado = recibir_lote(
+        EXAMEN, _lote(2), AlmacenEnDisco(tmp_path), ColaQueSeCae(hasta=200), COLA, bitacora
+    )
+
+    assert [h.estado for h in resultado.aceptadas] == [ENCOLADA, ENCOLADA]
+    assert [e.trabajo_id for e in bitacora.pendientes()] == [resultado.aceptadas[0].trabajo_id]
+
+
+def test_el_endpoint_confirma_el_lote_aunque_falle_el_almacen(tmp_path):
+    """De punta a punta: con el disco fallando en una hoja, 200 con el lote completo y no 500."""
+    app.dependency_overrides[obtener_almacen] = lambda: AlmacenQueFallaEn(tmp_path, en={2})
+    app.dependency_overrides[obtener_cliente_cola] = lambda: ColaQueSeCae(hasta=200)
+    app.dependency_overrides[obtener_bitacora] = lambda: BitacoraEnMemoria()
+    try:
+        cliente = TestClient(app, raise_server_exceptions=False)
+        respuesta = cliente.post(
+            "/examenes/CALC-2026-01/hojas",
+            files=[("archivos", (f"hoja-{i}.jpg", JPG, "image/jpeg")) for i in range(3)],
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert respuesta.status_code == 200
+    cuerpo = respuesta.json()
+    assert cuerpo["total_procesados"] == 3
+    assert len(cuerpo["aceptadas"]) == 2
+    assert len(cuerpo["rechazados"]) == 1

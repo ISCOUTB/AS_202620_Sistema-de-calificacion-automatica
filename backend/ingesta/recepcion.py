@@ -13,6 +13,7 @@ De ahí las dos decisiones de forma de este módulo:
    puede probar sin levantar ni un servidor ni una cola.
 """
 
+import logging
 from datetime import datetime, timezone
 from pathlib import PurePosixPath
 
@@ -30,6 +31,17 @@ from infraestructura.modelo import (
 )
 
 __all__ = ["recibir_lote", "motivo_de_rechazo", "EXTENSIONES_ACEPTADAS"]
+
+logger = logging.getLogger("ingesta")
+
+# Los dos motivos de una hoja válida que no se pudo recibir. A diferencia de un rechazo por
+# formato, el archivo está bien: el motivo dice que no entró y que basta con volver a subirlo.
+NO_SE_PUDO_GUARDAR = (
+    "No se pudo guardar en el almacén del sistema. La hoja no entró: vuelva a subirla."
+)
+NO_SE_PUDO_REGISTRAR = (
+    "No se pudo registrar su recepción. La hoja no entró: vuelva a subirla."
+)
 
 # RNF-02: la entrada es una hoja de respuestas estructurada, escaneada o fotografiada.
 FIRMAS_POR_EXTENSION: dict[str, tuple[bytes, ...]] = {
@@ -102,6 +114,15 @@ def recibir_lote(
     ausente cuesta el timeout de conexión en cada intento y lleva el lote a más de veinte
     minutos, para terminar exactamente en el mismo estado.
 
+    **Un fallo del almacén o de la bitácora tampoco tumba el lote.** Es el mismo caso con otro
+    colaborador: un disco lleno en la hoja ciento uno devolvía un 500, aunque las cien primeras
+    ya estaban almacenadas y en la cola. Hoy la hoja que no se pudo guardar o registrar se
+    reporta como rechazada, con un motivo que dice que no entró y que hay que volver a subirla, y
+    el lote sigue. Si lo que falla es confirmar en la bitácora una hoja que ya se publicó, la hoja
+    se reporta encolada, porque lo está: la bitácora la seguirá dando por pendiente, y si alguien
+    la vuelve a publicar llega con el mismo `trabajo_id`, que el worker procesa una sola vez
+    (ADR-0016).
+
     Lo que sigue sin resolverse, y conviene no vendérselo a nadie: la bitácora es de un solo
     proceso y el reintento todavía no está automatizado. `bitacora.pendientes()` deja el dato
     listo para el proceso que lo consuma, y ese proceso es trabajo del aspecto A-02. Tampoco se
@@ -125,7 +146,13 @@ def recibir_lote(
             rechazados.append(ArchivoRechazado(nombre_archivo=archivo.nombre, motivo=motivo))
             continue
 
-        referencia = almacen.guardar(examen_id, archivo.nombre, archivo.contenido)
+        try:
+            referencia = almacen.guardar(examen_id, archivo.nombre, archivo.contenido)
+        except OSError:
+            rechazados.append(
+                ArchivoRechazado(nombre_archivo=archivo.nombre, motivo=NO_SE_PUDO_GUARDAR)
+            )
+            continue
 
         trabajo = preparar_trabajo(
             {
@@ -134,14 +161,23 @@ def recibir_lote(
                 "nombre_archivo": archivo.nombre,
             }
         )
-        bitacora.registrar(
-            EntradaDeBitacora(
-                trabajo_id=trabajo.id,
-                examen_id=examen_id,
-                referencia=referencia,
-                nombre_archivo=archivo.nombre,
+        try:
+            bitacora.registrar(
+                EntradaDeBitacora(
+                    trabajo_id=trabajo.id,
+                    examen_id=examen_id,
+                    referencia=referencia,
+                    nombre_archivo=archivo.nombre,
+                )
             )
-        )
+        except OSError:
+            # La imagen quedó en el almacén, pero sin entrada en la bitácora nadie sabría que
+            # está ahí, y publicarla así es lo que ADR-0006 prohíbe. Se rechaza sin encolar; el
+            # archivo huérfano no lo lee nadie y no cambia ninguna nota.
+            rechazados.append(
+                ArchivoRechazado(nombre_archivo=archivo.nombre, motivo=NO_SE_PUDO_REGISTRAR)
+            )
+            continue
 
         if not cola_disponible:
             estado = PENDIENTE_DE_ENCOLAR
@@ -152,8 +188,19 @@ def recibir_lote(
                 cola_disponible = False
                 estado = PENDIENTE_DE_ENCOLAR
             else:
-                bitacora.confirmar_encolada(trabajo.id)
                 estado = ENCOLADA
+                try:
+                    bitacora.confirmar_encolada(trabajo.id)
+                except OSError as error:
+                    logger.warning(
+                        "Hoja encolada sin confirmación en la bitácora",
+                        extra={
+                            "evento": "encolada_sin_confirmar",
+                            "trabajo": trabajo.id,
+                            "examen": examen_id,
+                            "error": str(error),
+                        },
+                    )
 
         aceptadas.append(
             HojaAceptada(
