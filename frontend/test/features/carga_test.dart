@@ -152,6 +152,24 @@ void main() {
     // El lote no entró, así que la selección se conserva para reintentar.
     expect(find.text('1 archivo seleccionado'), findsOneWidget);
     expect(_boton(tester, 'Subir al sistema').enabled, isTrue);
+    expect(find.textContaining('para que pueda reintentar'), findsOneWidget);
+  });
+
+  testWidgets('Si algunas hojas pudieron entrar, el aviso no invita a reintentar sin más',
+      (tester) async {
+    // Antes, el texto de la excepción decía «algunas hojas pudieron entrar» y el detalle
+    // de abajo, «siguen seleccionados para que pueda reintentar».
+    await tester.pumpWidget(_pantallaCarga(
+      subir: (examenId, archivos) async => throw const ExcepcionDeCarga(
+        'La API respondió 502. Algunas hojas pudieron entrar.',
+        pudieronEntrar: true,
+      ),
+    ));
+    await tester.pumpAndSettle();
+    await _subirLote(tester);
+
+    expect(find.textContaining('podría quedar repetida'), findsOneWidget);
+    expect(find.textContaining('para que pueda reintentar'), findsNothing);
   });
 
   testWidgets('Las hojas recibidas salen de la selección para no volver a subirlas',

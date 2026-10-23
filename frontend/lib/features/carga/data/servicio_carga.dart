@@ -88,12 +88,17 @@ class ResultadoCarga {
 /// Falla de la carga como tal: no se pudo alcanzar al backend o respondió algo inesperado.
 ///
 /// Es distinta de un archivo rechazado. Un rechazo es una respuesta exitosa del sistema que
-/// dice «este archivo no sirve, y por esto»; esta excepción significa que no hubo respuesta,
-/// así que el docente no sabe si algo entró y debe reintentar el lote.
+/// dice «este archivo no sirve, y por esto»; esta excepción significa que no hubo reporte.
+///
+/// [pudieronEntrar] separa los dos casos que el docente tiene que tratar distinto: si es falso,
+/// la petición no llegó a procesarse y volver a subir el lote es lo correcto; si es verdadero,
+/// algunas hojas pudieron entrar, y volver a subirlas las duplicaría, porque el sistema todavía
+/// no detecta una hoja repetida (R-24).
 class ExcepcionDeCarga implements Exception {
-  const ExcepcionDeCarga(this.mensaje);
+  const ExcepcionDeCarga(this.mensaje, {this.pudieronEntrar = false});
 
   final String mensaje;
+  final bool pudieronEntrar;
 
   @override
   String toString() => mensaje;
@@ -102,25 +107,28 @@ class ExcepcionDeCarga implements Exception {
 /// Sube las hojas de un examen y devuelve el reporte de recepción (RF-01).
 ///
 /// El nombre del campo del formulario, `archivos`, tiene que coincidir con el del parámetro
-/// del endpoint en `api/main.py`: es el contrato entre los dos lados.
+/// del endpoint en `api/main.py`: es el contrato entre los dos lados. [cliente] existe para las
+/// pruebas; en la aplicación se usa el de `package:http`.
 Future<ResultadoCarga> subirHojas(
   String examenId,
-  List<ArchivoSeleccionado> archivos,
-) async {
-  final uri = Uri.parse('$backendUrl/examenes/$examenId/hojas');
-  final peticion = http.MultipartRequest('POST', uri);
-
-  for (final archivo in archivos) {
-    peticion.files.add(http.MultipartFile.fromBytes(
-      'archivos',
-      archivo.contenido,
-      filename: archivo.nombre,
-    ));
-  }
-
+  List<ArchivoSeleccionado> archivos, {
+  http.Client? cliente,
+}) async {
   final http.StreamedResponse flujo;
   try {
-    flujo = await peticion.send();
+    // El examen va codificado: sin eso, `P2#1` mandaba la petición a `/examenes/P2` (lo demás
+    // quedaba como fragmento) y un `?` la cortaba como consulta. Va dentro del `try` para que
+    // cualquier error al armarla se explique como una petición que no salió.
+    final uri = Uri.parse('$backendUrl/examenes/${Uri.encodeComponent(examenId)}/hojas');
+    final peticion = http.MultipartRequest('POST', uri);
+    for (final archivo in archivos) {
+      peticion.files.add(http.MultipartFile.fromBytes(
+        'archivos',
+        archivo.contenido,
+        filename: archivo.nombre,
+      ));
+    }
+    flujo = await (cliente?.send(peticion) ?? peticion.send());
   } catch (error) {
     throw const ExcepcionDeCarga(
       'No se pudo contactar con la API. Revise su conexión y vuelva a intentarlo.',
@@ -134,11 +142,21 @@ Future<ResultadoCarga> subirHojas(
     throw const ExcepcionDeCarga(
       'Se cortó la conexión mientras llegaba la respuesta. Algunas hojas pudieron entrar: '
       'revise antes de volver a subir el lote.',
+      pudieronEntrar: true,
     );
   }
-  if (respuesta.statusCode != 200) {
+  // Un 4xx sale antes de procesar el lote (validación, ruta, tamaño), así que ahí sí no entró
+  // nada. Un 5xx no lo garantiza: el proxy de Render puede devolver 502 o 504 mientras la API
+  // sigue trabajando, y antes este mensaje decía «No se recibió ninguna hoja» en los dos casos.
+  final codigo = respuesta.statusCode;
+  if (codigo >= 400 && codigo < 500) {
+    throw ExcepcionDeCarga('La API rechazó la petición ($codigo). No entró ninguna hoja.');
+  }
+  if (codigo != 200) {
     throw ExcepcionDeCarga(
-      'La API respondió ${respuesta.statusCode}. No se recibió ninguna hoja.',
+      'La API respondió $codigo. Algunas hojas pudieron entrar: revise antes de volver a subir '
+      'el lote.',
+      pudieronEntrar: true,
     );
   }
 
@@ -153,6 +171,7 @@ Future<ResultadoCarga> subirHojas(
     throw const ExcepcionDeCarga(
       'La API recibió el lote, pero su reporte no se pudo leer. Algunas hojas pudieron entrar: '
       'revise antes de volver a subir el lote.',
+      pudieronEntrar: true,
     );
   }
 }

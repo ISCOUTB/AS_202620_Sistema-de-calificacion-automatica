@@ -47,6 +47,11 @@ class _Falla {
   final String detalle;
 }
 
+/// Lo que se le dice al docente cuando algunas hojas pudieron entrar sin reporte: el sistema no
+/// detecta una hoja subida dos veces (R-24), así que reintentar sin revisar las duplicaría.
+const _detalleSiPudieronEntrar =
+    'Sus archivos siguen seleccionados. Si vuelve a subirlos, alguna hoja podría quedar repetida.';
+
 class _PantallaCargaState extends State<PantallaCarga> {
   final _examen = TextEditingController();
 
@@ -153,10 +158,14 @@ class _PantallaCargaState extends State<PantallaCarga> {
       _llevarReporteALaVista();
     } on ExcepcionDeCarga catch (error) {
       if (!mounted) return;
+      // Si algunas hojas pudieron entrar, invitar a reintentar las duplicaría: el detalle es el
+      // mismo que el de una respuesta ilegible.
       setState(() => _falla = _Falla(
             titulo: 'No se pudo completar la carga',
             texto: error.mensaje,
-            detalle: 'Sus archivos siguen seleccionados para que pueda reintentar.',
+            detalle: error.pudieronEntrar
+                ? _detalleSiPudieronEntrar
+                : 'Sus archivos siguen seleccionados para que pueda reintentar.',
           ));
     } catch (_) {
       // Una respuesta que no se pudo leer no es lo mismo que una que no llegó: el lote pudo
@@ -166,8 +175,7 @@ class _PantallaCargaState extends State<PantallaCarga> {
             titulo: 'Sin confirmación de la API',
             texto: 'La respuesta de la API no se pudo leer, así que no se sabe qué hojas '
                 'entraron.',
-            detalle: 'Sus archivos siguen seleccionados. Si vuelve a subirlos, alguna hoja '
-                'podría quedar repetida.',
+            detalle: _detalleSiPudieronEntrar,
           ));
     } finally {
       if (mounted) setState(() => _subiendo = false);
