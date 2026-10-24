@@ -41,7 +41,7 @@ proveedor de LLM y el sitio frente a la API.
 | ADR de extraer o no extraer, con criterios | [ADR-0017](docs/adr/0017-no-extraer-ningun-modulo-del-monolito-todavia.md): cuatro opciones, siete criterios, «no extraer» con sus motivos y sus disparadores |
 | arc42 §11 con los modos de fallo | R-22 a R-25 en el [arc42 §11](docs/arc42/arc42-template-ES.md#11-risks-and-technical-debts), y el recorrido en [§6.6](docs/arc42/arc42-template-ES.md#66-fallos-parciales-de-las-integraciones-s11--adr-0016) |
 | `aspectos.md` al día | Filas [A-01](docs/aspectos.md#a-01) y [A-06](docs/aspectos.md#a-06), con sus subsecciones de la S11 |
-| Los modos de fallo probados, no solo listados | [`test_modos_de_fallo.py`](backend/tests/test_modos_de_fallo.py) (9 pruebas, validadas provocando la falla con 7 mutaciones) y la columna «Prueba» de la tabla |
+| Los modos de fallo probados, no solo listados | [`test_modos_de_fallo.py`](backend/tests/test_modos_de_fallo.py) (9 pruebas en la S11, validadas provocando la falla con 7 mutaciones; 12 desde los arreglos del 19-oct) y la columna «Prueba» de la tabla |
 | Documentación sincronizada | arc42 §5.1, §6.2, §6.6, §8.4, §9 y §11 · [C4](docs/c4/doc-c4.md) Nivel 2, relaciones 4 y 5, y Nivel 3, relaciones 5 y 6 · [`aspectos.md`](docs/aspectos.md) |
 | Uso de IA | [`docs/ia.md`, entrada 15](docs/ia.md#entrada-15) |
 
@@ -307,7 +307,7 @@ Backend (dentro de `backend/`, con Redis disponible vía `docker compose up -d r
 pytest
 ```
 
-Son 129. Verifican: que la aplicación FastAPI arranca y su endpoint de salud responde
+Son 156. Verifican: que la aplicación FastAPI arranca y su endpoint de salud responde
 200; que los siete módulos del dominio se importan sin error ni ciclos; que ningún módulo
 importa por fuera de lo declarado en el docstring de su `__init__.py` (la prueba de fronteras
 entre módulos); que un trabajo encolado en Redis se recupera igual al desencolarlo; y, para el
@@ -348,6 +348,16 @@ una sola vez. Y que el worker sobrevive a un fallo de Redis, que procesa igual s
 la marca, y que la misma solicitud de distractores repetida no deja estado y gasta su propio cupo.
 Se validaron provocando la falla con siete mutaciones, que el docstring del archivo enumera.
 
+Veintisiete llegaron con los arreglos del 19-oct. Verifican que un error
+del almacén o de la bitácora rechaza esa hoja y no tumba el lote; que una cola que contesta lento
+no saca el lote del techo de EC-07, porque el lote tiene un plazo además de la espera por llamada;
+que el lote se confirma fuera del bucle de eventos (R-21) y se lee de a una hoja, con un tope de
+20 MB; que un nombre largo se acorta y dos exámenes no comparten carpeta; que una espera vencida al
+consumir llega al worker como fallo de la cola; que la API reusa un solo cliente de Redis y busca a
+Redis en el mismo lugar que el worker; que el filtro de distractores iguala `2x` con `2·x` y `sen`
+con `sin`, y no pierde un distractor que vale 0; y que las herramientas de medición solo cuentan lo
+que dicen contar. Cada una falla si se quita su arreglo.
+
 Seis son la **prueba de contrato** ([`backend/tests/test_contrato.py`](backend/tests/test_contrato.py)),
 y verifican que el documento de `docs/contrato/openapi.json` y la API que corre no se puedan
 separar: que el archivo versionado sea exactamente el que genera la aplicación de hoy, que su
@@ -387,21 +397,24 @@ Frontend (dentro de `frontend/`):
 flutter test
 ```
 
-Son 66, una carpeta por pantalla en `test/features/` más `test/app_test.dart`:
+Son 72, una carpeta por pantalla en `test/features/` más `test/app_test.dart`:
 
 - **Marco de la aplicación (6):** la barra superior refleja el estado de conexión con el backend
   y ofrece volver a comprobar; la navegación es un riel en escritorio y una barra en teléfono; y
   cambiar de sección no pierde lo escrito en otra.
-- **Carga (13):** el botón de subir sigue deshabilitado hasta que haya examen y archivos, y sin
+- **Carga (18):** el botón de subir sigue deshabilitado hasta que haya examen y archivos, y sin
   conexión; el reporte lista las aceptadas y las rechazadas con su motivo; una hoja
-  `pendiente_de_encolar` se muestra como pendiente; y una falla de red o una respuesta ilegible
-  se avisan sin dar el lote por perdido ni por recibido.
+  `pendiente_de_encolar` se muestra como pendiente; una falla de red o una respuesta ilegible
+  se avisan sin dar el lote por perdido ni por recibido; y un 5xx dice que algunas hojas pudieron
+  entrar, sin invitar a reintentar. Cuatro de ellas prueban el servicio contra un `MockClient`,
+  incluido que el examen viaje codificado en la ruta.
 - **Pauta y distractores (26):** el 503 y el 429 se muestran como advertencias con el mensaje de
-  la API; con el límite por minuto hay cuenta regresiva y con el diario no se ofrece repetir. Nueve
-  de ellas prueban el servicio contra un `MockClient`, código por código.
-- **Panel (10) y Revisión (11):** avisan que usan datos de ejemplo (en Revisión, también que un
+  la API; con el límite por minuto hay cuenta regresiva, y con el diario no se ofrece repetir y el
+  botón de pedir vuelve cuando pasa la espera. Nueve de ellas prueban el servicio contra un
+  `MockClient`, código por código.
+- **Panel (11) y Revisión (11):** avisan que usan datos de ejemplo (en Revisión, también que un
   veredicto no se guarda) y no se desbordan a 390 px; el Panel tampoco ofrece acciones de IA
-  fuera del alcance.
+  fuera del alcance, y su porcentaje de aprobación no divide por cero.
 
 Ninguna toca la red ni el diálogo de archivos del navegador: las pantallas reciben esas
 operaciones inyectadas y las pruebas les pasan sustitutos.
@@ -518,6 +531,8 @@ Las decisiones de un ADR aceptado no se editan ni se borran: si una decisión ca
 - [x] Proveedor de LLM: Groq, detrás de un puerto de `autoria` (ADR-0013)
 - [x] Segundo corte: presupuesto del proveedor de LLM, `GET /metricas` y experimento de EC-09 (ADR-0015)
 - [x] S11: modos de fallo de las tres integraciones, esperas acotadas de la cola y worker idempotente (ADR-0016); decisión de no extraer (ADR-0017)
+- [x] Arreglos del 19-oct: el lote ya no se cae por un error del disco,
+  tiene un plazo para la cola, no congela la API (R-21 cerrado) y se lee de a una hoja con tope
 - [ ] Acuse de recibo en la cola y detección de hojas subidas dos veces (R-22 y R-24, con A-02)
 - [ ] Aspectos A-02 a A-05
 
