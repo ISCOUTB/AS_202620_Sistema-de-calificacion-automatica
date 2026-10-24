@@ -338,9 +338,12 @@ importación que declara el docstring de cada `__init__.py` y que hace cumplir
 | **dashboard** | Presentación de resultados y agregaciones por curso, examen y pregunta. | RF-05 | `infraestructura`, `identidad`, `calificacion` | Paquete vacío (aspecto A-03, declarado). |
 | **identidad** | Autenticación, roles y aislamiento de datos por curso. | RF-09, RF-10 | `infraestructura` | Paquete vacío (aspecto A-05, declarado). |
 
-`api/main.py` es la traducción entre HTTP y dominio: construye sus dependencias (almacén,
-cliente de cola) por petición vía `Depends`, precisamente para que arrancar la aplicación (y
-probarla) no exija que el volumen o Redis existan. `worker/main.py` comparte esa misma base de
+`api/main.py` es la traducción entre HTTP y dominio: entrega sus dependencias (almacén, bitácora,
+cliente de cola) vía `Depends` y las construye la primera vez que se piden, no al importar,
+precisamente para que arrancar la aplicación (y probarla) no exija que el volumen o Redis existan.
+El almacén y la bitácora se construyen por petición; el cliente de cola, desde los arreglos del 19-oct, se crea
+una vez y se reusa, para no repetir la conexión y el saludo inicial de Redis en cada lote.
+`worker/main.py` comparte esa misma base de
 dominio. Los bordes de importación que existen hoy son cuatro, todos dentro de lo declarado:
 `api/main.py` importa `autoria`, `ingesta` e `infraestructura`; `api/settings.py` importa `autoria`
 (los valores por omisión del presupuesto); `ingesta/recepcion.py` importa `infraestructura`; y
@@ -1035,9 +1038,9 @@ decide ningún campo de negocio, se limita a copiar nombre y bytes.
 **sobre de transporte** con el que un encargo viaja a la cola, y su dueño es `infraestructura`
 porque es quien decide lo único que el sobre declara por su cuenta: el identificador, acuñado en
 `preparar_trabajo` (`cola.py:40`). El `payload` lo arma `ingesta` en
-[`recepcion.py:130`](../../backend/ingesta/recepcion.py), y a primera vista eso parece dos manos
+[`recepcion.py:196`](../../backend/ingesta/recepcion.py), y a primera vista eso parece dos manos
 sobre la misma entidad. No lo es: `infraestructura` nunca interpreta ese diccionario, lo serializa
-entero al publicar (`cola.py:55`), así que no decide ninguno de sus campos ni se convierte en
+entero al publicar (`cola.py:60`), así que no decide ninguno de sus campos ni se convierte en
 segundo autor del dato que transporta. El identificador que acuña sí viaja después a
 `EntradaDeBitacora` y a `HojaAceptada`, pero como el mismo valor propagado y no redecidido, que es
 exactamente lo que [ADR-0006](../adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md)
@@ -1132,8 +1135,8 @@ una lleva su acción correctiva y aquello de lo que depende para poder hacerse.
 | ID | Violación | Dónde está | Acción correctiva | Depende de |
 |---|---|---|---|---|
 | V-1 | `api` y `worker` importan el dominio sin declarar frontera, y la prueba que la verifica no los recorre | `backend/api/__init__.py`, `backend/worker/__init__.py`, `backend/tests/test_fronteras.py:17` | Docstring con `Responsabilidad:` e `Importa:` en ambos y agregarlos a `MODULOS`, comprobando la prueba en rojo | Nada |
-| V-2 | El nombre de la cola está declarado dos veces y ninguna declaración es la fuente de verdad | `backend/api/settings.py:13`, `backend/worker/main.py:25` | Una sola declaración en `infraestructura/cola.py` y la prueba que falla si los dos procesos resuelven nombres distintos | Nada |
-| V-3 | El estado de una hoja existe en la bitácora y en la `HojaAceptada` que viajó al frontend, sin nada que los concilie | `backend/infraestructura/modelo.py:65`, `backend/ingesta/recepcion.py:165` | Que la bitácora sea la única fuente de verdad del estado al construir el reintento | Que exista A-02 |
+| V-2 | El nombre de la cola está declarado dos veces y ninguna declaración es la fuente de verdad | `backend/api/settings.py:17`, `backend/worker/main.py:31` | Una sola declaración en `infraestructura/cola.py` y la prueba que falla si los dos procesos resuelven nombres distintos | Nada |
+| V-3 | El estado de una hoja existe en la bitácora y en la `HojaAceptada` que viajó al frontend, sin nada que los concilie | `backend/infraestructura/modelo.py:65`, `backend/ingesta/recepcion.py:258` | Que la bitácora sea la única fuente de verdad del estado al construir el reintento | Que exista A-02 |
 | V-4 | `BitacoraEnDisco` supone un único proceso escritor, y nada lo declara ni lo impide | `backend/infraestructura/bitacora.py:70` | Declarar el supuesto en el adaptador y cerrarlo en el ADR de persistencia definitiva | El ADR que cierra R-06 |
 | V-5 | La regla de dueño único vive solo en esta sección: ninguna prueba la verifica (desde la S9, `autoria` ya la declara con `Posee:`) | `backend/infraestructura/modelo.py`, `backend/tests/test_fronteras.py` | Línea `Posee:` en el docstring de cada módulo y extender la prueba de fronteras a la propiedad | Nada |
 
@@ -1174,8 +1177,8 @@ los dos recién agregados, por el mismo criterio con el que se validaron las pru
 
 #### V-2 · El nombre de la cola está declarado dos veces
 
-`NOMBRE_COLA` aparece en [`api/settings.py`](../../backend/api/settings.py) línea 13 y en
-[`worker/main.py`](../../backend/worker/main.py) línea 25. Las dos leen la misma variable de
+`NOMBRE_COLA` aparece en [`api/settings.py`](../../backend/api/settings.py) línea 17 y en
+[`worker/main.py`](../../backend/worker/main.py) línea 31. Las dos leen la misma variable de
 entorno y las dos repiten el mismo literal por omisión, `"procesamiento"`. Hoy el sistema funciona
 porque coinciden, pero **nada verifica que coincidan**, y el dato que relaciona a los dos procesos
 no tiene un dueño: tiene dos declaraciones de igual rango.
@@ -1777,7 +1780,7 @@ priorización original.
 | **R-18** | **El presupuesto del proveedor de LLM vive en la memoria del proceso de la API** ([ADR-0015](../adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md)). Se vacía en cada despliegue y cada reinicio, y con más de una instancia o más de un proceso de uvicorn cada uno tendría el suyo. | Bajo | Un reinicio a mitad del día, que devuelve el cupo diario completo (hasta 300 solicitudes en 24 h, más de las que caben en la cuota diaria de Groq); o escalar la API horizontalmente. | Mientras haya una instancia y un proceso, se acepta: el último freno sigue siendo el 503 del proveedor. Si la API escala, el presupuesto pasa a Redis detrás del mismo adaptador `GeneradorConPresupuesto`. |
 | **R-19** | **El presupuesto es global, no por profesor.** Un cliente puede gastar el cupo de los demás: un minuto si lanza una ráfaga, un día si insiste 150 veces. | Medio | Que alguien fuera del curso use la URL pública en bucle. | Lo cierra `identidad` (A-05), con un cupo por profesor autenticado, igual que R-14 y R-17. Mientras tanto, el presupuesto protege la cuota del proveedor, aunque no la reparte. |
 | **R-20** | **Divergencias conocidas entre esta documentación y lo desplegado**, anotadas en vez de esconderse. (1) Corregida con el frontend nuevo: la pantalla de carga mostraba «En cola» para toda hoja aceptada, también para las `pendiente_de_encolar`; ahora lee el campo `estado` (`frontend/lib/features/carga/data/servicio_carga.dart:48`) y la muestra como pendiente. (2) `POST /distractores` ya tiene pantalla (Pauta y distractores); `GET /metricas` sigue sin pantalla y se consulta por la API. (3) La cifra de 1,744 s de EC-07 que citan 6.2, `aspectos.md` y ADR-0006 no está en el informe crudo `medicion-ec07-despues.json`, que registra 1,491 s como peor de tres corridas; las dos cumplen el umbral de 10 s. | Bajo | Que un revisor busque 1,744 en el informe crudo, o la pantalla de `/metricas`. | (1) Hecho: el reporte de la pantalla de carga muestra el `estado`. (2) Una vista de `GET /metricas` solo si la operación la necesita. (3) Repetir la medición de EC-07 con `medir_ec07.py` y citar la cifra del informe que quede versionado. |
-| **R-21** | **Mientras se confirma un lote, el proceso de la API no atiende otras peticiones.** `cargar_hojas` es `async def`, pero `recibir_lote` escribe en disco con `fsync` de forma bloqueante, así que el lote entero ocupa el bucle de eventos. Con un solo proceso de uvicorn en Render, un lote de 200 hojas (1,5 s en local) detiene `/health` y `/distractores` durante ese tiempo. | Bajo | Un lote grande cuando el monitor consulta `/health`, o dos docentes cargando a la vez. | Declarar la ruta como `def`, como ya se hizo con `/distractores` por la misma razón, para que FastAPI la corra en su grupo de hilos. Se deja para cuando se trabaje A-02, que vuelve a tocar la recepción. |
+| **R-21** | **Cerrado con los arreglos del 19-oct:** mientras se confirmaba un lote, el proceso de la API no atendía otras peticiones, porque `cargar_hojas` es `async def` y `recibir_lote` escribe con `fsync` y espera a Redis de forma bloqueante. Al corregirlo se vio, además, que el lote se leía entero a memoria antes de procesarlo. Ahora `recibir_lote` corre en un hilo aparte con `run_in_threadpool` y lee las hojas de a una. | Cerrado | No aplica. | [`api/main.py`](../../backend/api/main.py) (`cargar_hojas`) y `test_el_lote_se_confirma_fuera_del_event_loop` en [`test_carga_hojas.py`](../../backend/tests/test_carga_hojas.py), que falla si la llamada vuelve al bucle de eventos. |
 | **R-22** | **La cola no tiene acuse de recibo** (modo de fallo MF-06 de la [tabla de la S11](../evidencia/modos-de-fallo.md)). Si el worker muere después del `BLPOP` y antes de terminar, el trabajo sale de la lista y no vuelve. La hoja sigue en el almacén y en la bitácora, pero marcada como encolada, así que nada la reintenta. | Bajo hoy, porque procesar es escribir una línea de log; **Alto** con A-02 | Un despliegue o un reinicio de la instancia mientras el worker tiene un trabajo en la mano: en Render pasa con cada push que cambia `backend/`. | Con A-02: `BLMOVE` a una lista de trabajos en curso y `LREM` al terminar, con un barrido que devuelva a la cola los que lleven demasiado tiempo en curso; o Redis Streams con `XACK` y `XAUTOCLAIM`. Lo decide un ADR propio. Mientras tanto, la hoja se puede recuperar a mano desde la bitácora. |
 | **R-23** | **La marca de idempotencia del worker va antes de procesar y vive en un Redis sin persistencia** ([ADR-0016](../adr/0016-acotar-la-espera-de-la-cola-y-hacer-idempotente-al-worker.md)). Hoy es correcto, porque procesar es registrar. Con A-02, una caída a mitad dejaría el trabajo marcado y sin hacer; y un reinicio del Key Value borra las marcas, así que un duplicado posterior pasaría. | Bajo | Construir A-02 sin mover la marca; o un reinicio del Key Value seguido de un reintento desde la bitácora. | Con A-02, la marca pasa a después de terminar, o a dos estados (en curso, con vencimiento corto, y hecho). La persistencia de las marcas se resuelve con la de la cola, cuando se cierre R-06. Está escrito en el docstring del worker. |
 | **R-24** | **La API no detecta una hoja subida dos veces** (MF-13). Si la respuesta de una carga se corta, el docente no sabe qué entró y puede volver a subir el lote; las hojas repetidas se almacenan y se encolan otra vez, con otro `trabajo_id`, así que la idempotencia del worker no las ve. | Medio | Una carga con la red inestable seguida de un reenvío; con A-02, dos calificaciones de la misma hoja. | Diseñado en la [sección 4 de la tabla](../evidencia/modos-de-fallo.md): clave `(examen_id, SHA-256 del contenido)` en la bitácora y un estado `ya_recibida` con el `trabajo_id` original, como cambio menor del contrato. Se construye antes de que A-02 califique. Mientras tanto, el sitio quita de la selección lo recibido y avisa cuando la respuesta no llegó. |
