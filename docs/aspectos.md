@@ -36,17 +36,23 @@ Redis lento, un lote de 200 hojas tardaba 10,017 s en confirmarse, fuera de EC-0
 [ADR-0016](adr/0016-acotar-la-espera-de-la-cola-y-hacer-idempotente-al-worker.md) tarda 2,017 s; el worker procesa una sola vez el trabajo que llega dos veces.
 [ADR-0017](adr/0017-no-extraer-ningun-modulo-del-monolito-todavia.md) decide no extraer ningún módulo todavía, con sus criterios.
 
+**La entrega de consistencia y caché cae sobre las mismas dos filas** ([tabla operación →
+consistencia y diseño de la caché](evidencia/consistencia-y-cache.md)). En [A-01](#a-01), [ADR-0018](adr/0018-dar-a-la-hoja-una-identidad-propia-y-derivar-su-estado-de-la-bitacora.md) separa la
+identidad de la hoja (`hoja_id`) de la de su trabajo y declara la bitácora fuente de verdad de su
+estado: es la decisión de datos más costosa de revertir. En [A-06](#a-06), [ADR-0019](adr/0019-guardar-en-cache-las-propuestas-de-distractores.md)
+guarda 24 horas las propuestas del proveedor, y la misma pregunta repetida no gasta cupo.
+
 Cada fila enlaza a su escenario de calidad en el arc42. Los nueve escenarios documentados son
 alcanzables desde la fila del aspecto que los realiza.
 
 | ID | Aspecto | Estado | Requisito | Escenario de calidad | Contexto C4 (Nivel 1) | C4 | ADR | Código | Pruebas | Evidencia |
 |---|---|---|---|---|---|---|---|---|---|---|
-| **[A-01](#a-01)** | Carga de examen para calificación | **Construido** | RF-01 | [EC-07](arc42/arc42-template-ES.md#ec-07) | [Rel. 1](c4/doc-c4.md#relaciones): Profesor/TA → Sistema | C1: [QuantIA](c4/doc-c4.md#nivel-1--diagrama-de-contexto-del-sistema) · C2: [Aplicación web](c4/doc-c4.md#nivel-2--diagrama-de-contenedores), [Almacén de imágenes](c4/doc-c4.md#nivel-2--diagrama-de-contenedores), [Cola de trabajos](c4/doc-c4.md#nivel-2--diagrama-de-contenedores) | [0002](adr/0002-procesar-calificacion-de-forma-asincrona.md) · [0006](adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md) · [0016](adr/0016-acotar-la-espera-de-la-cola-y-hacer-idempotente-al-worker.md) | [`ingesta/recepcion.py`](../backend/ingesta/recepcion.py) · [`infraestructura/almacen.py`](../backend/infraestructura/almacen.py) · [`infraestructura/bitacora.py`](../backend/infraestructura/bitacora.py) · [`infraestructura/modelo.py`](../backend/infraestructura/modelo.py) · [`api/main.py`](../backend/api/main.py) · [`frontend/lib/features/carga/views/pantalla_carga.dart`](../frontend/lib/features/carga/views/pantalla_carga.dart) · [`infraestructura/cola.py`](../backend/infraestructura/cola.py) · [`worker/main.py`](../backend/worker/main.py) | [`test_recepcion.py`](../backend/tests/test_recepcion.py) · [`test_durabilidad_recepcion.py`](../backend/tests/test_durabilidad_recepcion.py) · [`test_carga_hojas.py`](../backend/tests/test_carga_hojas.py) · [`carga_test.dart`](../frontend/test/features/carga_test.dart) · [`servicio_carga_test.dart`](../frontend/test/features/servicio_carga_test.dart) · [`test_modos_de_fallo.py`](../backend/tests/test_modos_de_fallo.py) | [Medición de EC-07](evidencia/medicion-ec07.md): 1,744 s contra ≤10 s · 0 % de pérdida silenciosa · [captura](#a-01-evidencia) · [Modos de fallo](evidencia/modos-de-fallo.md) (S11): con la cola lenta, el lote de 200 confirma en 2,017 s (antes 10,017 s) |
+| **[A-01](#a-01)** | Carga de examen para calificación | **Construido** | RF-01 | [EC-07](arc42/arc42-template-ES.md#ec-07) | [Rel. 1](c4/doc-c4.md#relaciones): Profesor/TA → Sistema | C1: [QuantIA](c4/doc-c4.md#nivel-1--diagrama-de-contexto-del-sistema) · C2: [Aplicación web](c4/doc-c4.md#nivel-2--diagrama-de-contenedores), [Almacén de imágenes](c4/doc-c4.md#nivel-2--diagrama-de-contenedores), [Cola de trabajos](c4/doc-c4.md#nivel-2--diagrama-de-contenedores) | [0002](adr/0002-procesar-calificacion-de-forma-asincrona.md) · [0006](adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md) · [0016](adr/0016-acotar-la-espera-de-la-cola-y-hacer-idempotente-al-worker.md) · [0018](adr/0018-dar-a-la-hoja-una-identidad-propia-y-derivar-su-estado-de-la-bitacora.md) | [`ingesta/recepcion.py`](../backend/ingesta/recepcion.py) · [`infraestructura/almacen.py`](../backend/infraestructura/almacen.py) · [`infraestructura/bitacora.py`](../backend/infraestructura/bitacora.py) · [`infraestructura/modelo.py`](../backend/infraestructura/modelo.py) · [`api/main.py`](../backend/api/main.py) · [`frontend/lib/features/carga/views/pantalla_carga.dart`](../frontend/lib/features/carga/views/pantalla_carga.dart) · [`infraestructura/cola.py`](../backend/infraestructura/cola.py) · [`worker/main.py`](../backend/worker/main.py) | [`test_recepcion.py`](../backend/tests/test_recepcion.py) · [`test_durabilidad_recepcion.py`](../backend/tests/test_durabilidad_recepcion.py) · [`test_carga_hojas.py`](../backend/tests/test_carga_hojas.py) · [`carga_test.dart`](../frontend/test/features/carga_test.dart) · [`servicio_carga_test.dart`](../frontend/test/features/servicio_carga_test.dart) · [`test_modos_de_fallo.py`](../backend/tests/test_modos_de_fallo.py) · [`test_identidad_de_la_hoja.py`](../backend/tests/test_identidad_de_la_hoja.py) | [Medición de EC-07](evidencia/medicion-ec07.md): 1,744 s contra ≤10 s · 0 % de pérdida silenciosa · [captura](#a-01-evidencia) · [Modos de fallo](evidencia/modos-de-fallo.md) (S11): con la cola lenta, el lote de 200 confirma en 2,017 s (antes 10,017 s) · [Consistencia](evidencia/consistencia-y-cache.md): filas C-01 a C-05 |
 | **[A-02](#a-02)** | Detección de marcas y nivel de confianza | Declarado | RF-02, RF-03 | [EC-01](arc42/arc42-template-ES.md#ec-01) · [EC-02](arc42/arc42-template-ES.md#ec-02) | **Sin contexto propio** — proceso interno, no cruza la frontera del sistema (ver nota abajo) | Pendiente | ADR de umbral previsto (R-04) | Pendiente | Pendiente | Pendiente |
 | **[A-03](#a-03)** | Calificación contra la clave y publicación | Declarado | RF-04, RF-05, RF-08 | [EC-03](arc42/arc42-template-ES.md#ec-03) · [EC-04](arc42/arc42-template-ES.md#ec-04) | [Rel. 2](c4/doc-c4.md#relaciones): Sistema → Profesor/TA | Pendiente | [0002](adr/0002-procesar-calificacion-de-forma-asincrona.md) | Pendiente | Pendiente | Pendiente |
 | **[A-04](#a-04)** | Registro del banco y habilitación del examen | Declarado | RF-06, RF-07 | [EC-05](arc42/arc42-template-ES.md#ec-05) | [Rel. 1](c4/doc-c4.md#relaciones): Profesor/TA → Sistema | Pendiente | [0003](adr/0003-usar-fastapi-y-flutter.md) · [0004](adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md) · [0005](adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md) | Pendiente | Pendiente | Pendiente |
 | **[A-05](#a-05)** | Identidad y aislamiento por curso | Declarado | RF-09, RF-10 | [EC-06](arc42/arc42-template-ES.md#ec-06) | [Rel. 1 y 2](c4/doc-c4.md#relaciones): transversal a ambas — condición de «docente autenticado» bajo la que operan | Pendiente | ADR de auditoría previsto (RF-10) | Pendiente | Pendiente | Pendiente |
-| **[A-06](#a-06)** | Propuesta de distractores diagnósticos | **Construido** | RF-11 *(opcional)* | [EC-08](arc42/arc42-template-ES.md#ec-08) · [EC-09](arc42/arc42-template-ES.md#ec-09) | [Rel. 3](c4/doc-c4.md#relaciones): Sistema → Proveedor de LLM (opcional) | C1: [Proveedor de LLM](c4/doc-c4.md#nivel-1--diagrama-de-contexto-del-sistema) · C2: [Aplicación web → Proveedor de LLM](c4/doc-c4.md#relaciones-1) (relación 8) · C3: [`autoria`](c4/doc-c4.md#nivel-3--diagrama-de-componentes) | [0005](adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md) · [0013](adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md) · [0015](adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md) · [0017](adr/0017-no-extraer-ningun-modulo-del-monolito-todavia.md) | [`autoria/distractores.py`](../backend/autoria/distractores.py) · [`autoria/proveedor_llm.py`](../backend/autoria/proveedor_llm.py) · [`autoria/presupuesto.py`](../backend/autoria/presupuesto.py) · [`api/main.py`](../backend/api/main.py) (`POST /distractores` y `GET /metricas`) · pantalla: [`pantalla_pauta.dart`](../frontend/lib/features/pauta/views/pantalla_pauta.dart) y [`servicio_distractores.dart`](../frontend/lib/features/pauta/data/servicio_distractores.dart) | [`test_distractores.py`](../backend/tests/test_distractores.py) · [`test_proveedor_llm.py`](../backend/tests/test_proveedor_llm.py) · [`test_ruta_distractores.py`](../backend/tests/test_ruta_distractores.py) · [`test_presupuesto.py`](../backend/tests/test_presupuesto.py) · [`pauta_test.dart`](../frontend/test/features/pauta_test.dart) · [`servicio_distractores_test.dart`](../frontend/test/features/servicio_distractores_test.dart) · [`test_modos_de_fallo.py`](../backend/tests/test_modos_de_fallo.py) | [Evaluación de EC-08](evidencia/evaluacion-distractores.md): M1: 0 de 120 propuestas repiten la respuesta correcta · M2: p95 de 2,91 s contra 15 s · M3: 503 en 20,25 s contra 21 s · [la prueba falla ante el defecto](evidencia/prueba-distractores-falla.md) · [auditoría](evidencia/auditoria-s9.md) · [Experimento de EC-09](evidencia/experimento-presupuesto.md) (segundo corte): de 20 solicitudes en el proveedor y 11 cortes por cuota a 6 y 0 · [Modos de fallo MF-07 a MF-10](evidencia/modos-de-fallo.md) (S11) |
+| **[A-06](#a-06)** | Propuesta de distractores diagnósticos | **Construido** | RF-11 *(opcional)* | [EC-08](arc42/arc42-template-ES.md#ec-08) · [EC-09](arc42/arc42-template-ES.md#ec-09) | [Rel. 3](c4/doc-c4.md#relaciones): Sistema → Proveedor de LLM (opcional) | C1: [Proveedor de LLM](c4/doc-c4.md#nivel-1--diagrama-de-contexto-del-sistema) · C2: [Aplicación web → Proveedor de LLM](c4/doc-c4.md#relaciones-1) (relación 8) · C3: [`autoria`](c4/doc-c4.md#nivel-3--diagrama-de-componentes) | [0005](adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md) · [0013](adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md) · [0015](adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md) · [0017](adr/0017-no-extraer-ningun-modulo-del-monolito-todavia.md) · [0019](adr/0019-guardar-en-cache-las-propuestas-de-distractores.md) | [`autoria/distractores.py`](../backend/autoria/distractores.py) · [`autoria/proveedor_llm.py`](../backend/autoria/proveedor_llm.py) · [`autoria/presupuesto.py`](../backend/autoria/presupuesto.py) · [`autoria/cache.py`](../backend/autoria/cache.py) · [`api/main.py`](../backend/api/main.py) (`POST /distractores` y `GET /metricas`) · pantalla: [`pantalla_pauta.dart`](../frontend/lib/features/pauta/views/pantalla_pauta.dart) y [`servicio_distractores.dart`](../frontend/lib/features/pauta/data/servicio_distractores.dart) | [`test_distractores.py`](../backend/tests/test_distractores.py) · [`test_proveedor_llm.py`](../backend/tests/test_proveedor_llm.py) · [`test_ruta_distractores.py`](../backend/tests/test_ruta_distractores.py) · [`test_presupuesto.py`](../backend/tests/test_presupuesto.py) · [`pauta_test.dart`](../frontend/test/features/pauta_test.dart) · [`servicio_distractores_test.dart`](../frontend/test/features/servicio_distractores_test.dart) · [`test_modos_de_fallo.py`](../backend/tests/test_modos_de_fallo.py) · [`test_cache_de_propuestas.py`](../backend/tests/test_cache_de_propuestas.py) | [Evaluación de EC-08](evidencia/evaluacion-distractores.md): M1: 0 de 120 propuestas repiten la respuesta correcta · M2: p95 de 2,91 s contra 15 s · M3: 503 en 20,25 s contra 21 s · [la prueba falla ante el defecto](evidencia/prueba-distractores-falla.md) · [auditoría](evidencia/auditoria-s9.md) · [Experimento de EC-09](evidencia/experimento-presupuesto.md) (segundo corte): de 20 solicitudes en el proveedor y 11 cortes por cuota a 6 y 0 · [Modos de fallo MF-07 a MF-10](evidencia/modos-de-fallo.md) (S11) · [Caché de propuestas](evidencia/consistencia-y-cache.md): filas C-07 y C-08, y su política de invalidación |
 
 **Estados:** *Declarado* = pasos 1 y 3 parciales (nombre, para quién, qué resuelve, requisitos
 y escenario asignados). *Especificado* = pasos 1 a 4 completos. *Construido* = pasos 5 a 7.
@@ -345,6 +351,29 @@ responda dos veces), de los dos lados, en la [tabla de modos de fallo](evidencia
   cuando exista A-02 (R-23); y la API no detecta una hoja subida dos veces (MF-13, R-24). Los tres
   tienen su plan en la tabla.
 
+### Consistencia: la identidad de la hoja y la fuente de verdad de su estado
+
+La entrega de consistencia pide el ADR de la decisión de datos más costosa de revertir, y es de este
+aspecto: la identidad de la hoja, de la que va a colgar todo lo que A-02 y A-03 guarden.
+
+- **Encontrado al revisar:** la hoja no tenía identidad propia. El `trabajo_id` hacía de identidad
+  de la hoja y de la del encargo que viaja por la cola, y con un solo valor no se podía volver a
+  procesar una hoja (para recalificarla) sin chocar con la idempotencia de ADR-0016.
+- **Decidir:** [ADR-0018](adr/0018-dar-a-la-hoja-una-identidad-propia-y-derivar-su-estado-de-la-bitacora.md). Un `hoja_id` acuñado una vez por `ingesta`, distinto del
+  `trabajo_id`, y la bitácora como única fuente de verdad del estado; la copia `estado` de la
+  respuesta es una instantánea. Se toma ahora, cuando revertirla todavía es quitar un campo.
+- **Construir:** [`ingesta/recepcion.py`](../backend/ingesta/recepcion.py) lo acuña,
+  [`infraestructura/bitacora.py`](../backend/infraestructura/bitacora.py) lo escribe y lo relee (las
+  líneas viejas, con su `trabajo_id`), [`worker/main.py`](../backend/worker/main.py) lo registra y el
+  contrato pasa a 1.3.0.
+- **Verificar:** seis pruebas en
+  [`test_identidad_de_la_hoja.py`](../backend/tests/test_identidad_de_la_hoja.py), que se suman a
+  las del paso 6 y se validaron provocando la falla con cuatro mutaciones.
+- **Evidenciar:** las garantías de cada paso de la carga, en la
+  [tabla operación → consistencia](evidencia/consistencia-y-cache.md), filas C-01 a C-05.
+- **Sigue abierto:** ninguna ruta deja consultar el estado vigente de una hoja, y hoy obtenerlo es
+  releer toda la bitácora (R-26).
+
 ### Por qué se eligió este aspecto primero
 
 - Es el punto de entrada del flujo completo: sin una hoja cargada no hay nada sobre lo cual
@@ -561,6 +590,30 @@ faltaba probar:
   6 hilos esperando 20 s; la tabla dice qué dato lo haría necesario.
 - **No se extrae a un servicio propio:** [ADR-0017](adr/0017-no-extraer-ningun-modulo-del-monolito-todavia.md) lo evaluó como opción y lo descartó
   por ahora, con los datos que lo harían revisar.
+
+### Consistencia: la caché de propuestas
+
+El diseño de caché de la entrega de consistencia es de este aspecto: es la única lectura cara del
+sistema (un cupo del presupuesto y unos 2 s por solicitud) y lo que se lee no envejece solo.
+
+- **Decidir:** [ADR-0019](adr/0019-guardar-en-cache-las-propuestas-de-distractores.md). Las propuestas del proveedor se guardan 24 horas en la memoria de
+  la API, por fuera del presupuesto, y la misma pregunta pedida otra vez se responde desde ahí, con
+  la regla aplicada otra vez y `desde_la_cache: true`.
+- **Invalidación:** el modelo y la huella de las instrucciones van en la clave; se guarda sin
+  filtrar y la regla corre en cada lectura; 24 horas que leer no renueva; 256 entradas; y «Pedir
+  otras propuestas» manda `otras: true`, que salta la caché y reemplaza lo guardado. Las fallas no
+  se guardan.
+- **Construir:** [`autoria/cache.py`](../backend/autoria/cache.py),
+  [`api/main.py`](../backend/api/main.py) (la ruta y `GET /metricas`), el contrato en 1.4.0 y, en el
+  sitio, [`servicio_distractores.dart`](../frontend/lib/features/pauta/data/servicio_distractores.dart)
+  y [`pantalla_pauta.dart`](../frontend/lib/features/pauta/views/pantalla_pauta.dart).
+- **Verificar:** trece pruebas en
+  [`test_cache_de_propuestas.py`](../backend/tests/test_cache_de_propuestas.py), validadas con una
+  mutación por regla de invalidación, y dos ajustes en las pruebas del sitio.
+- **Evidenciar:** la política de invalidación completa y las filas C-07 y C-08 de la
+  [tabla de consistencia](evidencia/consistencia-y-cache.md). En vivo, `cache_de_distractores` en `GET /metricas`.
+- **Sigue abierto:** la caché vive en cada proceso (R-27), y su efecto con tráfico real no se ha
+  medido todavía.
 
 ---
 
