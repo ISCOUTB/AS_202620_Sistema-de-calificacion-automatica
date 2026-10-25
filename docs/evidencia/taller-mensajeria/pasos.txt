@@ -1,0 +1,7 @@
+== 1. Estado tras la carga, sin worker
+{"pendientes": 3, "en_curso": 0, "esperando_reintento": 0, "fallidos": 0}
+== 2. Antes de arrancar el worker: duplicado publicado, uno en curso de un worker caído
+{"pendientes": 3, "en_curso": 1, "esperando_reintento": 0, "fallidos": 0}
+== 3. Al final
+{"mensaje": "{\"id\": \"4ea9b20a-f772-45b5-9c76-c6a1476ac7e0\", \"payload\": {\"hoja_id\": \"aaccdeac-2373-4e64-97ce-6b1e11c46ac2\", \"examen_id\": \"EVID-1\", \"referencia\": \"EVID-1/5e195dcb-8b75-4e6d-94c7-ee262b585d7f-hoja-3.jpg\", \"nombre_archivo\": \"hoja-3.jpg\"}, \"version\": 1, \"tipo\": \"hoja_recibida\", \"emitido_en\": \"2026-10-25T17:35:25.644203+00:00\", \"intento\": 4}", "motivo": "No se pudo leer la imagen: FileNotFoundError: [Errno 2] No such file or directory: '<almacén>/EVID-1/5e195dcb-8b75-4e6d-94c7-ee262b585d7f-hoja-3.jpg'", "intentos": 4, "momento": "2026-10-25T17:36:08.669150+00:00"}
+{"pendientes": 0, "en_curso": 0, "esperando_reintento": 0, "fallidos": 1}

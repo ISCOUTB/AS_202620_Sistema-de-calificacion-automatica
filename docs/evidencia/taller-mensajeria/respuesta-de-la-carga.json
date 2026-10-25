@@ -1,0 +1,31 @@
+{
+  "examen_id": "EVID-1",
+  "total_procesados": 3,
+  "aceptadas": [
+    {
+      "nombre_archivo": "hoja-1.jpg",
+      "referencia": "EVID-1/873dd2f2-b994-4e6b-81e5-337f7dc3c0d5-hoja-1.jpg",
+      "hoja_id": "da37f817-3b0b-4b17-bdcb-12a63e7f0e6f",
+      "trabajo_id": "1dfe3bef-861f-4d5e-9229-c88d9e1b3f15",
+      "recibida_en": "2026-10-25T17:35:25.642143Z",
+      "estado": "encolada"
+    },
+    {
+      "nombre_archivo": "hoja-2.jpg",
+      "referencia": "EVID-1/e07b1555-56e9-431c-936b-f105da8ce31f-hoja-2.jpg",
+      "hoja_id": "0a4987a3-007b-4305-8da9-84ea9ea9ff34",
+      "trabajo_id": "0d3aeed5-6412-4d2e-8e41-07799be8a650",
+      "recibida_en": "2026-10-25T17:35:25.643939Z",
+      "estado": "encolada"
+    },
+    {
+      "nombre_archivo": "hoja-3.jpg",
+      "referencia": "EVID-1/5e195dcb-8b75-4e6d-94c7-ee262b585d7f-hoja-3.jpg",
+      "hoja_id": "aaccdeac-2373-4e64-97ce-6b1e11c46ac2",
+      "trabajo_id": "4ea9b20a-f772-45b5-9c76-c6a1476ac7e0",
+      "recibida_en": "2026-10-25T17:35:25.645199Z",
+      "estado": "encolada"
+    }
+  ],
+  "rechazados": []
+}

@@ -1,0 +1,50 @@
+[
+  {
+    "trabajo": "1dfe3bef-861f-4d5e-9229-c88d9e1b3f15",
+    "hoja": "da37f817-3b0b-4b17-bdcb-12a63e7f0e6f",
+    "estado": "procesado",
+    "intentos": 1,
+    "de_punta_a_punta_ms": 646.0,
+    "eventos": [
+      "trabajo_publicado",
+      "trabajo_tomado",
+      "hoja_recibida",
+      "trabajo_tomado",
+      "trabajo_repetido"
+    ]
+  },
+  {
+    "trabajo": "0d3aeed5-6412-4d2e-8e41-07799be8a650",
+    "hoja": "0a4987a3-007b-4305-8da9-84ea9ea9ff34",
+    "estado": "procesado",
+    "intentos": 3,
+    "de_punta_a_punta_ms": 17822.0,
+    "eventos": [
+      "trabajo_publicado",
+      "trabajo_tomado",
+      "reintento_programado",
+      "trabajo_tomado",
+      "reintento_programado",
+      "trabajo_tomado",
+      "hoja_recibida"
+    ]
+  },
+  {
+    "trabajo": "4ea9b20a-f772-45b5-9c76-c6a1476ac7e0",
+    "hoja": "aaccdeac-2373-4e64-97ce-6b1e11c46ac2",
+    "estado": "en la lista de fallidos",
+    "intentos": 4,
+    "de_punta_a_punta_ms": 43025.0,
+    "eventos": [
+      "trabajo_publicado",
+      "trabajo_tomado",
+      "reintento_programado",
+      "trabajo_tomado",
+      "reintento_programado",
+      "trabajo_tomado",
+      "reintento_programado",
+      "trabajo_tomado",
+      "trabajo_a_fallidos"
+    ]
+  }
+]
