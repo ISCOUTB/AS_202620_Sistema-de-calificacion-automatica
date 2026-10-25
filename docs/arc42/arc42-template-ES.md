@@ -65,6 +65,7 @@ su frontera.
   - [8.2 Lenguaje ubicuo](#82-lenguaje-ubicuo)
   - [8.3 Propiedad de datos](#83-propiedad-de-datos)
   - [8.4 Resiliencia de las integraciones](#84-resiliencia-de-las-integraciones)
+  - [8.5 Consistencia de los datos y caché](#85-consistencia-de-los-datos-y-caché)
   - [Conceptos transversales todavía sin desarrollar](#conceptos-transversales-todavía-sin-desarrollar)
 - [9. Architecture Decisions](#9-architecture-decisions)
 - [10. Quality Requirements](#10-quality-requirements)
@@ -313,7 +314,7 @@ los dos documentos juntos:
 
 | Contenedor | Responsabilidad (C4 Nivel 2) | Tecnología | Estado de implementación |
 |---|---|---|---|
-| **Aplicación web** *(lado servidor)* | Autenticación, cursos, preguntas, exámenes, carga de escaneos y consulta de resultados; inicia los trabajos de procesamiento. | FastAPI (`backend/api/main.py`), Uvicorn (servicio `api`). | Expone `GET /health`, `POST /examenes/{examen_id}/hojas` (RF-01, aspecto A-01), `POST /distractores` (RF-11, aspecto A-06) y `GET /metricas` (EC-09, ADR-0015). El resto de responsabilidades del contenedor (cursos, preguntas, resultados) siguen sin ruta. |
+| **Aplicación web** *(lado servidor)* | Autenticación, cursos, preguntas, exámenes, carga de escaneos y consulta de resultados; inicia los trabajos de procesamiento. | FastAPI (`backend/api/main.py`), Uvicorn (servicio `api`). | Expone `GET /health`, `POST /examenes/{examen_id}/hojas` (RF-01, aspecto A-01), `POST /distractores` (RF-11, aspecto A-06) y `GET /metricas` (EC-09, ADR-0015). El resto de responsabilidades del contenedor (cursos, preguntas, resultados) siguen sin ruta. Desde [ADR-0019](../adr/0019-guardar-en-cache-las-propuestas-de-distractores.md) guarda en su memoria, 24 horas, las propuestas del proveedor para cada pregunta, y [ADR-0018](../adr/0018-dar-a-la-hoja-una-identidad-propia-y-derivar-su-estado-de-la-bitacora.md) le da a cada hoja aceptada una identidad propia (`hoja_id`). |
 | **Interfaz web** *(parte de «Aplicación web» en el C4)* | Presenta al docente el dashboard, la carga de escaneos y la resolución de marcas ambiguas. | Flutter compilado a web, servido por nginx (servicio `frontend`). | Cuatro pantallas, una carpeta por funcionalidad en `frontend/lib/features/`, con el estado de conexión en la barra superior. **Carga** (A-01) y **Pauta y distractores** (A-06) llaman a la API. **Panel**, **Revisión** y la clave de Pauta muestran datos de ejemplo bajo un aviso visible, porque A-02 a A-04 no están construidos: el dashboard de RNF-04 y la resolución de marcas ambiguas siguen sin datos reales. |
 | **Worker de procesamiento** | Ejecuta el OMR, calcula calificaciones y genera alertas de revisión. | Proceso Python (`backend/worker/main.py`), misma imagen que la aplicación web. | Consume la cola y confirma que la hoja encolada por `ingesta` le llegó, registrando en log su identificador, examen, archivo y referencia. **No ejecuta todavía** el pipeline `omr → calificacion`: ese es el aspecto A-02, aún declarado. Desde la S11 procesa cada trabajo una sola vez aunque la cola lo entregue dos veces ([ADR-0016](../adr/0016-acotar-la-espera-de-la-cola-y-hacer-idempotente-al-worker.md)), y sigue en la instancia de la API por decisión, no por omisión ([ADR-0017](../adr/0017-no-extraer-ningun-modulo-del-monolito-todavia.md)). |
 | **Cola de trabajos** | Desacopla la aplicación web del procesamiento OMR. | Redis 7, adaptador FIFO en `infraestructura/cola.py` (RPUSH/BLPOP). | Implementado y probado contra un Redis real (`backend/tests/test_encolado.py`); sigue siendo, según su propio docstring, «el germen» de lo que EC-07 exige, no una cola de producción con reintentos o acuses de recibo. Desde la S11 la API la espera 2 s y el worker 10 s, sin reintentos ocultos del cliente ([ADR-0016](../adr/0016-acotar-la-espera-de-la-cola-y-hacer-idempotente-al-worker.md)); el acuse de recibo sigue pendiente (R-22). |
@@ -477,6 +478,12 @@ de verdad ante un cambio incompatible está comprobado en
 10) y el paso 5 descarta el trabajo que llega dos veces. Lo que pasa en cada caso de fallo de este
 recorrido está en [6.6](#66-fallos-parciales-de-las-integraciones-s11--adr-0016).
 
+**Desde [ADR-0018](../adr/0018-dar-a-la-hoja-una-identidad-propia-y-derivar-su-estado-de-la-bitacora.md)**, en el paso 3 `ingesta` acuña además la identidad de cada hoja,
+`hoja_id`, distinta de la de su trabajo: la entrada de bitácora, el trabajo que viaja por la cola y
+la respuesta llevan la misma, y el worker la registra. La bitácora es la fuente de verdad del estado
+de la hoja; el `estado` de la respuesta es la instantánea del paso 4. Las garantías de cada paso
+están en la [tabla de consistencia](../evidencia/consistencia-y-cache.md), filas C-01 a C-05.
+
 ## 6.3 Escenarios pendientes
 
 | Escenario | Recorre | Verifica | Bloqueado por |
@@ -523,6 +530,14 @@ sequenceDiagram
 
 Cada solicitud deja un evento JSON, `distractores_propuestos` o `proveedor_no_disponible`, con la
 duración y los tokens: es la métrica de [EC-08](#ec-08).
+
+**Desde [ADR-0019](../adr/0019-guardar-en-cache-las-propuestas-de-distractores.md), antes del presupuesto está la caché de propuestas.** Si la misma pregunta
+(el mismo enunciado y la misma respuesta correcta, sin contar espacios, y la misma cantidad) se pidió
+en las últimas 24 horas con el mismo modelo y las mismas instrucciones, las propuestas guardadas pasan
+otra vez por la regla y se responden con `desde_la_cache: true`, sin reservar cupo ni salir a la red.
+«Pedir otras propuestas» manda `otras: true`, que salta la caché y reemplaza lo guardado. Lo que no
+entra: un 503, un 429 o una respuesta sin propuestas. La política completa está en
+[`consistencia-y-cache.md`](../evidencia/consistencia-y-cache.md).
 
 ## 6.5 Ráfaga contra la ruta de distractores (EC-09 · ADR-0015)
 
@@ -1019,6 +1034,7 @@ eso se trata aparte, en [«Entidades previstas»](#entidades-previstas-sin-const
 | `PropuestaDescartada` | `autoria` | [`backend/autoria/distractores.py`](../../backend/autoria/distractores.py) | 63 |
 | `ResultadoDePropuesta` | `autoria` | [`backend/autoria/distractores.py`](../../backend/autoria/distractores.py) | 71 |
 | `EstadoDelPresupuesto` | `autoria` | [`backend/autoria/presupuesto.py`](../../backend/autoria/presupuesto.py) | 60 |
+| `EstadoDeLaCache` | `autoria` | [`backend/autoria/cache.py`](../../backend/autoria/cache.py) | 85 |
 
 **Por qué el dueño de las cinco es `ingesta` y no `infraestructura`, si las cinco clases están
 declaradas en `infraestructura/modelo.py`.** La ruta y la línea son de dónde vive la
@@ -1070,6 +1086,18 @@ cuentan y cuándo salen de la ventana (ADR-0015). `api/main.py` lo copia campo p
 entidades de A-01: traduce, no decide. Se agregó a la línea `Posee:` de `autoria` en el segundo
 corte.
 
+**Por qué `EstadoDeLaCache` es de `autoria`, y por qué la caché no es dueña de nada más.** Lo
+construye `CacheDePropuestas.estado()` ([`cache.py`](../../backend/autoria/cache.py)), que decide
+qué entra, cuándo vence y qué sale ([ADR-0019](../adr/0019-guardar-en-cache-las-propuestas-de-distractores.md)); `api` lo copia en
+`EstadoDeLaCacheEnRespuesta`, igual que el presupuesto. Las propuestas que la caché guarda siguen
+siendo `DistractorPropuesto` tal como las devolvió el proveedor: la caché no decide ninguno de sus
+campos, y la regla que decide qué llega al profesor corre en cada lectura.
+
+**La identidad de la hoja.** Desde [ADR-0018](../adr/0018-dar-a-la-hoja-una-identidad-propia-y-derivar-su-estado-de-la-bitacora.md), `HojaAceptada` y `EntradaDeBitacora` llevan
+`hoja_id`, que acuña `ingesta` al aceptar la hoja. No cambia la tabla: las dos clases siguen en las
+mismas líneas de `modelo.py` (`hoja_id` es un campo más) y el dueño sigue siendo `ingesta`. Lo que
+cambia es que `Trabajo` deja de ser, de hecho, la identidad de la hoja: su `id` es el del encargo.
+
 ### Entidades previstas (sin construir)
 
 Los aspectos A-02 a A-05 todavía no tienen código ([`docs/aspectos.md`](../aspectos.md)), así que
@@ -1080,7 +1108,7 @@ complete por adición y no se reescriba cuando esos aspectos se especifiquen.
 | Entidad prevista | Módulo dueño previsto | Aspecto | Estado |
 |---|---|---|---|
 | Marca detectada y su nivel de confianza | `omr` | A-02 | Pendiente |
-| Nota / resultado de calificación | `calificacion` | A-03 | Pendiente |
+| Nota / resultado de calificación | `calificacion` | A-03 | Pendiente. Se referencia por `hoja_id`, con una nota vigente por hoja (ADR-0018) |
 | Banco de preguntas y clave de respuestas | `autoria` | A-04 | Pendiente |
 | Distractor diagnóstico (RF-11, opcional) | `autoria` | A-06 | **Construido en la S9**: pasó a la tabla de arriba (`DistractorPropuesto` y las otras tres de `autoria`) |
 | Usuario, rol y curso | `identidad` | A-05 | Pendiente |
@@ -1233,6 +1261,12 @@ verdad del estado de una hoja y que cualquier consulta posterior se resuelva con
 con la pantalla de carga, pero pasa a documentarse en el modelo como lo que es: una instantánea del
 momento de la respuesta, no el estado vigente.
 
+**Decidida en [ADR-0018](../adr/0018-dar-a-la-hoja-una-identidad-propia-y-derivar-su-estado-de-la-bitacora.md), antes de A-02.** La bitácora es la única fuente de verdad del estado
+de una hoja, y toda otra copia es una proyección; el docstring de `HojaAceptada` ya dice que su
+`estado` es una instantánea. Para poder preguntarle a la bitácora por una hoja hacía falta una
+identidad estable, y ADR-0018 la agrega (`hoja_id`). Queda pendiente lo que sí es de A-02: la
+consulta del estado vigente, que hoy ninguna ruta ofrece (R-26).
+
 #### V-4 · `BitacoraEnDisco` supone un único proceso escritor
 
 `_agregar` ([`bitacora.py:70`](../../backend/infraestructura/bitacora.py)) abre el archivo en modo
@@ -1348,6 +1382,21 @@ caso en la [tabla de modos de fallo](../evidencia/modos-de-fallo.md):
 | **Degradar con motivo, nunca con 500.** Cada falla se traduce a un estado que el dominio entiende | `pendiente_de_encolar`, 503 con motivo, 429 con `Retry-After` |
 | **Cada mitigación tiene una prueba que falla sin ella** | `test_modos_de_fallo.py`, `test_durabilidad_recepcion.py`, `test_proveedor_llm.py` y `test_ruta_distractores.py`, en el paso «Modos de fallo de las integraciones (S11)» del pipeline |
 
+## 8.5 Consistencia de los datos y caché
+
+Atraviesa `ingesta`, `infraestructura`, `autoria`, `api` y el worker, y por eso va aquí y no en un
+módulo. La tabla completa, operación por operación, con lo que garantiza, lo que no y la prueba que
+la sostiene, está en [`consistencia-y-cache.md`](../evidencia/consistencia-y-cache.md). Las reglas que la ordenan:
+
+| Regla | Dónde se aplica hoy |
+|---|---|
+| **Cada dato tiene una fuente de verdad, y lo demás son proyecciones** | El estado de una hoja sale de la bitácora; el `estado` de la respuesta es una instantánea ([ADR-0018](../adr/0018-dar-a-la-hoja-una-identidad-propia-y-derivar-su-estado-de-la-bitacora.md)) |
+| **Lo confirmado está escrito** antes de responder | Cada hoja aceptada está en el almacén y en la bitácora, con `fsync`, antes de la respuesta (C-01) |
+| **Atómico por hoja, no por lote; nunca un trabajo sin hoja registrada** | El orden almacenar → registrar → publicar → confirmar, con recuperación hacia adelante (C-02, ADR-0006) |
+| **Una identidad por cosa, acuñada una vez** | `hoja_id` para la hoja y `trabajo_id` para cada encargo de procesarla ([ADR-0018](../adr/0018-dar-a-la-hoja-una-identidad-propia-y-derivar-su-estado-de-la-bitacora.md)); la idempotencia es por encargo (ADR-0016) |
+| **Lo que vive en memoria es correcto con una instancia y se dice** | El presupuesto (R-18) y la caché (R-27): linealizables dentro del proceso, nada entre instancias |
+| **Una caché solo guarda lo que puede estar viejo sin daño, y su invalidación no depende de acordarse** | Solo propuestas de distractores, nunca el estado de una hoja; la versión del modelo y de las instrucciones en la clave, 24 horas, 256 entradas y `otras: true` ([ADR-0019](../adr/0019-guardar-en-cache-las-propuestas-de-distractores.md)) |
+
 ## Conceptos transversales todavía sin desarrollar
 
 Un concepto transversal se documenta cuando ya atraviesa más de un módulo del código, y hoy seis
@@ -1403,6 +1452,8 @@ constancia en el commit y en esta sección ([0014](../adr/0014-dejar-constancia-
 | [0015](../adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md) | Limitar el gasto del proveedor de LLM con un presupuesto en la API | **aceptado** | 2026-10-11 | [EC-09](#ec-09) |
 | [0016](../adr/0016-acotar-la-espera-de-la-cola-y-hacer-idempotente-al-worker.md) | Acotar la espera de la cola y hacer idempotente al worker | **aceptado** | 2026-10-18 | [EC-07](#ec-07) |
 | [0017](../adr/0017-no-extraer-ningun-modulo-del-monolito-todavia.md) | No extraer ningún módulo del monolito todavía | **aceptado** | 2026-10-18 | [EC-04](#ec-04), [EC-07](#ec-07), [EC-08](#ec-08) |
+| [0018](../adr/0018-dar-a-la-hoja-una-identidad-propia-y-derivar-su-estado-de-la-bitacora.md) | Dar a la hoja una identidad propia y derivar su estado de la bitácora | **aceptado** | 2026-10-24 | [EC-07](#ec-07), [EC-03](#ec-03), [EC-04](#ec-04) |
+| [0019](../adr/0019-guardar-en-cache-las-propuestas-de-distractores.md) | Guardar en caché las propuestas de distractores | **aceptado** | 2026-10-24 | [EC-08](#ec-08), [EC-09](#ec-09) |
 
 **Por qué 0002 reemplaza a 0001.** La revisión de coherencia previa al corte 1 encontró que
 EC-03 y EC-04 no se pueden cumplir a la vez con procesamiento síncrono(200 hojas × 5 s son
@@ -1501,6 +1552,20 @@ hojas están en el disco efímero de la instancia (0012) y un segundo servicio r
 horas de Render. Confirma la forma de 0002 sin tocarla, y deja escritos los datos que la harían
 revisar (R-25).
 
+**Por qué 0018 precisa a 0006 y a 0016 sin reemplazarlos.** Es el ADR de la decisión de datos más
+costosa de revertir que pide la entrega de consistencia, y empieza por demostrar cuál es: recorre las
+decisiones de datos del sistema con lo que costaría revertir cada una y encuentra que es la identidad
+de la hoja, que no está detrás de ningún puerto y cuyo costo crece con cada registro. Separa `hoja_id`
+de `trabajo_id` y declara la bitácora fuente de verdad del estado. La bitácora de 0006 sigue siendo de
+solo agregado con el mismo orden de pasos, y la idempotencia de 0016 sigue siendo por trabajo: 0018
+dice por qué esa es la clave correcta. Ninguno de los tres cambia de estado.
+
+**Por qué 0019 precisa a 0013 y a 0015 sin reemplazarlos.** Es el diseño de caché de la misma entrega.
+El proveedor, sus 20 s sin reintentos, el 503 y el presupuesto siguen igual; la caché, por fuera del
+presupuesto, decide cuántas solicitudes salen a la red. Guarda lo que devolvió el proveedor, sin
+filtrar, para que la regla corra en cada lectura, y se invalida por versión (modelo e instrucciones en
+la clave), por tiempo, por capacidad y a pedido del profesor.
+
 **Decisiones previstas (aún no tomadas):**
 
 - La verificación automática de equivalencias en las propuestas de distractores, con SymPy, que
@@ -1508,7 +1573,9 @@ revisar (R-25).
   [ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md) deja el prototipo, sus cifras y las condiciones que la vuelven obligatoria (ver R-11).
 - Mecanismo de persistencia y almacenamiento de las imágenes, con su política de retención
   (RNF-14). **Sigue abierta después de ADR-0006**, que cubrió solo el registro de la recepción y
-  dejó el medio definitivo sin elegir, detrás del mismo puerto que ya aislaba el almacén.
+  dejó el medio definitivo sin elegir, detrás del mismo puerto que ya aislaba el almacén. **Desde
+  ADR-0018 ya tiene fijado lo que debe respetar**: `hoja_id` como clave de la hoja y la bitácora como
+  tabla de hechos de solo agregado, no como una columna de estado.
 - Estrategia de calibración del umbral de confianza del OMR.
 - Si EC-05 necesita una medida de tiempo de revisión, y con qué valor — ver ADR-0004.
 - Si la calificación de riesgo técnico de EC-05 en el árbol de utilidad (hoy *Alto*) debe
@@ -1785,6 +1852,8 @@ priorización original.
 | **R-23** | **La marca de idempotencia del worker va antes de procesar y vive en un Redis sin persistencia** ([ADR-0016](../adr/0016-acotar-la-espera-de-la-cola-y-hacer-idempotente-al-worker.md)). Hoy es correcto, porque procesar es registrar. Con A-02, una caída a mitad dejaría el trabajo marcado y sin hacer; y un reinicio del Key Value borra las marcas, así que un duplicado posterior pasaría. | Bajo | Construir A-02 sin mover la marca; o un reinicio del Key Value seguido de un reintento desde la bitácora. | Con A-02, la marca pasa a después de terminar, o a dos estados (en curso, con vencimiento corto, y hecho). La persistencia de las marcas se resuelve con la de la cola, cuando se cierre R-06. Está escrito en el docstring del worker. |
 | **R-24** | **La API no detecta una hoja subida dos veces** (MF-13). Si la respuesta de una carga se corta, el docente no sabe qué entró y puede volver a subir el lote; las hojas repetidas se almacenan y se encolan otra vez, con otro `trabajo_id`, así que la idempotencia del worker no las ve. | Medio | Una carga con la red inestable seguida de un reenvío; con A-02, dos calificaciones de la misma hoja. | Diseñado en la [sección 4 de la tabla](../evidencia/modos-de-fallo.md): clave `(examen_id, SHA-256 del contenido)` en la bitácora y un estado `ya_recibida` con el `trabajo_id` original, como cambio menor del contrato. Se construye antes de que A-02 califique. Mientras tanto, el sitio quita de la selección lo recibido y avisa cuando la respuesta no llegó. |
 | **R-25** | **El worker comparte 0,1 CPU y 512 MB con la API** y no se extrae ([ADR-0017](../adr/0017-no-extraer-ningun-modulo-del-monolito-todavia.md)). Hoy no pesa, porque el worker solo registra. Con el OMR, un lote grande puede hacer más lenta la API mientras se procesa, y EC-04 puede no cumplirse. | Bajo hoy; **Medio** con A-02 | Que EC-04 se mida con el OMR y no se cumpla, o que `/health` pase de 1 s mientras se procesa un lote. | Extraer el worker a un servicio propio, como describe la reversión de ADR-0017, después de cerrar R-06 con un almacén de objetos (sin eso, otro servicio no ve las hojas). |
+| **R-26** | **Saber el estado vigente de una hoja es releer toda la bitácora.** [ADR-0018](../adr/0018-dar-a-la-hoja-una-identidad-propia-y-derivar-su-estado-de-la-bitacora.md) la declara fuente de verdad, pero hoy la única lectura es `pendientes()`, que recorre el archivo entero, y ninguna ruta le permite al docente preguntar por una hoja: el reporte que tiene en pantalla es una instantánea que no se actualiza (V-3). | Bajo hoy; **Medio** con A-02 | Construir el reintento automático o una pantalla que consulte el estado, con una bitácora que crece con cada lote. | Una proyección del estado por `hoja_id`, reconstruible desde los hechos, cuando exista la primera consulta; con la base de R-06, una tabla de hechos con índice por `hoja_id`. Lo que no se hace: guardar el estado en una caché ([ADR-0019](../adr/0019-guardar-en-cache-las-propuestas-de-distractores.md), punto que lo excluye). |
+| **R-27** | **La caché de propuestas vive en la memoria de cada proceso** ([ADR-0019](../adr/0019-guardar-en-cache-las-propuestas-de-distractores.md)). Se vacía en cada despliegue, y con más de una instancia cada una tendría la suya: los aciertos bajarían y un profesor podría recibir propuestas distintas para la misma pregunta según la instancia que lo atienda. Dos pedidos simultáneos de una pregunta nueva salen los dos al proveedor. | Bajo | Escalar la API a más de una instancia o de un proceso; o que `GET /metricas` muestre pocos aciertos con tráfico real. | Mientras haya una instancia, se acepta. Si escala, la caché pasa a Redis con la misma clave y `SET … EX 86400`, detrás del mismo `GeneradorConCache`, junto con el presupuesto (R-18). |
 
 ---
 
