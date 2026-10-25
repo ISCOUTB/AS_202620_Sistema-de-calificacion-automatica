@@ -55,6 +55,14 @@ jobs:
           tests/test_proveedor_llm.py tests/test_ruta_distractores.py
         working-directory: backend
 
+      # Mismo criterio, para el taller de mensajería (ADR-0020): que el mensaje de la cola cumpla
+      # su contrato versionado, que un duplicado se procese una sola vez y que un fallo
+      # recuperable se reintente es la promesa de la cola hacia el worker. La suite completa la
+      # vuelve a correr.
+      - name: Taller de mensajería (contrato, duplicados y reintentos)
+        run: pytest -v tests/test_mensajeria.py
+        working-directory: backend
+
       - name: Suite completa del backend
         run: pytest -v
         working-directory: backend
