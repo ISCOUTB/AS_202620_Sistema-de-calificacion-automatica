@@ -15,6 +15,7 @@ De ahí las dos decisiones de forma de este módulo:
 
 import logging
 import time
+import uuid
 from collections.abc import Callable, Iterable
 from datetime import datetime, timezone
 from pathlib import PurePosixPath
@@ -193,8 +194,12 @@ def recibir_lote(
             )
             continue
 
+        # La identidad de la hoja (ADR-0018), distinta de la de su trabajo: el trabajo es un
+        # encargo de procesarla, y la hoja puede tener más de uno.
+        hoja_id = str(uuid.uuid4())
         trabajo = preparar_trabajo(
             {
+                "hoja_id": hoja_id,
                 "examen_id": examen_id,
                 "referencia": referencia,
                 "nombre_archivo": archivo.nombre,
@@ -207,6 +212,7 @@ def recibir_lote(
                     examen_id=examen_id,
                     referencia=referencia,
                     nombre_archivo=archivo.nombre,
+                    hoja_id=hoja_id,
                 )
             )
         except OSError:
@@ -255,6 +261,7 @@ def recibir_lote(
                 referencia=referencia,
                 trabajo_id=trabajo.id,
                 recibida_en=datetime.now(timezone.utc),
+                hoja_id=hoja_id,
                 estado=estado,
             )
         )
