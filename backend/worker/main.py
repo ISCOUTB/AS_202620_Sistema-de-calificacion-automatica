@@ -57,6 +57,7 @@ def ejecutar() -> None:
                 extra={
                     "evento": "trabajo_repetido",
                     "trabajo": trabajo.id,
+                    "hoja": datos.get("hoja_id"),
                     "examen": datos.get("examen_id"),
                 },
             )
@@ -70,6 +71,7 @@ def ejecutar() -> None:
             extra={
                 "evento": "hoja_recibida",
                 "trabajo": trabajo.id,
+                "hoja": datos.get("hoja_id"),
                 "examen": datos.get("examen_id"),
                 "archivo": datos.get("nombre_archivo"),
                 "referencia": datos.get("referencia"),
