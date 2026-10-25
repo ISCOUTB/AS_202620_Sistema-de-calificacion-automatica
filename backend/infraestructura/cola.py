@@ -2,6 +2,21 @@
 recibo. Basta para lo que EC-07 mide, la recepción; el acuse de recibo que exigirá procesar
 cada hoja sin perderla es trabajo de A-02, así que no es todavía una cola de producción.
 
+El contrato del mensaje (ADR-0020)
+----------------------------------
+Lo que viaja por la cola es un `Trabajo` serializado en JSON, versión `VERSION_DEL_TRABAJO`. Su
+forma exacta está en `ESQUEMA_DEL_TRABAJO`, que `herramientas.exportar_contrato` publica en
+`docs/contrato/trabajo-v1.schema.json`. El criterio de compatibilidad:
+
+- **Agregar** un campo opcional no cambia la versión: quien lee ignora lo que no conoce
+  (`leer_trabajo` es un lector tolerante).
+- **Quitar, renombrar o cambiar el tipo o el significado** de un campo obligatorio es una
+  versión nueva. Quien lee rechaza las versiones que no conoce (`MensajeInvalido`): reintentar
+  el mismo texto no lo arreglaría.
+- Un mensaje **anterior al contrato** (sin `version`, publicado antes del taller y todavía en la
+  cola tras un despliegue) se lee como versión 1; si no trae `hoja_id`, su `id` hace de hoja,
+  la misma regla que la bitácora sigue desde ADR-0018.
+
 Cuánto se espera a Redis (S11, ADR-0016)
 ----------------------------------------
 Es la integración principal del sistema, y su modo de fallo más caro no era que Redis estuviera
@@ -34,6 +49,8 @@ import json
 import os
 import uuid
 from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
+from typing import Any
 
 import redis
 # Se importa el submódulo explícitamente: `redis.exceptions` solo queda disponible como
@@ -70,10 +87,87 @@ class ColaNoDisponible(RuntimeError):
     convierte en esta."""
 
 
+# La versión del contrato del mensaje. Sube solo con un cambio incompatible (ver el docstring).
+VERSION_DEL_TRABAJO = 1
+TIPO_HOJA_RECIBIDA = "hoja_recibida"
+
+
+class MensajeInvalido(ValueError):
+    """Lo que llegó por la cola no cumple el contrato, o es de una versión que no se conoce.
+
+    Es un error permanente: volver a leer el mismo texto da el mismo resultado, así que el
+    consumidor lo manda a la lista de fallidos sin reintentarlo."""
+
+
 @dataclass
 class Trabajo:
+    """El mensaje que viaja por la cola: un sobre con identidad, versión e intento, y el payload.
+
+    `id` es el del encargo (el `trabajo_id`); la identidad de la hoja viaja en el payload, como
+    `hoja_id` (ADR-0018). `emitido_en` es el momento en que el productor lo acuñó, y sirve para
+    medir cuánto esperó en la cola. `intento` empieza en 1 y lo sube el consumidor cada vez que
+    programa un reintento (ADR-0020)."""
+
     id: str
     payload: dict
+    version: int = VERSION_DEL_TRABAJO
+    tipo: str = TIPO_HOJA_RECIBIDA
+    emitido_en: str = ""
+    intento: int = 1
+
+
+# El contrato del mensaje, versión 1, como JSON Schema. Es la fuente: el archivo de
+# `docs/contrato/` se genera desde aquí y una prueba comprueba que no se separen.
+ESQUEMA_DEL_TRABAJO: dict[str, Any] = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "urn:quantia:contrato:trabajo:v1",
+    "title": "Trabajo de la cola de procesamiento, versión 1",
+    "description": (
+        "Mensaje que la API publica en la cola por cada hoja aceptada y que el worker consume "
+        "(ADR-0002, ADR-0020). Compatibilidad: agregar un campo opcional no cambia la versión, y "
+        "quien lee ignora lo que no conoce; quitar, renombrar o cambiar el tipo de un campo "
+        "obligatorio es una versión nueva, y quien lee rechaza las que no conoce."
+    ),
+    "type": "object",
+    "required": ["id", "version", "tipo", "emitido_en", "intento", "payload"],
+    "properties": {
+        "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Identidad del encargo (trabajo_id). La conserva cada reintento.",
+        },
+        "version": {"const": VERSION_DEL_TRABAJO, "description": "Versión de este contrato."},
+        "tipo": {"const": TIPO_HOJA_RECIBIDA, "description": "Qué pide el mensaje."},
+        "emitido_en": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Cuándo lo acuñó el productor, en UTC.",
+        },
+        "intento": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Número de intento. 1 al publicarse; lo sube cada reintento.",
+        },
+        "payload": {
+            "type": "object",
+            "required": ["hoja_id", "examen_id", "referencia", "nombre_archivo"],
+            "properties": {
+                "hoja_id": {
+                    "type": "string",
+                    "description": "Identidad de la hoja (ADR-0018), distinta de la del trabajo.",
+                },
+                "examen_id": {"type": "string"},
+                "referencia": {
+                    "type": "string",
+                    "description": "Dónde está la imagen en el almacén. Opaca para el consumidor.",
+                },
+                "nombre_archivo": {"type": "string"},
+            },
+        },
+    },
+}
+
+
 
 
 def cliente_redis(
@@ -102,7 +196,60 @@ def preparar_trabajo(payload: dict) -> Trabajo:
     Está separado de `publicar` desde [ADR-0006](../../docs/adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md):
     la bitácora de recepción tiene que registrar el identificador antes de que exista el riesgo
     de que la cola falle, y no puede inventarse uno distinto del que viajará en el trabajo."""
-    return Trabajo(id=str(uuid.uuid4()), payload=payload)
+    return Trabajo(
+        id=str(uuid.uuid4()),
+        payload=payload,
+        emitido_en=datetime.now(timezone.utc).isoformat(),
+    )
+
+
+def texto(valor: str | bytes) -> str:
+    """Lo que devuelve redis-py, como texto. Los clientes de `cliente_redis` ya devuelven `str`
+    (`decode_responses=True`); esto existe para que los tipos lo digan y para quien pase otro."""
+    return valor.decode("utf-8") if isinstance(valor, bytes) else valor
+
+
+def serializar_trabajo(trabajo: Trabajo) -> str:
+    """El texto que viaja por la cola: el `Trabajo` entero, en JSON."""
+    return json.dumps(asdict(trabajo), ensure_ascii=False)
+
+
+def leer_trabajo(crudo: str) -> Trabajo:
+    """Lee un mensaje de la cola con el criterio de compatibilidad del contrato.
+
+    Ignora los campos que no conoce, lee como versión 1 el mensaje sin `version` y le da su `id`
+    como `hoja_id` al que no la trae. Levanta `MensajeInvalido` si no es JSON, si le falta un
+    campo obligatorio o si su versión no es una que este consumidor conozca."""
+    try:
+        datos = json.loads(crudo)
+    except (TypeError, ValueError) as error:
+        raise MensajeInvalido("No es JSON.") from error
+    if not isinstance(datos, dict):
+        raise MensajeInvalido("No es un objeto JSON.")
+    version = datos.get("version", VERSION_DEL_TRABAJO)
+    if version != VERSION_DEL_TRABAJO:
+        raise MensajeInvalido(f"La versión {version!r} del contrato no se conoce.")
+    identificador = datos.get("id")
+    payload = datos.get("payload")
+    if not isinstance(identificador, str) or not identificador:
+        raise MensajeInvalido("Falta el id del trabajo.")
+    if not isinstance(payload, dict):
+        raise MensajeInvalido("Falta el payload.")
+    if not isinstance(payload.get("referencia"), str):
+        raise MensajeInvalido("Falta la referencia de la hoja en el almacén.")
+    intento = datos.get("intento", 1)
+    if not isinstance(intento, int) or intento < 1:
+        raise MensajeInvalido(f"El intento {intento!r} no es un entero positivo.")
+    return Trabajo(
+        id=identificador,
+        payload={**payload, "hoja_id": payload.get("hoja_id") or identificador},
+        version=VERSION_DEL_TRABAJO,
+        tipo=datos.get("tipo", TIPO_HOJA_RECIBIDA),
+        emitido_en=datos.get("emitido_en", ""),
+        intento=intento,
+    )
+
+
 
 
 def publicar(cliente: redis.Redis, cola: str, trabajo: Trabajo) -> Trabajo:
@@ -111,7 +258,7 @@ def publicar(cliente: redis.Redis, cola: str, trabajo: Trabajo) -> Trabajo:
     Traduce cualquier fallo de redis-py a `ColaNoDisponible` para que quien llame no tenga que
     importar `redis` solo para atraparlo."""
     try:
-        cliente.rpush(cola, json.dumps(asdict(trabajo)))
+        cliente.rpush(cola, serializar_trabajo(trabajo))
     except redis.exceptions.RedisError as error:
         raise ColaNoDisponible(str(error)) from error
     return trabajo
@@ -159,5 +306,4 @@ def desencolar(cliente: redis.Redis, cola: str, timeout: int = 5) -> Trabajo | N
     if resultado is None:
         return None
     _, crudo = resultado
-    datos = json.loads(crudo)
-    return Trabajo(id=datos["id"], payload=datos["payload"])
+    return leer_trabajo(texto(crudo))

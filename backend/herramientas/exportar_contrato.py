@@ -17,7 +17,9 @@ Desde `backend/`, con el entorno del proyecto:
 
     python -m herramientas.exportar_contrato
 
-Escribe `docs/contrato/openapi.json`. Si el diff sale vacio, el contrato no cambio. Si sale con
+Escribe `docs/contrato/openapi.json` y, desde el taller de mensajeria (ADR-0020), el contrato del
+mensaje de la cola, `docs/contrato/trabajo-v1.schema.json`. Si el diff sale vacio, el contrato no
+cambio. Si sale con
 cambios, hay que mirarlos uno por uno antes de commitear: un campo que desaparece o un tipo que
 se estrecha rompen a quien ya consume la API.
 
@@ -33,9 +35,16 @@ import json
 from pathlib import Path
 
 from api.main import app
+from infraestructura.cola import ESQUEMA_DEL_TRABAJO, VERSION_DEL_TRABAJO
 
 RAIZ_REPOSITORIO = Path(__file__).resolve().parent.parent.parent
 RUTA_CONTRATO = RAIZ_REPOSITORIO / "docs" / "contrato" / "openapi.json"
+# El contrato del mensaje de la cola (taller de mensajería, ADR-0020). Lleva la versión en el
+# nombre: una versión nueva es un archivo nuevo, y el de la anterior queda para quien todavía la
+# produzca o la consuma.
+RUTA_CONTRATO_DEL_TRABAJO = (
+    RAIZ_REPOSITORIO / "docs" / "contrato" / f"trabajo-v{VERSION_DEL_TRABAJO}.schema.json"
+)
 
 
 def documento_openapi() -> dict:
@@ -52,11 +61,19 @@ def serializar(documento: dict) -> str:
     return json.dumps(documento, indent=2, ensure_ascii=False, sort_keys=True) + "\n"
 
 
+def documento_del_trabajo() -> dict:
+    """El JSON Schema del mensaje de la cola, tal como lo declara `infraestructura/cola.py`."""
+    return ESQUEMA_DEL_TRABAJO
+
+
 def exportar() -> Path:
     RUTA_CONTRATO.parent.mkdir(parents=True, exist_ok=True)
     # `newline="\n"` fija el fin de linea. Sin el, Windows traduce cada salto a CRLF y dos
     # exportaciones del mismo codigo dejan de ser el mismo byte segun quien las corra.
     RUTA_CONTRATO.write_text(serializar(documento_openapi()), encoding="utf-8", newline="\n")
+    RUTA_CONTRATO_DEL_TRABAJO.write_text(
+        serializar(documento_del_trabajo()), encoding="utf-8", newline="\n"
+    )
     return RUTA_CONTRATO
 
 
@@ -67,3 +84,4 @@ if __name__ == "__main__":
     print(f"  version : {documento['info']['version']}")
     print(f"  rutas   : {len(documento['paths'])}")
     print(f"  esquemas: {len(documento['components']['schemas'])}")
+    print(f"Contrato del mensaje en {RUTA_CONTRATO_DEL_TRABAJO.relative_to(RAIZ_REPOSITORIO)}")

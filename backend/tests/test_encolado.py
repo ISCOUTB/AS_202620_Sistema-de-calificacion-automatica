@@ -8,7 +8,13 @@ NOMBRE_COLA = "prueba_encolado"
 
 
 def test_trabajo_encolado_se_recupera_de_la_cola(cliente):
-    payload = {"archivo": "hoja-001.png", "curso": "calculo-diferencial-2026-1"}
+    # Un payload que cumple el contrato del mensaje (ADR-0020): `desencolar` lo lee con él.
+    payload = {
+        "hoja_id": "h-001",
+        "examen_id": "calculo-diferencial-2026-1",
+        "referencia": "calculo-diferencial-2026-1/hoja-001.png",
+        "nombre_archivo": "hoja-001.png",
+    }
 
     trabajo_encolado = encolar(cliente, NOMBRE_COLA, payload)
     trabajo_recuperado = desencolar(cliente, NOMBRE_COLA, timeout=5)

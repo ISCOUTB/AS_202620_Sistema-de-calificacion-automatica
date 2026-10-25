@@ -1,0 +1,65 @@
+{
+  "$id": "urn:quantia:contrato:trabajo:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Mensaje que la API publica en la cola por cada hoja aceptada y que el worker consume (ADR-0002, ADR-0020). Compatibilidad: agregar un campo opcional no cambia la versión, y quien lee ignora lo que no conoce; quitar, renombrar o cambiar el tipo de un campo obligatorio es una versión nueva, y quien lee rechaza las que no conoce.",
+  "properties": {
+    "emitido_en": {
+      "description": "Cuándo lo acuñó el productor, en UTC.",
+      "format": "date-time",
+      "type": "string"
+    },
+    "id": {
+      "description": "Identidad del encargo (trabajo_id). La conserva cada reintento.",
+      "format": "uuid",
+      "type": "string"
+    },
+    "intento": {
+      "description": "Número de intento. 1 al publicarse; lo sube cada reintento.",
+      "minimum": 1,
+      "type": "integer"
+    },
+    "payload": {
+      "properties": {
+        "examen_id": {
+          "type": "string"
+        },
+        "hoja_id": {
+          "description": "Identidad de la hoja (ADR-0018), distinta de la del trabajo.",
+          "type": "string"
+        },
+        "nombre_archivo": {
+          "type": "string"
+        },
+        "referencia": {
+          "description": "Dónde está la imagen en el almacén. Opaca para el consumidor.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "hoja_id",
+        "examen_id",
+        "referencia",
+        "nombre_archivo"
+      ],
+      "type": "object"
+    },
+    "tipo": {
+      "const": "hoja_recibida",
+      "description": "Qué pide el mensaje."
+    },
+    "version": {
+      "const": 1,
+      "description": "Versión de este contrato."
+    }
+  },
+  "required": [
+    "id",
+    "version",
+    "tipo",
+    "emitido_en",
+    "intento",
+    "payload"
+  ],
+  "title": "Trabajo de la cola de procesamiento, versión 1",
+  "type": "object"
+}
