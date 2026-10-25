@@ -137,7 +137,10 @@ def _metricas(cliente: httpx.Client, url: str) -> Any:
 
 
 def _solicitar(cliente: httpx.Client, url: str, numero: int, pregunta: dict[str, str]) -> dict[str, Any]:
-    cuerpo = {**pregunta, "cantidad": 3}
+    # `otras` no deja que la caché de propuestas (ADR-0019) responda: lo que mide esta herramienta
+    # es el presupuesto frente al proveedor, y una pregunta repetida de una corrida anterior
+    # saldría de la caché sin llegar a él.
+    cuerpo = {**pregunta, "cantidad": 3, "otras": True}
     inicio = time.perf_counter()
     hora = _ahora()["cartagena"]
     try:

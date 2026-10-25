@@ -81,6 +81,63 @@
         "title": "DistractorEnRespuesta",
         "type": "object"
       },
+      "EstadoDeLaCacheEnRespuesta": {
+        "description": "Cuanto se ha usado la cache de propuestas de distractores (ADR-0019).\n\nSon cuentas desde el arranque del proceso: la cache vive en su memoria y se vacia con cada\nreinicio.",
+        "properties": {
+          "aciertos": {
+            "description": "Solicitudes respondidas desde la cache, sin gastar cupo.",
+            "title": "Aciertos",
+            "type": "integer"
+          },
+          "capacidad": {
+            "description": "Cuantas preguntas caben como mucho.",
+            "title": "Capacidad",
+            "type": "integer"
+          },
+          "entradas": {
+            "description": "Preguntas guardadas ahora.",
+            "title": "Entradas",
+            "type": "integer"
+          },
+          "expulsadas": {
+            "description": "Entradas que salieron porque la cache estaba llena.",
+            "title": "Expulsadas",
+            "type": "integer"
+          },
+          "fallos": {
+            "description": "Lecturas sin una entrada vigente, que salieron al proveedor.",
+            "title": "Fallos",
+            "type": "integer"
+          },
+          "guardadas": {
+            "description": "Respuestas del proveedor guardadas o reemplazadas.",
+            "title": "Guardadas",
+            "type": "integer"
+          },
+          "vencidas": {
+            "description": "Entradas descartadas por pasar de su vigencia.",
+            "title": "Vencidas",
+            "type": "integer"
+          },
+          "vigencia_segundos": {
+            "description": "Cuanto vale una entrada desde que se guardo.",
+            "title": "Vigencia Segundos",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "capacidad",
+          "vigencia_segundos",
+          "entradas",
+          "aciertos",
+          "fallos",
+          "guardadas",
+          "vencidas",
+          "expulsadas"
+        ],
+        "title": "EstadoDeLaCacheEnRespuesta",
+        "type": "object"
+      },
       "EstadoDelPresupuestoEnRespuesta": {
         "description": "Cuanto del presupuesto de solicitudes al proveedor de LLM se ha usado.\n\nLas dos ventanas deslizantes son las que deciden si una solicitud cabe. Los contadores\n`desde_el_arranque` son observabilidad y vuelven a cero cuando el proceso se reinicia.",
         "properties": {
@@ -273,6 +330,11 @@
             "title": "Descartados",
             "type": "array"
           },
+          "desde_la_cache": {
+            "description": "true si las propuestas salieron de una solicitud anterior igual, guardada hace menos de 24 horas, sin llamar al proveedor ni gastar cupo (ADR-0019). La regla se aplico otra vez sobre ellas.",
+            "title": "Desde La Cache",
+            "type": "boolean"
+          },
           "distractores": {
             "items": {
               "$ref": "#/components/schemas/DistractorEnRespuesta"
@@ -283,7 +345,8 @@
         },
         "required": [
           "distractores",
-          "descartados"
+          "descartados",
+          "desde_la_cache"
         ],
         "title": "RespuestaDeDistractores",
         "type": "object"
@@ -291,12 +354,16 @@
       "RespuestaDeMetricas": {
         "description": "Lo que devuelve `GET /metricas`: el estado del presupuesto del proveedor de LLM.\n\nEs la metrica de EC-09 consultable en vivo, como `lote_confirmado` en el registro lo es de\nEC-07. Solo publica cuentas: ningun dato de un profesor ni de una pregunta.",
         "properties": {
+          "cache_de_distractores": {
+            "$ref": "#/components/schemas/EstadoDeLaCacheEnRespuesta"
+          },
           "presupuesto_de_distractores": {
             "$ref": "#/components/schemas/EstadoDelPresupuestoEnRespuesta"
           }
         },
         "required": [
-          "presupuesto_de_distractores"
+          "presupuesto_de_distractores",
+          "cache_de_distractores"
         ],
         "title": "RespuestaDeMetricas",
         "type": "object"
@@ -334,6 +401,12 @@
             "minLength": 1,
             "title": "Enunciado",
             "type": "string"
+          },
+          "otras": {
+            "default": false,
+            "description": "true para pedir propuestas nuevas: no se leen las guardadas para esta misma pregunta, se piden al proveedor y reemplazan a las guardadas (ADR-0019). Gasta cupo.",
+            "title": "Otras",
+            "type": "boolean"
           },
           "respuesta_correcta": {
             "description": "La respuesta correcta de la clave.",
@@ -395,13 +468,13 @@
   "info": {
     "description": "Interfaz HTTP de QuantIA, sistema de calificación de exámenes de opción múltiple. Hoy cubre el aspecto A-01 (carga de hojas escaneadas para calificación) y el A-06 (propuesta opcional de distractores diagnósticos), con el presupuesto que protege la cuota del proveedor de LLM y su métrica en `GET /metricas` (EC-09).",
     "title": "QuantIA",
-    "version": "1.3.0"
+    "version": "1.4.0"
   },
   "openapi": "3.1.0",
   "paths": {
     "/distractores": {
       "post": {
-        "description": "Pide al proveedor de LLM distractores diagnósticos para una pregunta (RF-11, EC-08).\n\n**Es opcional y se degrada sin arrastrar a nadie.** Si el proveedor no está configurado,\ntarda más de lo que el adaptador espera o falla, la respuesta es 503 con el motivo, y el\nresto de la API sigue igual: la calificación no usa el LLM (ADR-0005) y el registro manual\nde preguntas no depende de él (ADR-0013).\n\n**Ninguna propuesta que repita la respuesta correcta llega al profesor** (M1 de EC-08). Lo\nque la regla descarta vuelve en `descartados`, con su motivo.\n\n**Ninguna solicitud sale al proveedor sin cupo en el presupuesto** (EC-09, ADR-0015). Si no\ncabe, la respuesta es 429 con `Retry-After`, sin tocar la red. Una solicitud sin proveedor\nconfigurado responde 503 antes de reservar, así que no gasta cupo.\n\nEs una ruta `def` y no `async def` a propósito: la llamada al proveedor bloquea mientras\nespera, y FastAPI corre estas rutas en su grupo de hilos, así que la espera no detiene a las\ndemás peticiones.",
+        "description": "Pide al proveedor de LLM distractores diagnósticos para una pregunta (RF-11, EC-08).\n\n**Es opcional y se degrada sin arrastrar a nadie.** Si el proveedor no está configurado,\ntarda más de lo que el adaptador espera o falla, la respuesta es 503 con el motivo, y el\nresto de la API sigue igual: la calificación no usa el LLM (ADR-0005) y el registro manual\nde preguntas no depende de él (ADR-0013).\n\n**Ninguna propuesta que repita la respuesta correcta llega al profesor** (M1 de EC-08). Lo\nque la regla descarta vuelve en `descartados`, con su motivo.\n\n**Ninguna solicitud sale al proveedor sin cupo en el presupuesto** (EC-09, ADR-0015). Si no\ncabe, la respuesta es 429 con `Retry-After`, sin tocar la red. Una solicitud sin proveedor\nconfigurado responde 503 antes de reservar, así que no gasta cupo.\n\n**La misma pregunta, pedida otra vez en menos de 24 horas, sale de la caché** (ADR-0019): sin\nllamar al proveedor ni gastar cupo, con la regla aplicada otra vez, y `desde_la_cache` en\ntrue. Con `otras: true` no se lee la caché: se piden propuestas nuevas, que reemplazan a las\nguardadas.\n\nEs una ruta `def` y no `async def` a propósito: la llamada al proveedor bloquea mientras\nespera, y FastAPI corre estas rutas en su grupo de hilos, así que la espera no detiene a las\ndemás peticiones.",
         "operationId": "proponer_distractores_para_una_pregunta_distractores_post",
         "requestBody": {
           "content": {
@@ -528,7 +601,7 @@
     },
     "/metricas": {
       "get": {
-        "description": "La métrica de EC-09 consultable en vivo (ADR-0015).\n\nDice cuántas solicitudes al proveedor caben todavía y cuántas se cortaron con 429, sin\nrevisar el registro. Solo publica cuentas, ningún dato de un profesor ni de una pregunta, y no\ntoca la red ni el disco, así que responde aunque el proveedor esté caído.",
+        "description": "La métrica de EC-09 consultable en vivo (ADR-0015).\n\nDice cuántas solicitudes al proveedor caben todavía y cuántas se cortaron con 429, sin\nrevisar el registro. Solo publica cuentas, ningún dato de un profesor ni de una pregunta, y no\ntoca la red ni el disco, así que responde aunque el proveedor esté caído. Desde ADR-0019\npublica también los aciertos, fallos y entradas de la caché de propuestas.",
         "operationId": "metricas_metricas_get",
         "responses": {
           "200": {
@@ -542,7 +615,7 @@
             "description": "Lo usado en las dos ventanas y lo enviado y cortado desde el arranque."
           }
         },
-        "summary": "Estado del presupuesto del proveedor de LLM"
+        "summary": "Estado del presupuesto del proveedor de LLM y de la caché de propuestas"
       }
     }
   }

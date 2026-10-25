@@ -163,7 +163,14 @@ def _pedir(cliente: TestClient, enunciado: str, respuesta_correcta: str) -> tupl
     inicio = time.perf_counter()
     respuesta = cliente.post(
         "/distractores",
-        json={"enunciado": enunciado, "respuesta_correcta": respuesta_correcta, "cantidad": 3},
+        # `otras`: cada pasada repite las mismas preguntas, y sin esto la segunda saldría de la
+        # caché de propuestas (ADR-0019) en vez del proveedor que se está midiendo.
+        json={
+            "enunciado": enunciado,
+            "respuesta_correcta": respuesta_correcta,
+            "cantidad": 3,
+            "otras": True,
+        },
     )
     return respuesta, round(time.perf_counter() - inicio, 3)
 

@@ -18,6 +18,7 @@ from api.esquemas import (
     ArchivoRechazadoEnRespuesta,
     DescartadoEnRespuesta,
     DistractorEnRespuesta,
+    EstadoDeLaCacheEnRespuesta,
     EstadoDelPresupuestoEnRespuesta,
     HojaAceptadaEnRespuesta,
     PresupuestoAgotadoEnRespuesta,
@@ -41,7 +42,10 @@ from api.settings import (
     RUTA_BITACORA,
 )
 from autoria import (
+    HUELLA_DE_LAS_INSTRUCCIONES,
+    CacheDePropuestas,
     GeneradorCompatibleConOpenAI,
+    GeneradorConCache,
     GeneradorConPresupuesto,
     GeneradorDeDistractores,
     PreguntaParaDistractores,
@@ -133,6 +137,24 @@ def obtener_presupuesto() -> PresupuestoDeSolicitudes:
     """Dependencia del presupuesto. Sustituible, como las otras: cada prueba recibe uno nuevo y
     ninguna gasta el cupo de la siguiente."""
     return PRESUPUESTO_DE_DISTRACTORES
+
+
+# La caché de propuestas (ADR-0019). Como el presupuesto, una sola, creada al importar, en la
+# memoria de este proceso: lo guardado tiene que sobrevivir de una solicitud a la siguiente, y se
+# vacía con cada reinicio. Crearla no toca la red ni el disco.
+CACHE_DE_PROPUESTAS = CacheDePropuestas()
+
+
+def obtener_cache() -> CacheDePropuestas:
+    """Dependencia de la caché. Sustituible: cada prueba que la necesita recibe una nueva."""
+    return CACHE_DE_PROPUESTAS
+
+
+def obtener_version_de_las_propuestas() -> str:
+    """Lo que hace que una propuesta guardada siga valiendo: el modelo y las instrucciones que la
+    produjeron. Va en la clave de la caché, así que cambiar cualquiera de los dos la invalida sin
+    tocarla (ADR-0019). Sustituible, para que una prueba simule el cambio de modelo."""
+    return f"{LLM_MODELO}:{HUELLA_DE_LAS_INSTRUCCIONES}"
 
 
 def obtener_generador() -> GeneradorDeDistractores | None:
@@ -288,6 +310,8 @@ def proponer_distractores_para_una_pregunta(
     solicitud: SolicitudDeDistractores,
     generador: GeneradorDeDistractores | None = Depends(obtener_generador),
     presupuesto: PresupuestoDeSolicitudes = Depends(obtener_presupuesto),
+    cache: CacheDePropuestas = Depends(obtener_cache),
+    version: str = Depends(obtener_version_de_las_propuestas),
 ) -> RespuestaDeDistractores:
     """Pide al proveedor de LLM distractores diagnósticos para una pregunta (RF-11, EC-08).
 
@@ -303,6 +327,11 @@ def proponer_distractores_para_una_pregunta(
     cabe, la respuesta es 429 con `Retry-After`, sin tocar la red. Una solicitud sin proveedor
     configurado responde 503 antes de reservar, así que no gasta cupo.
 
+    **La misma pregunta, pedida otra vez en menos de 24 horas, sale de la caché** (ADR-0019): sin
+    llamar al proveedor ni gastar cupo, con la regla aplicada otra vez, y `desde_la_cache` en
+    true. Con `otras: true` no se lee la caché: se piden propuestas nuevas, que reemplazan a las
+    guardadas.
+
     Es una ruta `def` y no `async def` a propósito: la llamada al proveedor bloquea mientras
     espera, y FastAPI corre estas rutas en su grupo de hilos, así que la espera no detiene a las
     demás peticiones.
@@ -315,6 +344,13 @@ def proponer_distractores_para_una_pregunta(
                 "pueden escribir a mano."
             ),
         )
+    # La caché va por fuera del presupuesto: lo que sale de ella no gasta cupo.
+    con_cache = GeneradorConCache(
+        GeneradorConPresupuesto(generador, presupuesto),
+        cache,
+        version,
+        leer=not solicitud.otras,
+    )
     try:
         resultado = proponer_distractores(
             PreguntaParaDistractores(
@@ -322,7 +358,7 @@ def proponer_distractores_para_una_pregunta(
                 respuesta_correcta=solicitud.respuesta_correcta,
                 cantidad=solicitud.cantidad,
             ),
-            GeneradorConPresupuesto(generador, presupuesto),
+            con_cache,
         )
     except PresupuestoAgotado as agotado:
         # La métrica de EC-09 en el registro: cada solicitud cortada deja un evento, con la
@@ -355,24 +391,28 @@ def proponer_distractores_para_una_pregunta(
             DescartadoEnRespuesta.model_validate(descartado)
             for descartado in resultado.descartados
         ],
+        desde_la_cache=con_cache.desde_la_cache,
     )
 
 
 @app.get(
     "/metricas",
-    summary="Estado del presupuesto del proveedor de LLM",
+    summary="Estado del presupuesto del proveedor de LLM y de la caché de propuestas",
     response_description="Lo usado en las dos ventanas y lo enviado y cortado desde el arranque.",
 )
 def metricas(
     presupuesto: PresupuestoDeSolicitudes = Depends(obtener_presupuesto),
+    cache: CacheDePropuestas = Depends(obtener_cache),
 ) -> RespuestaDeMetricas:
     """La métrica de EC-09 consultable en vivo (ADR-0015).
 
     Dice cuántas solicitudes al proveedor caben todavía y cuántas se cortaron con 429, sin
     revisar el registro. Solo publica cuentas, ningún dato de un profesor ni de una pregunta, y no
-    toca la red ni el disco, así que responde aunque el proveedor esté caído."""
+    toca la red ni el disco, así que responde aunque el proveedor esté caído. Desde ADR-0019
+    publica también los aciertos, fallos y entradas de la caché de propuestas."""
     return RespuestaDeMetricas(
         presupuesto_de_distractores=EstadoDelPresupuestoEnRespuesta.model_validate(
             presupuesto.estado()
-        )
+        ),
+        cache_de_distractores=EstadoDeLaCacheEnRespuesta.model_validate(cache.estado()),
     )

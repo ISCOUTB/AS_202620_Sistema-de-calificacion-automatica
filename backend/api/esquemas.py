@@ -35,7 +35,11 @@ from infraestructura.modelo import ENCOLADA, PENDIENTE_DE_ENCOLAR
 # 1.3.0 agrega `hoja_id` a cada hoja aceptada (ADR-0018): la identidad de la hoja, separada de la
 # de su trabajo. Solo agrega un campo a una respuesta, así que vuelve a subir la menor: un cliente
 # que ya lee `trabajo_id` lo sigue recibiendo igual.
-VERSION_DEL_CONTRATO = "1.3.0"
+#
+# 1.4.0 agrega la cache de propuestas (ADR-0019): el campo opcional `otras` en la solicitud de
+# distractores, `desde_la_cache` en su respuesta y el estado de la cache en `GET /metricas`. Todo
+# agrega; un cliente que no manda `otras` recibe lo mismo que antes, ahora quiza sin gastar cupo.
+VERSION_DEL_CONTRATO = "1.4.0"
 
 EstadoDeHoja = Literal["encolada", "pendiente_de_encolar"]
 
@@ -140,6 +144,15 @@ class SolicitudDeDistractores(BaseModel):
     cantidad: int = Field(
         default=3, ge=1, le=5, description="Cuantos distractores se piden. Entre 1 y 5."
     )
+    # No viaja al proveedor: decide si se lee la cache (ADR-0019). RNF-13 sigue cumpliendose,
+    # porque lo que llega al proveedor sigue siendo `PreguntaParaDistractores`.
+    otras: bool = Field(
+        default=False,
+        description=(
+            "true para pedir propuestas nuevas: no se leen las guardadas para esta misma pregunta, "
+            "se piden al proveedor y reemplazan a las guardadas (ADR-0019). Gasta cupo."
+        ),
+    )
 
 
 class DistractorEnRespuesta(BaseModel):
@@ -170,6 +183,13 @@ class RespuestaDeDistractores(BaseModel):
 
     distractores: list[DistractorEnRespuesta]
     descartados: list[DescartadoEnRespuesta]
+    desde_la_cache: bool = Field(
+        description=(
+            "true si las propuestas salieron de una solicitud anterior igual, guardada hace menos "
+            "de 24 horas, sin llamar al proveedor ni gastar cupo (ADR-0019). La regla se aplico "
+            "otra vez sobre ellas."
+        )
+    )
 
 
 class ProveedorNoDisponibleEnRespuesta(BaseModel):
@@ -215,6 +235,24 @@ class EstadoDelPresupuestoEnRespuesta(BaseModel):
     arrancado_en: datetime = Field(description="Momento en que arranco el proceso de la API.")
 
 
+class EstadoDeLaCacheEnRespuesta(BaseModel):
+    """Cuanto se ha usado la cache de propuestas de distractores (ADR-0019).
+
+    Son cuentas desde el arranque del proceso: la cache vive en su memoria y se vacia con cada
+    reinicio."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    capacidad: int = Field(description="Cuantas preguntas caben como mucho.")
+    vigencia_segundos: int = Field(description="Cuanto vale una entrada desde que se guardo.")
+    entradas: int = Field(description="Preguntas guardadas ahora.")
+    aciertos: int = Field(description="Solicitudes respondidas desde la cache, sin gastar cupo.")
+    fallos: int = Field(description="Lecturas sin una entrada vigente, que salieron al proveedor.")
+    guardadas: int = Field(description="Respuestas del proveedor guardadas o reemplazadas.")
+    vencidas: int = Field(description="Entradas descartadas por pasar de su vigencia.")
+    expulsadas: int = Field(description="Entradas que salieron porque la cache estaba llena.")
+
+
 class RespuestaDeMetricas(BaseModel):
     """Lo que devuelve `GET /metricas`: el estado del presupuesto del proveedor de LLM.
 
@@ -222,3 +260,4 @@ class RespuestaDeMetricas(BaseModel):
     EC-07. Solo publica cuentas: ningun dato de un profesor ni de una pregunta."""
 
     presupuesto_de_distractores: EstadoDelPresupuestoEnRespuesta
+    cache_de_distractores: EstadoDeLaCacheEnRespuesta

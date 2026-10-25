@@ -14,9 +14,14 @@ from collections.abc import Iterator
 import pytest
 from fastapi.testclient import TestClient
 
-from api.main import app, obtener_generador, obtener_presupuesto
+from api.main import app, obtener_cache, obtener_generador, obtener_presupuesto
 from api.settings import ALLOWED_ORIGIN
-from autoria import DistractorPropuesto, PresupuestoDeSolicitudes, ProveedorNoDisponible
+from autoria import (
+    CacheDePropuestas,
+    DistractorPropuesto,
+    PresupuestoDeSolicitudes,
+    ProveedorNoDisponible,
+)
 from tests.test_distractores import GeneradorFalso
 
 SOLICITUD = {"enunciado": "Derivada de x·sin(x)", "respuesta_correcta": "sin(x) + x·cos(x)"}
@@ -24,7 +29,11 @@ SOLICITUD = {"enunciado": "Derivada de x·sin(x)", "respuesta_correcta": "sin(x)
 
 @pytest.fixture
 def cliente() -> Iterator[TestClient]:
+    """Cada prueba recibe un presupuesto nuevo y una caché de capacidad 0, que no guarda nada:
+    estas pruebas mandan la misma pregunta varias veces para ejercer el presupuesto, y con caché
+    la segunda ya no llegaría a él. La caché se prueba en `test_cache_de_propuestas.py`."""
     app.dependency_overrides[obtener_presupuesto] = lambda: PresupuestoDeSolicitudes()
+    app.dependency_overrides[obtener_cache] = lambda: CacheDePropuestas(capacidad=0)
     yield TestClient(app)
     app.dependency_overrides.clear()
 
@@ -172,7 +181,11 @@ def test_la_misma_solicitud_dos_veces_no_deja_estado_y_gasta_su_propio_cupo(
     """Responde dos veces, en la integración con el proveedor (S11, MF-09): si el profesor pide lo
     mismo dos veces, o el navegador reenvía, cada una es una propuesta completa e independiente.
     La ruta no guarda nada entre solicitudes, así que no hay un estado que pueda quedar a medias
-    ni duplicado: lo único que cuesta la repetida es su cupo, y el presupuesto lo cuenta."""
+    ni duplicado: lo único que cuesta la repetida es su cupo, y el presupuesto lo cuenta.
+
+    Desde ADR-0019 la repetida sale de la caché de propuestas y no gasta cupo. Esta prueba corre
+    con la caché de capacidad 0 del fixture, así que sigue ejerciendo la ruta sin ella; la conducta
+    con caché la sostiene `test_cache_de_propuestas.py`."""
     presupuesto = _con_presupuesto(por_minuto=6)
     generador = GeneradorFalso([DistractorPropuesto("x", "Se bajó el exponente sin multiplicar")])
     app.dependency_overrides[obtener_generador] = lambda: generador

@@ -24,6 +24,7 @@ Usa `httpx`, que ya es dependencia directa del backend (`requirements.in`): este
 agrega ninguna.
 """
 
+import hashlib
 import json
 import logging
 import time
@@ -37,7 +38,11 @@ from autoria.distractores import (
     ProveedorNoDisponible,
 )
 
-__all__ = ["GeneradorCompatibleConOpenAI", "TIEMPO_DE_ESPERA_SEGUNDOS"]
+__all__ = [
+    "GeneradorCompatibleConOpenAI",
+    "HUELLA_DE_LAS_INSTRUCCIONES",
+    "TIEMPO_DE_ESPERA_SEGUNDOS",
+]
 
 logger = logging.getLogger("autoria")
 
@@ -60,6 +65,13 @@ MENSAJE_PARA_EL_MODELO = (
     "x·cos(x) o e^(2x). Responde solo con un objeto JSON de la forma "
     '{{"distractores": [{{"expresion": "...", "error": "..."}}]}}.'
 )
+
+# Lo que identifica a las instrucciones que recibe el modelo. Va en la clave de la caché de
+# propuestas (ADR-0019): si alguien cambia el texto de arriba, las propuestas guardadas con el
+# texto anterior dejan de leerse solas, sin tener que acordarse de vaciar nada.
+HUELLA_DE_LAS_INSTRUCCIONES = hashlib.sha256(
+    (INSTRUCCIONES_DEL_SISTEMA + MENSAJE_PARA_EL_MODELO).encode("utf-8")
+).hexdigest()[:12]
 
 
 class GeneradorCompatibleConOpenAI:
