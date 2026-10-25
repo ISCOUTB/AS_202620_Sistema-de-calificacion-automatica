@@ -158,6 +158,11 @@
             "title": "Estado",
             "type": "string"
           },
+          "hoja_id": {
+            "description": "Identidad de la hoja, acunada una sola vez al aceptarla (ADR-0018). Es la que referencia todo lo que se sepa de la hoja despues; una hoja puede tener mas de un trabajo, y todos llevan este mismo valor.",
+            "title": "Hoja Id",
+            "type": "string"
+          },
           "nombre_archivo": {
             "description": "Nombre con el que el docente envio el archivo.",
             "title": "Nombre Archivo",
@@ -183,6 +188,7 @@
         "required": [
           "nombre_archivo",
           "referencia",
+          "hoja_id",
           "trabajo_id",
           "recibida_en",
           "estado"
@@ -389,7 +395,7 @@
   "info": {
     "description": "Interfaz HTTP de QuantIA, sistema de calificación de exámenes de opción múltiple. Hoy cubre el aspecto A-01 (carga de hojas escaneadas para calificación) y el A-06 (propuesta opcional de distractores diagnósticos), con el presupuesto que protege la cuota del proveedor de LLM y su métrica en `GET /metricas` (EC-09).",
     "title": "QuantIA",
-    "version": "1.2.0"
+    "version": "1.3.0"
   },
   "openapi": "3.1.0",
   "paths": {
