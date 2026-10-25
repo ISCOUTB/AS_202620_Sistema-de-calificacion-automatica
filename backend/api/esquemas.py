@@ -31,7 +31,11 @@ from infraestructura.modelo import ENCOLADA, PENDIENTE_DE_ENCOLAR
 # esquemas de 1.1.0 siguen identicos. Un cliente que ya consume `/distractores` puede recibir
 # ahora un 429, pero ese codigo no reemplaza a ninguno de los que ya conocia: solo aparece cuando
 # antes la solicitud habria agotado la cuota del proveedor.
-VERSION_DEL_CONTRATO = "1.2.0"
+#
+# 1.3.0 agrega `hoja_id` a cada hoja aceptada (ADR-0018): la identidad de la hoja, separada de la
+# de su trabajo. Solo agrega un campo a una respuesta, así que vuelve a subir la menor: un cliente
+# que ya lee `trabajo_id` lo sigue recibiendo igual.
+VERSION_DEL_CONTRATO = "1.3.0"
 
 EstadoDeHoja = Literal["encolada", "pendiente_de_encolar"]
 
@@ -68,6 +72,13 @@ class HojaAceptadaEnRespuesta(BaseModel):
             "Ubicacion que devolvio el almacen. Opaca a proposito: el consumidor no debe "
             "suponer que es una ruta de disco, porque el ADR de persistencia (R-06) puede "
             "convertirla en una clave de objeto sin que este contrato cambie."
+        )
+    )
+    hoja_id: str = Field(
+        description=(
+            "Identidad de la hoja, acunada una sola vez al aceptarla (ADR-0018). Es la que "
+            "referencia todo lo que se sepa de la hoja despues; una hoja puede tener mas de un "
+            "trabajo, y todos llevan este mismo valor."
         )
     )
     trabajo_id: str = Field(
