@@ -34,7 +34,7 @@ from api.main import app, obtener_almacen, obtener_bitacora, obtener_cliente_col
 from herramientas.exportar_contrato import RUTA_CONTRATO
 from infraestructura.almacen import AlmacenEnDisco
 from infraestructura.bitacora import BitacoraEnDisco, BitacoraEnMemoria
-from infraestructura.cola import Trabajo
+from infraestructura.cola import Trabajo, publicar
 from infraestructura.modelo import PENDIENTE_DE_ENCOLAR, ArchivoCargado
 from ingesta import recibir_lote
 from tests.test_durabilidad_recepcion import ColaQueSeCae
@@ -151,31 +151,25 @@ def test_la_api_publica_la_identidad_de_la_hoja_y_el_contrato_la_exige(cliente_h
     assert {"hoja_id", "trabajo_id"} <= set(esquema["required"])
 
 
-class _FinDeLaPrueba(Exception):
-    """Corta el ciclo infinito del worker después del primer trabajo."""
-
-
 def test_el_worker_registra_de_que_hoja_es_el_trabajo(
-    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    cliente, tmp_path, caplog: pytest.LogCaptureFixture
 ) -> None:
-    trabajos = iter([
-        Trabajo(id="t-1", payload={"hoja_id": "h-1", "examen_id": EXAMEN,
-                                   "nombre_archivo": "h1.jpg", "referencia": "r"}),
-    ])
-
-    def desencolar_una_vez(*_args: object, **_kwargs: object) -> Trabajo:
-        try:
-            return next(trabajos)
-        except StopIteration:
-            raise _FinDeLaPrueba from None
-
-    monkeypatch.setattr(worker_main, "cliente_redis", lambda: object())
-    monkeypatch.setattr(worker_main, "desencolar", desencolar_una_vez)
-    monkeypatch.setattr(worker_main, "primera_entrega", lambda *_args: True)
-
-    with caplog.at_level(logging.INFO, logger="worker"), pytest.raises(_FinDeLaPrueba):
-        worker_main.ejecutar()
+    """Contra el Redis del CI (se salta sin él), porque el worker consume con acuse desde el
+    taller de mensajería (ADR-0020)."""
+    cola = f"prueba-identidad-{uuid.uuid4()}"
+    (tmp_path / EXAMEN).mkdir()
+    (tmp_path / EXAMEN / "h1.jpg").write_bytes(JPG)
+    trabajo = Trabajo(id=f"t-{uuid.uuid4()}", payload={
+        "hoja_id": "h-1", "examen_id": EXAMEN, "nombre_archivo": "h1.jpg",
+        "referencia": f"{EXAMEN}/h1.jpg",
+    })
+    try:
+        publicar(cliente, cola, trabajo)
+        with caplog.at_level(logging.INFO, logger="worker"):
+            worker_main.atender_una_vez(cliente, cola, AlmacenEnDisco(tmp_path))
+    finally:
+        cliente.delete(cola, f"{cola}:en-curso", f"trabajo-visto:{trabajo.id}")
 
     [registro] = [r for r in caplog.records if getattr(r, "evento", None) == "hoja_recibida"]
     assert vars(registro)["hoja"] == "h-1"
-    assert vars(registro)["trabajo"] == "t-1"
+    assert vars(registro)["trabajo"] == trabajo.id

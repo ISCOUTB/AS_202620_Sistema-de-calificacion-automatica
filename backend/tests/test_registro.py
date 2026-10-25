@@ -8,12 +8,14 @@ devuelve el texto del mensaje, las tres pruebas se ponen en rojo.
 
 import json
 import logging
+import uuid
 from pathlib import Path
 
 import pytest
 
 import worker.main as worker_main
-from infraestructura.cola import Trabajo
+from infraestructura.almacen import AlmacenEnDisco
+from infraestructura.cola import Trabajo, publicar
 from infraestructura.registro import FormateadorJSON
 
 
@@ -48,36 +50,29 @@ def test_un_valor_que_no_es_json_sale_como_texto_en_vez_de_romper_el_registro() 
     assert linea["referencia"].endswith("hoja.jpg")
 
 
-class _FinDeLaPrueba(Exception):
-    """Corta el ciclo infinito del worker después del primer trabajo."""
-
-
 def test_el_worker_registra_la_hoja_recibida_con_los_datos_del_trabajo(
-    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    cliente, tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
-    trabajos = iter([
-        Trabajo(id="t-1", payload={"examen_id": "parcial-1", "nombre_archivo": "hoja-001.jpg",
-                                   "referencia": "parcial-1/hoja-001.jpg"}),
-    ])
-
-    def desencolar_una_vez(*_args: object, **_kwargs: object) -> Trabajo:
-        try:
-            return next(trabajos)
-        except StopIteration:
-            raise _FinDeLaPrueba from None
-
-    monkeypatch.setattr(worker_main, "cliente_redis", lambda: object())
-    monkeypatch.setattr(worker_main, "desencolar", desencolar_una_vez)
-    # La idempotencia del worker (ADR-0016) se prueba en `test_modos_de_fallo.py`; aquí el
-    # trabajo es nuevo.
-    monkeypatch.setattr(worker_main, "primera_entrega", lambda *_args: True)
-
-    with caplog.at_level(logging.INFO, logger="worker"), pytest.raises(_FinDeLaPrueba):
-        worker_main.ejecutar()
+    """Desde el taller de mensajería (ADR-0020) el worker abre la imagen y consume con acuse, así
+    que la prueba usa el Redis del CI (se salta sin él) y una imagen de verdad en un almacén
+    temporal."""
+    cola = f"prueba-registro-{uuid.uuid4()}"
+    (tmp_path / "parcial-1").mkdir()
+    (tmp_path / "parcial-1" / "hoja-001.jpg").write_bytes(b"\xff\xd8\xff" + b"\x00" * 8)
+    trabajo = Trabajo(id=f"t-{uuid.uuid4()}", payload={
+        "hoja_id": "h-1", "examen_id": "parcial-1", "nombre_archivo": "hoja-001.jpg",
+        "referencia": "parcial-1/hoja-001.jpg",
+    })
+    try:
+        publicar(cliente, cola, trabajo)
+        with caplog.at_level(logging.INFO, logger="worker"):
+            worker_main.atender_una_vez(cliente, cola, AlmacenEnDisco(tmp_path))
+    finally:
+        cliente.delete(cola, f"{cola}:en-curso", f"trabajo-visto:{trabajo.id}")
 
     [registro] = [r for r in caplog.records if getattr(r, "evento", None) == "hoja_recibida"]
     linea = json.loads(FormateadorJSON().format(registro))
-    assert linea["trabajo"] == "t-1"
+    assert linea["trabajo"] == trabajo.id
     assert linea["examen"] == "parcial-1"
     assert linea["archivo"] == "hoja-001.jpg"
     assert linea["referencia"] == "parcial-1/hoja-001.jpg"

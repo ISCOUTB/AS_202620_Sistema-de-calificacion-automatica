@@ -241,6 +241,18 @@ def recibir_lote(
                 estado = PENDIENTE_DE_ENCOLAR
             else:
                 estado = ENCOLADA
+                # El primer eslabón del rastro de un mensaje (ADR-0020): los eventos del worker
+                # llevan el mismo `trabajo` y la misma `hoja`.
+                logger.info(
+                    "Trabajo publicado",
+                    extra={
+                        "evento": "trabajo_publicado",
+                        "trabajo": trabajo.id,
+                        "hoja": hoja_id,
+                        "examen": examen_id,
+                        "cola": nombre_cola,
+                    },
+                )
                 try:
                     bitacora.confirmar_encolada(trabajo.id)
                 except OSError as error:

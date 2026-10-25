@@ -1,6 +1,7 @@
 import os
 
 from autoria import SOLICITUDES_POR_DIA, SOLICITUDES_POR_MINUTO
+from infraestructura.almacen import RUTA_ALMACEN_POR_OMISION
 from infraestructura.cola import REDIS_URL_POR_OMISION
 
 # El valor por omisión viene de `infraestructura/cola.py`, el mismo que usa el worker.
@@ -10,7 +11,7 @@ ALLOWED_ORIGIN = os.environ.get("ALLOWED_ORIGIN", "http://localhost:8080")
 # Raíz del almacén de hojas escaneadas. En Docker apunta al volumen `almacen_imagenes`, que el
 # compose monta en `api` y en `worker` para que ambos vean el mismo archivo. Fuera de Docker
 # cae en un directorio local, que es lo que sirve para `uvicorn --reload` durante desarrollo.
-RUTA_ALMACEN = os.environ.get("RUTA_ALMACEN", "almacen_imagenes")
+RUTA_ALMACEN = os.environ.get("RUTA_ALMACEN", RUTA_ALMACEN_POR_OMISION)
 
 # Nombre de la cola de trabajos. Debe coincidir con el que consume `worker/main.py`, que lo lee
 # de la misma variable de entorno y con el mismo valor por omisión.

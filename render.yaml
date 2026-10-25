@@ -13,6 +13,8 @@
 services:
   # La API y el worker en la misma instancia. Render no tiene plan gratuito para workers en
   # segundo plano, y el worker no lee el disco: solo consume la cola y registra lo que recibe.
+  # Desde el taller de mensajería (ADR-0020) el worker sí abre la imagen de cada trabajo, con el
+  # mismo RUTA_ALMACEN que la API: es otra razón para que los dos sigan en la misma instancia.
   - type: web
     name: quantia-utb-api
     runtime: docker

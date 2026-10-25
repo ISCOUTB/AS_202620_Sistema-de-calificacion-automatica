@@ -1,6 +1,11 @@
-"""Adaptador minimalista de cola sobre Redis: una lista FIFO, sin reintentos ni acuses de
-recibo. Basta para lo que EC-07 mide, la recepción; el acuse de recibo que exigirá procesar
-cada hoja sin perderla es trabajo de A-02, así que no es todavía una cola de producción.
+"""Adaptador de cola sobre Redis: una lista FIFO, y el contrato del mensaje que viaja por ella.
+
+Nació como un adaptador mínimo, sin reintentos ni acuses de recibo, porque bastaba para lo que
+EC-07 mide, la recepción. Desde el taller de mensajería
+([ADR-0020](../../docs/adr/0020-entregar-los-trabajos-al-menos-una-vez-con-reintentos-y-lista-de-fallidos.md))
+el lado del consumidor tiene acuse, reintentos y lista de fallidos, y vive en
+`infraestructura/consumo.py`; aquí quedan el productor, el contrato del mensaje y la marca de
+idempotencia.
 
 El contrato del mensaje (ADR-0020)
 ----------------------------------
@@ -11,8 +16,8 @@ forma exacta está en `ESQUEMA_DEL_TRABAJO`, que `herramientas.exportar_contrato
 - **Agregar** un campo opcional no cambia la versión: quien lee ignora lo que no conoce
   (`leer_trabajo` es un lector tolerante).
 - **Quitar, renombrar o cambiar el tipo o el significado** de un campo obligatorio es una
-  versión nueva. Quien lee rechaza las versiones que no conoce (`MensajeInvalido`): reintentar
-  el mismo texto no lo arreglaría.
+  versión nueva. Quien lee rechaza las versiones que no conoce, y el mensaje va a la lista de
+  fallidos con el motivo: reintentarlo no lo arreglaría.
 - Un mensaje **anterior al contrato** (sin `version`, publicado antes del taller y todavía en la
   cola tras un despliegue) se lee como versión 1; si no trae `hoja_id`, su `id` hace de hoja,
   la misma regla que la bitácora sigue desde ADR-0018.
@@ -41,8 +46,14 @@ El trabajo que llega dos veces (S11, ADR-0016)
 Aun sin reintentos ocultos, un trabajo puede llegar dos veces al worker: si el `RPUSH` vence en
 el cliente después de que Redis lo guardó, la hoja queda `pendiente_de_encolar` en la bitácora
 aunque su trabajo sí está en la cola, y el reintento de las pendientes la publicaría otra vez con
-el mismo identificador. `primera_entrega` es lo que hace idempotente al worker: deja una marca
-por identificador con `SET NX` y vigencia, y solo la primera entrega la encuentra libre.
+el mismo identificador. La marca `trabajo-visto:<id>` es lo que hace idempotente al worker.
+
+**Desde el taller (ADR-0020) la marca se pone después de procesar, no antes.** Con acuse de
+recibo, un trabajo que el worker no terminó vuelve a la cola; si la marca se hubiera puesto antes,
+esa segunda entrega se descartaría como repetida y la hoja se perdería igual. Era lo que R-23 y el
+punto 5 de ADR-0016 dejaron escrito. Ahora `ya_procesado` pregunta y `marcar_procesado` marca al
+terminar; dos workers con el mismo trabajo a la vez podrían procesarlo los dos, que con una entrega
+al menos una vez es lo esperado y lo que el procesamiento por `hoja_id` absorbe.
 """
 
 import json
@@ -168,8 +179,6 @@ ESQUEMA_DEL_TRABAJO: dict[str, Any] = {
 }
 
 
-
-
 def cliente_redis(
     url: str | None = None, espera_segundos: float = ESPERA_AL_CONSUMIR_SEGUNDOS
 ) -> redis.Redis:
@@ -250,8 +259,6 @@ def leer_trabajo(crudo: str) -> Trabajo:
     )
 
 
-
-
 def publicar(cliente: redis.Redis, cola: str, trabajo: Trabajo) -> Trabajo:
     """Agrega un trabajo ya acuñado al final de la cola (RPUSH, FIFO).
 
@@ -270,29 +277,31 @@ def encolar(cliente: redis.Redis, cola: str, payload: dict) -> Trabajo:
     return publicar(cliente, cola, preparar_trabajo(payload))
 
 
-def primera_entrega(cliente: redis.Redis, trabajo_id: str) -> bool:
-    """True si es la primera vez que este trabajo se entrega; False si ya se entregó antes.
+def ya_procesado(cliente: redis.Redis, trabajo_id: str) -> bool:
+    """True si este trabajo ya se procesó y su marca sigue vigente (ADR-0016, ADR-0020).
 
-    Es la idempotencia del worker (ADR-0016): `SET trabajo-visto:<id> 1 NX EX <vigencia>` es
-    atómico en Redis, así que de dos entregas del mismo identificador, aunque lleguen a dos
-    workers a la vez, solo una encuentra la marca libre. Traduce los fallos de redis-py a
-    `ColaNoDisponible`, como `publicar`: decidir qué hacer si no se pudo comprobar es de quien
-    llama."""
-    try:
-        marcado = cliente.set(
-            f"{_PREFIJO_TRABAJO_VISTO}{trabajo_id}",
-            "1",
-            nx=True,
-            ex=VIGENCIA_DE_UN_TRABAJO_VISTO_SEGUNDOS,
-        )
-    except redis.exceptions.RedisError as error:
-        raise ColaNoDisponible(str(error)) from error
-    return bool(marcado)
+    Deja pasar los errores de redis-py: si Redis no contesta, el worker tampoco puede confirmar
+    ni reintentar, y lo que hace es esperar y recuperar lo que tenía en curso."""
+    return bool(cliente.exists(f"{_PREFIJO_TRABAJO_VISTO}{trabajo_id}"))
+
+
+def marcar_procesado(cliente: redis.Redis, trabajo_id: str) -> None:
+    """Deja la marca de que el trabajo se procesó, con su vigencia. Va **después** de procesar y
+    antes del acuse: si el worker muere entre las dos cosas, la entrega que vuelve encuentra la
+    marca y solo se confirma."""
+    cliente.set(
+        f"{_PREFIJO_TRABAJO_VISTO}{trabajo_id}", "1", ex=VIGENCIA_DE_UN_TRABAJO_VISTO_SEGUNDOS
+    )
 
 
 def desencolar(cliente: redis.Redis, cola: str, timeout: int = 5) -> Trabajo | None:
     """Retira el trabajo más antiguo (BLPOP, bloqueante hasta `timeout` segundos). None si no
     llegó nada en ese tiempo.
+
+    **Es la lectura sin acuse, y el worker ya no la usa** (ADR-0020): un trabajo retirado así se
+    pierde si el proceso muere antes de terminarlo. El worker usa `consumo.tomar`, que lo deja en
+    una lista de trabajos en curso hasta el acuse. Se conserva para las pruebas que solo necesitan
+    ver qué hay en la cola.
 
     **Un `TimeoutError` del cliente no es una cola vacía, y sube como error.** Con la espera del
     worker por encima del bloqueo del `BLPOP` (ADR-0016), Redis siempre contesta antes de que

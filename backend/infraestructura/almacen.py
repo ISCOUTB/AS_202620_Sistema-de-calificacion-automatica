@@ -22,7 +22,18 @@ import uuid
 from pathlib import Path
 from typing import Protocol
 
-__all__ = ["AlmacenDeImagenes", "AlmacenEnDisco", "directorio_del_examen", "nombre_seguro"]
+__all__ = [
+    "AlmacenDeImagenes",
+    "AlmacenEnDisco",
+    "RUTA_ALMACEN_POR_OMISION",
+    "directorio_del_examen",
+    "nombre_seguro",
+]
+
+# Dónde está el almacén si no lo dice `RUTA_ALMACEN`. Lo leen la API y, desde el taller de
+# mensajería (ADR-0020), también el worker, que abre la imagen de cada trabajo: se declara una sola
+# vez, aquí, por la misma razón que `REDIS_URL_POR_OMISION` (la lección de V-2).
+RUTA_ALMACEN_POR_OMISION = "almacen_imagenes"
 
 _CARACTERES_PERMITIDOS = re.compile(r"[^A-Za-z0-9._-]")
 
@@ -86,6 +97,14 @@ class AlmacenDeImagenes(Protocol):
         devolver una clave de objeto o un identificador de fila."""
         ...
 
+    def leer(self, referencia: str) -> bytes:
+        """Devuelve el contenido guardado con esa referencia.
+
+        Levanta `OSError` si no se puede leer (incluido `FileNotFoundError` si no está), que
+        para el worker es un fallo recuperable (ADR-0020), y `ValueError` si la referencia no es
+        una que este almacén pueda haber dado, que es permanente."""
+        ...
+
 
 class AlmacenEnDisco:
     """Adaptador provisional sobre el sistema de archivos.
@@ -108,3 +127,13 @@ class AlmacenEnDisco:
         (directorio / nombre_en_disco).write_bytes(contenido)
 
         return f"{carpeta}/{nombre_en_disco}"
+
+    def leer(self, referencia: str) -> bytes:
+        """La referencia llega por la cola, así que no se confía en ella: tiene que quedar dentro
+        de la raíz del almacén, o es `ValueError` (un mensaje que nadie de este sistema pudo
+        haber escrito)."""
+        raiz = self.raiz.resolve()
+        ruta = (raiz / referencia).resolve()
+        if raiz not in ruta.parents:
+            raise ValueError(f"La referencia {referencia!r} queda fuera del almacén.")
+        return ruta.read_bytes()

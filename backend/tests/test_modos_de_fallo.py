@@ -13,13 +13,15 @@ cubre el resto, de los dos lados de la cola:
 - **Responde dos veces.** El mismo trabajo publicado dos veces en un Redis real se procesa una sola
   vez: el worker es idempotente por identificador de trabajo.
 - **No responde y responde tarde, al consumir.** El worker sobrevive a un fallo de Redis, y
-  `desencolar` no se cuelga si Redis no contesta.
+  `desencolar` no se cuelga si Redis no contesta. Desde el taller de mensajería (ADR-0020) el
+  worker consume con `tomar`, que tampoco se cuelga, y si Redis falla a mitad de un trabajo, el
+  trabajo vuelve a la cola y se procesa después.
 
 Al final va el mismo caso de «responde tarde» para la otra integración que sale de la API, el
 proveedor de LLM (ADR-0013), contra el mismo servidor que no contesta.
 
-Todas corren sin Redis salvo la de «responde dos veces», que usa el Redis del CI y se salta con un
-mensaje si no hay uno, como `test_encolado.py`.
+Las del lado del worker usan el Redis del CI y se saltan con un mensaje si no hay uno, como
+`test_encolado.py`: desde ADR-0020 el worker consume con acuse, y eso se prueba contra Redis.
 
 Se validaron provocando la falla, una mutación a la vez sobre una copia del código:
 
@@ -27,9 +29,10 @@ Se validaron provocando la falla, una mutación a la vez sobre una copia del có
 - `obtener_cliente_cola` sin la espera corta, como estaba antes: fallan las 2 del Redis lento;
 - `retry=Retry(NoBackoff(), 3)`: fallan 3 de 4, y la de los reintentos cuenta 4 conexiones;
 - sin `socket_connect_timeout`: falla la de la espera de conexión;
-- el worker sin la comprobación de `primera_entrega`: fallan la de «responde dos veces», con el
-  trabajo repetido procesado dos veces, y la de la marca sin comprobar;
-- `_es_primera_entrega` devolviendo False cuando Redis falla: falla la de la marca sin comprobar.
+- el worker sin la comprobación de la marca (`primera_entrega` en la S11, `ya_procesado` desde
+  ADR-0020): fallan la de «responde dos veces», con el trabajo repetido procesado dos veces, y la
+  de Redis que falla a mitad;
+- `recuperar_en_curso` sin devolver nada (ADR-0020): falla la de Redis que falla a mitad.
 - el adaptador del proveedor de LLM esperando ocho veces su tiempo de espera: falla la del
   proveedor que no contesta.
 """
@@ -62,6 +65,7 @@ from infraestructura.cola import (
     preparar_trabajo,
     publicar,
 )
+from infraestructura.consumo import tomar
 from infraestructura.modelo import PENDIENTE_DE_ENCOLAR, ArchivoCargado
 from ingesta import recibir_lote
 
@@ -223,24 +227,24 @@ class _FinDeLaPrueba(Exception):
 
 
 def _correr_worker(
-    monkeypatch: pytest.MonkeyPatch, cliente: object, entregas: list
+    monkeypatch: pytest.MonkeyPatch, cliente, cola: str, raiz, vueltas: int
 ) -> None:
-    """Corre `worker.main.ejecutar` con las entregas dadas, en orden, y lo corta al terminar.
+    """Corre `worker.main.ejecutar` contra la cola dada y lo corta después de `vueltas` llamadas a
+    `atender_una_vez`. Desde el taller de mensajería (ADR-0020) el worker consume con acuse, así
+    que corre contra el Redis del CI."""
+    original = worker_main.atender_una_vez
+    contador = {"vueltas": 0}
 
-    Cada entrega es un `Trabajo` o una excepción que `desencolar` levanta en su lugar."""
-    pendientes = iter(entregas)
-
-    def desencolar_siguiente(*_args: object, **_kwargs: object) -> Trabajo | None:
-        try:
-            siguiente = next(pendientes)
-        except StopIteration:
-            raise _FinDeLaPrueba from None
-        if isinstance(siguiente, Exception):
-            raise siguiente
-        return siguiente
+    def atender_y_contar(*args, **kwargs):
+        if contador["vueltas"] == vueltas:
+            raise _FinDeLaPrueba
+        contador["vueltas"] += 1
+        return original(*args, **kwargs)
 
     monkeypatch.setattr(worker_main, "cliente_redis", lambda: cliente)
-    monkeypatch.setattr(worker_main, "desencolar", desencolar_siguiente)
+    monkeypatch.setattr(worker_main, "NOMBRE_COLA", cola)
+    monkeypatch.setattr(worker_main, "RUTA_ALMACEN", str(raiz))
+    monkeypatch.setattr(worker_main, "atender_una_vez", atender_y_contar)
     # La pausa del worker, y no `time.sleep`: `worker_main.time` es el módulo `time` de todo el
     # proceso, y reemplazar su `sleep` apagaba cualquier otra espera mientras durara la prueba,
     # también las que no son del worker.
@@ -256,52 +260,93 @@ def _eventos(caplog: pytest.LogCaptureFixture, nombre: str) -> list[logging.LogR
 def _trabajo(trabajo_id: str) -> Trabajo:
     return Trabajo(
         id=trabajo_id,
-        payload={"examen_id": "CALC", "nombre_archivo": "h.jpg", "referencia": "CALC/h.jpg"},
+        payload={
+            "hoja_id": f"hoja-de-{trabajo_id}",
+            "examen_id": "CALC",
+            "nombre_archivo": "h.jpg",
+            "referencia": "CALC/h.jpg",
+        },
+    )
+
+
+@pytest.fixture
+def almacen_con_la_hoja(tmp_path):
+    (tmp_path / "CALC").mkdir()
+    (tmp_path / "CALC" / "h.jpg").write_bytes(JPG)
+    return tmp_path
+
+
+def _limpiar(cliente, cola: str, *trabajos: Trabajo) -> None:
+    cliente.delete(
+        cola,
+        f"{cola}:en-curso",
+        f"{cola}:reintentos",
+        f"{cola}:fallidos",
+        *[f"trabajo-visto:{t.id}" for t in trabajos],
     )
 
 
 def test_el_trabajo_que_llega_dos_veces_se_procesa_una_sola_vez(
-    cliente, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    cliente, almacen_con_la_hoja, caplog: pytest.LogCaptureFixture
 ) -> None:
     """Responde dos veces, contra un Redis real: el mismo identificador publicado dos veces en la
     cola (lo que deja un `RPUSH` que venció en el cliente y después se reintentó) se procesa una
-    vez. El otro trabajo, con su propio identificador, se procesa normal."""
+    vez. El otro trabajo, con su propio identificador, se procesa normal. Las tres entregas se
+    confirman: nada queda en curso."""
     cola = f"prueba-repetidos-{uuid.uuid4()}"
     repetido, otro = _trabajo(str(uuid.uuid4())), _trabajo(str(uuid.uuid4()))
+    almacen = AlmacenEnDisco(almacen_con_la_hoja)
     try:
         for trabajo in (repetido, repetido, otro):
             publicar(cliente, cola, trabajo)
-        entregas = [desencolar(cliente, cola, timeout=1) for _ in range(3)]
 
         with caplog.at_level(logging.INFO, logger="worker"):
-            _correr_worker(monkeypatch, cliente, entregas)
+            for _ in range(3):
+                worker_main.atender_una_vez(cliente, cola, almacen)
 
         procesados = [vars(r)["trabajo"] for r in _eventos(caplog, "hoja_recibida")]
         repetidos = [vars(r)["trabajo"] for r in _eventos(caplog, "trabajo_repetido")]
         assert procesados == [repetido.id, otro.id]
         assert repetidos == [repetido.id]
+        assert cliente.llen(f"{cola}:en-curso") == 0
         vigencia = cliente.ttl(f"trabajo-visto:{repetido.id}")
         assert 0 < vigencia <= VIGENCIA_DE_UN_TRABAJO_VISTO_SEGUNDOS
     finally:
         # Aunque una aserción falle: si no, las marcas quedan 7 días en el Redis de desarrollo o
         # del CI.
-        cliente.delete(f"trabajo-visto:{repetido.id}", f"trabajo-visto:{otro.id}", cola)
+        _limpiar(cliente, cola, repetido, otro)
 
 
-def test_si_no_se_puede_comprobar_la_marca_el_trabajo_se_procesa_igual(
-    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+def test_si_redis_falla_a_mitad_el_trabajo_vuelve_a_la_cola_y_se_procesa_despues(
+    cliente, almacen_con_la_hoja, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """El trabajo ya salió de la cola: descartarlo por no poder comprobar sería perder la hoja."""
+    """Antes, si Redis fallaba al comprobar la marca, el trabajo ya había salido de la cola y se
+    procesaba sin comprobar (S11). Con acuse (ADR-0020) no hace falta adivinar: el trabajo sigue
+    en curso, el worker registra el fallo, espera y lo devuelve a la cola, y la vuelta siguiente lo
+    procesa con la comprobación hecha."""
+    cola = f"prueba-falla-a-mitad-{uuid.uuid4()}"
+    trabajo = _trabajo(str(uuid.uuid4()))
+    original = worker_main.ya_procesado
+    llamadas = {"n": 0}
 
-    def redis_falla(*_args: object) -> bool:
-        raise ColaNoDisponible("Error 111 connecting to redis:6379. Connection refused.")
+    def falla_la_primera_vez(*args):
+        llamadas["n"] += 1
+        if llamadas["n"] == 1:
+            raise redis.exceptions.ConnectionError("Connection reset by peer.")
+        return original(*args)
 
-    monkeypatch.setattr(worker_main, "primera_entrega", redis_falla)
-    with caplog.at_level(logging.INFO, logger="worker"):
-        _correr_worker(monkeypatch, object(), [_trabajo("t-1")])
+    monkeypatch.setattr(worker_main, "ya_procesado", falla_la_primera_vez)
+    try:
+        publicar(cliente, cola, trabajo)
+        with caplog.at_level(logging.INFO, logger="worker"):
+            _correr_worker(monkeypatch, cliente, cola, almacen_con_la_hoja, vueltas=2)
 
-    assert len(_eventos(caplog, "idempotencia_sin_comprobar")) == 1
-    assert len(_eventos(caplog, "hoja_recibida")) == 1
+        assert len(_eventos(caplog, "fallo_de_la_cola")) == 1
+        assert len(_eventos(caplog, "trabajos_recuperados")) == 1
+        assert [vars(r)["trabajo"] for r in _eventos(caplog, "hoja_recibida")] == [trabajo.id]
+        assert cliente.llen(f"{cola}:en-curso") == 0
+    finally:
+        _limpiar(cliente, cola, trabajo)
 
 
 @pytest.mark.parametrize(
@@ -313,33 +358,52 @@ def test_si_no_se_puede_comprobar_la_marca_el_trabajo_se_procesa_igual(
     ids=["no-responde", "responde-tarde"],
 )
 def test_el_worker_sigue_vivo_si_la_cola_no_responde(
-    falla: Exception, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    falla: Exception,
+    cliente,
+    almacen_con_la_hoja,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """No responde o responde tarde, del lado del worker: un fallo de Redis no lo tumba; lo
-    registra, espera y vuelve a pedir. La espera vencida cuenta como fallo y no como cola vacía
-    (antes, `desencolar` la convertía en `None`)."""
-    monkeypatch.setattr(worker_main, "primera_entrega", lambda *_args: True)
-    entregas = [falla, _trabajo("t-1")]
+    registra, espera y vuelve a pedir. La espera vencida cuenta como fallo y no como cola vacía."""
+    cola = f"prueba-vivo-{uuid.uuid4()}"
+    trabajo = _trabajo(str(uuid.uuid4()))
+    original = worker_main.tomar
+    llamadas = {"n": 0}
 
-    with caplog.at_level(logging.INFO, logger="worker"):
-        _correr_worker(monkeypatch, object(), entregas)
+    def falla_y_despues_toma(*args, **kwargs):
+        llamadas["n"] += 1
+        if llamadas["n"] == 1:
+            raise falla
+        return original(*args, **kwargs)
 
-    assert len(_eventos(caplog, "fallo_de_la_cola")) == 1
-    assert len(_eventos(caplog, "hoja_recibida")) == 1
+    monkeypatch.setattr(worker_main, "tomar", falla_y_despues_toma)
+    try:
+        publicar(cliente, cola, trabajo)
+        with caplog.at_level(logging.INFO, logger="worker"):
+            _correr_worker(monkeypatch, cliente, cola, almacen_con_la_hoja, vueltas=2)
+
+        assert len(_eventos(caplog, "fallo_de_la_cola")) == 1
+        assert len(_eventos(caplog, "hoja_recibida")) == 1
+    finally:
+        _limpiar(cliente, cola, trabajo)
 
 
-def test_desencolar_de_una_cola_que_no_contesta_avisa_en_vez_de_colgarse(
-    redis_lento: RedisQueNoContesta,
+@pytest.mark.parametrize("leer", ["desencolar", "tomar"])
+def test_leer_de_una_cola_que_no_contesta_avisa_en_vez_de_colgarse(
+    leer: str, redis_lento: RedisQueNoContesta
 ) -> None:
-    """Responde tarde, del lado del worker: si Redis no contesta dentro de la espera del socket,
-    `desencolar` no se queda esperando para siempre ni lo hace pasar por una cola vacía: levanta
-    el `TimeoutError`, que el worker registra como `fallo_de_la_cola`. Antes devolvía None, y una
-    cola caída se veía como un worker sin trabajo."""
+    """Responde tarde, del lado del worker: si Redis no contesta dentro de la espera del socket, ni
+    `desencolar` ni `tomar` (con el que el worker consume desde ADR-0020) se quedan esperando para
+    siempre ni lo hacen pasar por una cola vacía: levantan el `TimeoutError`, que el worker
+    registra como `fallo_de_la_cola`. Antes devolvía None, y una cola caída se veía como un worker
+    sin trabajo."""
     cliente = cliente_redis(redis_lento.url, espera_segundos=0.5)
+    funcion = desencolar if leer == "desencolar" else tomar
 
     inicio = time.perf_counter()
     with pytest.raises(redis.exceptions.TimeoutError):
-        desencolar(cliente, "procesamiento", timeout=0)
+        funcion(cliente, "procesamiento", timeout=0)
     assert time.perf_counter() - inicio < 2.0
 
 
