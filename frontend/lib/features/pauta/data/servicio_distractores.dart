@@ -8,11 +8,16 @@ import '../../../common/api/servicio_salud.dart' show backendUrl;
 /// Lo que el docente envía para pedir distractores (RF-11): los mismos tres campos de
 /// `SolicitudDeDistractores` en `backend/api/esquemas.py`, y ninguno más. Es lo único que llega
 /// al proveedor de LLM (RNF-13).
+///
+/// Desde el contrato 1.4.0 puede llevar además `otras: true`, que no llega al proveedor: le dice
+/// a la API que no responda con las propuestas guardadas para esta misma pregunta (ADR-0019). Solo
+/// viaja cuando vale `true`, así que una solicitud normal sigue siendo la de los tres campos.
 class SolicitudDistractores {
   const SolicitudDistractores({
     required this.enunciado,
     required this.respuestaCorrecta,
     this.cantidad = 3,
+    this.otras = false,
   });
 
   final String enunciado;
@@ -21,10 +26,23 @@ class SolicitudDistractores {
   /// Entre 1 y 5, el rango que acepta la API.
   final int cantidad;
 
+  /// `true` para pedir propuestas nuevas en vez de las guardadas: es lo que hace «Pedir otras
+  /// propuestas».
+  final bool otras;
+
+  /// La misma pregunta, pidiendo propuestas nuevas.
+  SolicitudDistractores paraPedirOtras() => SolicitudDistractores(
+        enunciado: enunciado,
+        respuestaCorrecta: respuestaCorrecta,
+        cantidad: cantidad,
+        otras: true,
+      );
+
   Map<String, dynamic> aJson() => {
         'enunciado': enunciado,
         'respuesta_correcta': respuestaCorrecta,
         'cantidad': cantidad,
+        if (otras) 'otras': true,
       };
 }
 

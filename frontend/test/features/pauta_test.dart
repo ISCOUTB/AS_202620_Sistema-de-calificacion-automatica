@@ -346,10 +346,11 @@ void main() {
     expect(solicitudes.last.cantidad, 5);
     expect(solicitudes.last.respuestaCorrecta, '-tan(x)');
 
-    // «Pedir otras propuestas» repite la última solicitud tal cual.
+    // «Pedir otras propuestas» repite la última solicitud y pide propuestas nuevas, no las que
+    // la API tiene guardadas para esa misma pregunta (ADR-0019).
     await _tocar(tester, find.text('Pedir otras propuestas'));
     expect(solicitudes, hasLength(3));
-    expect(solicitudes.last.aJson(), solicitudes[1].aJson());
+    expect(solicitudes.last.aJson(), {...solicitudes[1].aJson(), 'otras': true});
   });
 
   testWidgets('En escritorio la lista va a la izquierda y el generador a la derecha',

@@ -158,12 +158,19 @@ class _PantallaPautaState extends State<PantallaPauta> {
     ));
   }
 
-  /// «Pedir otras propuestas» y «Volver a pedir» repiten la última solicitud tal cual, aunque
-  /// el docente haya cambiado el formulario mientras tanto: las propuestas en pantalla son de
-  /// esa pregunta, y las nuevas deben serlo también.
+  /// «Volver a pedir» repite la última solicitud tal cual, aunque el docente haya cambiado el
+  /// formulario mientras tanto: las propuestas en pantalla son de esa pregunta, y las nuevas deben
+  /// serlo también. «Pedir otras propuestas» hace lo mismo con `otras: true` (`_pedirOtras`).
   void _repetir() {
     final solicitud = _solicitud;
     if (solicitud != null) _pedir(solicitud);
+  }
+
+  /// «Pedir otras propuestas» repite la pregunta pidiendo propuestas nuevas: sin `otras`, la API
+  /// respondería con las mismas que ya están en pantalla, guardadas en su caché (ADR-0019).
+  void _pedirOtras() {
+    final solicitud = _solicitud;
+    if (solicitud != null) _pedir(solicitud.paraPedirOtras());
   }
 
   Future<void> _pedir(SolicitudDistractores solicitud) async {
@@ -374,7 +381,7 @@ class _PantallaPautaState extends State<PantallaPauta> {
           resultado: _resultado!,
           decisiones: _decisiones,
           alDecidir: _decidir,
-          alPedirOtras: sinConexion ? null : _repetir,
+          alPedirOtras: sinConexion ? null : _pedirOtras,
           distractoresPorPregunta: _examen.distractoresPorPregunta,
         );
       case _Fase.error:

@@ -57,6 +57,24 @@ void main() {
     });
   });
 
+  test('Pedir otras manda otras: true, y solo entonces', () async {
+    late http.Request enviada;
+    final cliente = MockClient((solicitud) async {
+      enviada = solicitud;
+      return http.Response('{"distractores": [], "descartados": []}', 200);
+    });
+
+    await proponerDistractores(_solicitud.paraPedirOtras(), cliente: cliente);
+
+    expect(jsonDecode(enviada.body), {
+      'enunciado': 'Derive f(x) = x·sin(x)',
+      'respuesta_correcta': 'sin(x) + x·cos(x)',
+      'cantidad': 3,
+      'otras': true,
+    });
+    expect(_solicitud.aJson().containsKey('otras'), isFalse);
+  });
+
   test('Un 200 se traduce a propuestas y descartes', () async {
     final resultado = await proponerDistractores(
       _solicitud,
