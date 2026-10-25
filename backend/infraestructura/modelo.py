@@ -55,13 +55,28 @@ class HojaAceptada:
     `estado` distingue la hoja cuyo trabajo llegó a la cola de la que quedó almacenada y
     registrada en la bitácora esperando un reintento. El `trabajo_id` existe en ambos casos:
     se acuña antes de tocar la cola, precisamente para que la entrada de bitácora y el trabajo
-    que llegue después se refieran al mismo identificador."""
+    que llegue después se refieran al mismo identificador.
+
+    **`hoja_id` y `trabajo_id` son dos identidades distintas** desde
+    [ADR-0018](../../docs/adr/0018-dar-a-la-hoja-una-identidad-propia-y-derivar-su-estado-de-la-bitacora.md).
+    `hoja_id` es la de la hoja: se acuña una sola vez, al aceptarla, y es la que referenciará todo
+    lo que se sepa de ella después (la detección, la nota, la revisión manual). `trabajo_id` es
+    la de un encargo de procesarla: el reintento desde la bitácora conserva el mismo, y volver a
+    procesar la hoja (por ejemplo, para recalificarla tras corregir la clave) será un trabajo
+    nuevo de la misma hoja. Usar uno para las dos cosas obligaba a elegir entre poder
+    reprocesar y que el worker no procese dos veces el mismo encargo (ADR-0016).
+
+    **`estado` es una instantánea del momento de la respuesta, no el estado vigente.** El
+    estado vigente de una hoja se deriva de la bitácora, que es su fuente de verdad (ADR-0018 y
+    la violación V-3 del arc42 §8.3): una hoja `pendiente_de_encolar` que después se reintente
+    seguirá diciendo `pendiente_de_encolar` en esta copia."""
 
     examen_id: str
     nombre_archivo: str
     referencia: str
     trabajo_id: str
     recibida_en: datetime
+    hoja_id: str
     estado: str = ENCOLADA
 
 
@@ -97,9 +112,12 @@ class EntradaDeBitacora:
     """Una hoja almacenada cuyo procesamiento se va a encolar, o quedó pendiente de encolarse.
 
     Es lo mínimo que hace falta para reintentar sin volver a pedirle el archivo al docente: el
-    identificador del trabajo, dónde quedó la imagen y de qué examen es."""
+    identificador del trabajo, dónde quedó la imagen y de qué examen es. Desde ADR-0018 lleva
+    también la identidad de la hoja, para que el reintento publique un trabajo de la misma hoja
+    y no una hoja nueva."""
 
     trabajo_id: str
     examen_id: str
     referencia: str
     nombre_archivo: str
+    hoja_id: str

@@ -19,6 +19,13 @@ agregar otra que la referencia. Una escritura que sobrescribe puede dejar el arc
 si el proceso muere en el momento equivocado, que es justamente el momento del que esta
 bitácora tiene que sobrevivir.
 
+**Las líneas llevan la identidad de la hoja** desde
+[ADR-0018](../../docs/adr/0018-dar-a-la-hoja-una-identidad-propia-y-derivar-su-estado-de-la-bitacora.md),
+que además declara esta bitácora como la fuente de verdad del estado de cada hoja: cualquier
+otra copia (la respuesta al docente, una tabla futura, una caché) se deriva de lo que dice aquí.
+Las líneas escritas antes no la traen, y se leen con el `trabajo_id` como identidad de la hoja,
+que es lo que era entonces.
+
 **Por qué hay puerto.** Igual que el almacén, y por la misma razón (arc42 §4.1, riesgo R-06):
 cuando el ADR de persistencia definitiva elija un medio, cambia el adaptador y no cambian ni
 `ingesta` ni el modelo. `BitacoraEnDisco` es un adaptador honesto para un solo proceso, no una
@@ -78,6 +85,7 @@ class BitacoraEnDisco:
         self._agregar(
             {
                 "hecho": "recibida",
+                "hoja_id": entrada.hoja_id,
                 "trabajo_id": entrada.trabajo_id,
                 "examen_id": entrada.examen_id,
                 "referencia": entrada.referencia,
@@ -119,6 +127,10 @@ class BitacoraEnDisco:
                     examen_id=hecho["examen_id"],
                     referencia=hecho["referencia"],
                     nombre_archivo=hecho["nombre_archivo"],
+                    # Una línea anterior a ADR-0018 no trae `hoja_id`: entonces el trabajo era
+                    # la hoja, así que su identificador es el de la hoja. No se inventa uno
+                    # nuevo, que dejaría a la misma hoja con dos identidades.
+                    hoja_id=hecho.get("hoja_id", hecho["trabajo_id"]),
                 )
             elif hecho.get("hecho") == "encolada":
                 confirmadas.add(hecho["trabajo_id"])
