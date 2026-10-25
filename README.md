@@ -12,6 +12,39 @@ Sebastián Cañas Plata (`scp1109`) · Josué David Ortega De Arco (`josueacadem
 María Del Mar Restrepo Licona (`Mariadelmar-restrepo`) · Susana Marcela Rosales Castellar
 (`SusanaRosales`).
 
+## Evidencia: consistencia de los datos y caché
+
+Lo que se entrega: la tabla operación → garantía de consistencia, el diseño de una caché con su
+política de invalidación y el ADR de la decisión de datos más costosa de revertir. Las tres cosas
+están en el código, con pruebas, y no solo en los documentos.
+
+- **Tabla operación → consistencia** ([`consistencia-y-cache.md`](docs/evidencia/consistencia-y-cache.md), sección 2): diez
+  operaciones, C-01 a C-10, cada una con la garantía que da, la que **no** da, el archivo y la
+  línea, y la prueba. Por ejemplo: lo confirmado al docente ya está escrito con `fsync`; la carga es
+  atómica por hoja y no por lote; la cola va detrás de la bitácora y nunca al revés; el worker
+  procesa como mucho una vez por trabajo; el presupuesto es linealizable dentro del proceso.
+- **La decisión de datos más costosa de revertir** ([ADR-0018](docs/adr/0018-dar-a-la-hoja-una-identidad-propia-y-derivar-su-estado-de-la-bitacora.md)): la **identidad de la hoja**.
+  El ADR recorre las demás decisiones de datos con lo que costaría revertir cada una, y esta es la
+  única que no está detrás de un puerto y cuyo costo crece con cada registro. Hasta ahora era
+  implícita (el `trabajo_id`) y no dejaba recalificar una hoja sin chocar con la idempotencia de
+  ADR-0016. Se separa un `hoja_id` propio y la bitácora pasa a ser la fuente de verdad del estado.
+- **Caché con su invalidación** ([ADR-0019](docs/adr/0019-guardar-en-cache-las-propuestas-de-distractores.md)): las propuestas del proveedor de LLM se guardan
+  24 horas, y la misma pregunta repetida no llama al proveedor ni gasta cupo. Se invalida por
+  versión (el modelo y la huella de las instrucciones van en la clave), por tiempo, por capacidad y
+  a pedido del profesor («Pedir otras propuestas» manda `otras: true`). Se guarda sin filtrar, así
+  que la regla corre en cada lectura. Nunca guarda el estado de una hoja.
+- **Probado:** 19 pruebas nuevas, validadas provocando la falla con diez mutaciones; el contrato
+  pasa a 1.4.0, solo agregando.
+
+| Lo que se pide | Dónde está |
+|---|---|
+| Tabla operación → garantía de consistencia | [`consistencia-y-cache.md`](docs/evidencia/consistencia-y-cache.md), sección 2, filas C-01 a C-10, cada una con su prueba |
+| Diseño de caché con su política de invalidación | [`consistencia-y-cache.md`](docs/evidencia/consistencia-y-cache.md), sección 3 · [ADR-0019](docs/adr/0019-guardar-en-cache-las-propuestas-de-distractores.md) · [`autoria/cache.py`](backend/autoria/cache.py) · [`test_cache_de_propuestas.py`](backend/tests/test_cache_de_propuestas.py) (13 pruebas, una mutación por regla) |
+| ADR de la decisión de datos más costosa de revertir | [ADR-0018](docs/adr/0018-dar-a-la-hoja-una-identidad-propia-y-derivar-su-estado-de-la-bitacora.md), con la tabla que compara lo que costaría revertir cada decisión de datos · [`test_identidad_de_la_hoja.py`](backend/tests/test_identidad_de_la_hoja.py) (6 pruebas) |
+| Correspondencia con el repositorio | Cada fila de la tabla cita archivo, línea y prueba; el código está en `ingesta/recepcion.py`, `infraestructura/bitacora.py`, `autoria/cache.py` y `api/main.py`, y el contrato en [`openapi.json`](docs/contrato/openapi.json) 1.4.0 |
+| Documentación sincronizada | arc42 §5.1, §6.2, §6.4, §8.3, §8.5 (nueva), §9 y §11 (R-26 y R-27) · [C4](docs/c4/doc-c4.md) Nivel 2, relación 8, y Nivel 3, relaciones 3, 11 y 12 · [`aspectos.md`](docs/aspectos.md), filas A-01 y A-06 |
+| Uso de IA | [`docs/ia.md`, entrada 17](docs/ia.md#entrada-17) |
+
 ## Evidencia S11: fallos parciales y decisión de extracción
 
 La integración principal es la **cola de trabajos** (API → Redis → worker): toda hoja aceptada pasa
@@ -132,6 +165,7 @@ qué archivo y en qué sección está.
 | S9 | Porción construida con IA, prueba que falla, EC-08, auditoría y componente generativo | [Evidencia S9](#evidencia-s9) |
 | Corte 2 | Escenario operativo de límite de costo: decisión, experimento, CI, observabilidad y documentación sincronizada | [Segundo corte](#segundo-corte-límite-de-costo) |
 | S11 | Modos de fallo de las integraciones, idempotencia, saga y decisión de no extraer | [Evidencia S11](#evidencia-s11-fallos-parciales-y-decisión-de-extracción) |
+| Consistencia y caché | Tabla operación → consistencia, caché con su invalidación y ADR de la decisión de datos más costosa de revertir | [Evidencia: consistencia de los datos y caché](#evidencia-consistencia-de-los-datos-y-caché) |
 | Todas | Pipeline de integración continua | [Runs de GitHub Actions](https://github.com/ISCOUTB/AS_202620_Sistema-de-calificacion-automatica/actions) |
 | Todas | Análisis estático y su *Quality Gate* | [SonarQube Cloud](https://sonarcloud.io/summary/new_code?id=ISCOUTB_AS_202620_Sistema-de-calificacion-automatica) |
 | Todas | Respuesta a la retroalimentación automática | [`correcciones.md`](correcciones.md) |
@@ -307,7 +341,7 @@ Backend (dentro de `backend/`, con Redis disponible vía `docker compose up -d r
 pytest
 ```
 
-Son 156. Verifican: que la aplicación FastAPI arranca y su endpoint de salud responde
+Son 175. Verifican: que la aplicación FastAPI arranca y su endpoint de salud responde
 200; que los siete módulos del dominio se importan sin error ni ciclos; que ningún módulo
 importa por fuera de lo declarado en el docstring de su `__init__.py` (la prueba de fronteras
 entre módulos); que un trabajo encolado en Redis se recupera igual al desencolarlo; y, para el
@@ -358,6 +392,18 @@ Redis en el mismo lugar que el worker; que el filtro de distractores iguala `2x`
 con `sin`, y no pierde un distractor que vale 0; y que las herramientas de medición solo cuentan lo
 que dicen contar. Cada una falla si se quita su arreglo.
 
+Diecinueve llegaron con la entrega de consistencia y caché. Seis, en
+[`backend/tests/test_identidad_de_la_hoja.py`](backend/tests/test_identidad_de_la_hoja.py),
+verifican que cada hoja tiene un `hoja_id` propio, distinto de su `trabajo_id`; que el reporte, la
+bitácora y el trabajo de la cola dicen el mismo; que la bitácora lo conserva al releerse, también en
+las líneas escritas antes (ADR-0018); y que la API lo publica. Trece, en
+[`backend/tests/test_cache_de_propuestas.py`](backend/tests/test_cache_de_propuestas.py), verifican
+que la pregunta repetida sale de la caché sin llamar al proveedor ni gastar cupo, y cada regla de
+invalidación de ADR-0019: el cambio de modelo o de instrucciones, las 24 horas que leer no renueva,
+la capacidad, «Pedir otras propuestas», que no se guardan fallas ni respuestas vacías y que la regla
+corre en cada lectura. Se validaron provocando la falla con diez mutaciones, que los dos docstrings
+enumeran.
+
 Seis son la **prueba de contrato** ([`backend/tests/test_contrato.py`](backend/tests/test_contrato.py)),
 y verifican que el documento de `docs/contrato/openapi.json` y la API que corre no se puedan
 separar: que el archivo versionado sea exactamente el que genera la aplicación de hoy, que su
@@ -397,7 +443,7 @@ Frontend (dentro de `frontend/`):
 flutter test
 ```
 
-Son 72, una carpeta por pantalla en `test/features/` más `test/app_test.dart`:
+Son 73, una carpeta por pantalla en `test/features/` más `test/app_test.dart`:
 
 - **Marco de la aplicación (6):** la barra superior refleja el estado de conexión con el backend
   y ofrece volver a comprobar; la navegación es un riel en escritorio y una barra en teléfono; y
@@ -408,10 +454,10 @@ Son 72, una carpeta por pantalla en `test/features/` más `test/app_test.dart`:
   se avisan sin dar el lote por perdido ni por recibido; y un 5xx dice que algunas hojas pudieron
   entrar, sin invitar a reintentar. Cuatro de ellas prueban el servicio contra un `MockClient`,
   incluido que el examen viaje codificado en la ruta.
-- **Pauta y distractores (26):** el 503 y el 429 se muestran como advertencias con el mensaje de
+- **Pauta y distractores (27):** el 503 y el 429 se muestran como advertencias con el mensaje de
   la API; con el límite por minuto hay cuenta regresiva, y con el diario no se ofrece repetir y el
-  botón de pedir vuelve cuando pasa la espera. Nueve de ellas prueban el servicio contra un
-  `MockClient`, código por código.
+  botón de pedir vuelve cuando pasa la espera. Diez de ellas prueban el servicio contra un
+  `MockClient`, código por código, y una, que «Pedir otras propuestas» manda `otras: true`.
 - **Panel (11) y Revisión (11):** avisan que usan datos de ejemplo (en Revisión, también que un
   veredicto no se guarda) y no se desbordan a 390 px; el Panel tampoco ofrece acciones de IA
   fuera del alcance, y su porcentaje de aprobación no divide por cero.
@@ -437,9 +483,12 @@ El resultado, el procedimiento y sus límites están en
 ## El contrato de la API
 
 Lo que la API promete devolver está escrito en un documento OpenAPI versionado en el
-repositorio: [`docs/contrato/openapi.json`](docs/contrato/openapi.json), en la versión 1.2.0.
+repositorio: [`docs/contrato/openapi.json`](docs/contrato/openapi.json), en la versión 1.4.0.
 Describe las cuatro rutas con el esquema de cada respuesta campo por campo, no solo el listado de
 endpoints. La 1.2.0 agregó `GET /metricas` y el 429 de `/distractores` (segundo corte, ADR-0015).
+La 1.3.0 agregó el `hoja_id` de cada hoja aceptada (ADR-0018), y la 1.4.0, la caché de propuestas:
+`otras` en la solicitud de distractores, `desde_la_cache` en su respuesta y su estado en
+`/metricas` (ADR-0019). Las dos solo agregan.
 
 Está versionado y no se consulta en caliente por dos razones. `/openapi.json` solo existe
 mientras la API está levantada y describe la versión que esté corriendo en ese momento, así que
@@ -507,6 +556,8 @@ El desarrollo sigue Aspect Driven Development (ADD): cada funcionalidad se decla
 | [0015](docs/adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md) | Limitar el gasto del proveedor de LLM con un presupuesto en la API | aceptado |
 | [0016](docs/adr/0016-acotar-la-espera-de-la-cola-y-hacer-idempotente-al-worker.md) | Acotar la espera de la cola y hacer idempotente al worker | aceptado |
 | [0017](docs/adr/0017-no-extraer-ningun-modulo-del-monolito-todavia.md) | No extraer ningún módulo del monolito todavía | aceptado |
+| [0018](docs/adr/0018-dar-a-la-hoja-una-identidad-propia-y-derivar-su-estado-de-la-bitacora.md) | Dar a la hoja una identidad propia y derivar su estado de la bitácora | aceptado |
+| [0019](docs/adr/0019-guardar-en-cache-las-propuestas-de-distractores.md) | Guardar en caché las propuestas de distractores | aceptado |
 
 Las decisiones de un ADR aceptado no se editan ni se borran: si una decisión cambia, se escribe uno nuevo y el anterior pasa a estado *reemplazado por*. Los ajustes menores que no son de arquitectura, como un enlace roto, se permiten dejando constancia ([ADR-0014](docs/adr/0014-dejar-constancia-del-ajuste-de-enlaces-en-adr-0007.md)).
 
@@ -520,7 +571,7 @@ Las decisiones de un ADR aceptado no se editan ni se borran: si una decisión ca
 - [x] arc42: Deployment View (sección 7)
 - [x] Escenarios de calidad: 5 priorizados y 4 complementarios; EC-07, EC-08 y EC-09 medidos
 - [x] C4 Niveles 1, 2 y 3
-- [x] ADR 0001 a 0017
+- [x] ADR 0001 a 0019
 - [x] Elección de stack: FastAPI en el backend, Flutter en el frontend
 - [x] Esqueleto ejecutable
 - [x] Corte vertical de A-01: `ingesta`, almacén, bitácora, encolado y pantalla de carga
@@ -534,6 +585,9 @@ Las decisiones de un ADR aceptado no se editan ni se borran: si una decisión ca
 - [x] Arreglos del 19-oct: el lote ya no se cae por un error del disco,
   tiene un plazo para la cola, no congela la API (R-21 cerrado) y se lee de a una hoja con tope
 - [ ] Acuse de recibo en la cola y detección de hojas subidas dos veces (R-22 y R-24, con A-02)
+- [x] Consistencia y caché: tabla operación → consistencia, `hoja_id` propio con la bitácora como
+  fuente de verdad (ADR-0018) y caché de propuestas con su invalidación (ADR-0019)
+- [ ] Consulta del estado vigente de una hoja (R-26, con A-02)
 - [ ] Aspectos A-02 a A-05
 
 ## Documentación
@@ -542,13 +596,13 @@ Las decisiones de un ADR aceptado no se editan ni se borran: si una decisión ca
 docs/
 ├── arc42/
 │   └── arc42-template-ES.md                            # documento de arquitectura (arc42)
-├── adr/                                                # 0001 a 0017; el 0001, reemplazado por el 0002
+├── adr/                                                # 0001 a 0019; el 0001, reemplazado por el 0002
 ├── c4/
 │   └── doc-c4.md                                       # modelo C4 (Niveles 1, 2 y 3)
 ├── contrato/
 │   └── openapi.json                                    # contrato HTTP (OpenAPI 3.1), generado
 ├── despliegue/                                        # estimación de costo y taller de despliegue
-├── evidencia/                                          # EC-07, arranque en frío, prueba de contrato, SonarQube; de la S9: EC-08, prueba del defecto y auditoría; del corte 2: experimento de EC-09; de la S11: modos de fallo
+├── evidencia/                                          # EC-07, arranque en frío, prueba de contrato, SonarQube; de la S9: EC-08, prueba del defecto y auditoría; del corte 2: experimento de EC-09; de la S11: modos de fallo; de consistencia y caché: la tabla de garantías y el diseño de la caché
 ├── ficha-problema.md                                   # el problema, usuarios y alcance
 ├── aspectos.md                                         # aspectos y tabla de trazabilidad
 └── ia.md                                               # registro de uso de IA
