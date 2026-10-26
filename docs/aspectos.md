@@ -42,12 +42,18 @@ identidad de la hoja (`hoja_id`) de la de su trabajo y declara la bitácora fuen
 estado: es la decisión de datos más costosa de revertir. En [A-06](#a-06), [ADR-0019](adr/0019-guardar-en-cache-las-propuestas-de-distractores.md)
 guarda 24 horas las propuestas del proveedor, y la misma pregunta repetida no gasta cupo.
 
+**El taller de mensajería cae sobre [A-01](#a-01)**, porque su operación es la cola de trabajos,
+de la API al worker ([taller](evidencia/taller-mensajeria.md)). [ADR-0020](adr/0020-entregar-los-trabajos-al-menos-una-vez-con-reintentos-y-lista-de-fallidos.md) le da al mensaje un contrato versionado y
+pasa la entrega a al menos una vez, con acuse, reintentos con espera creciente y lista de fallidos;
+una ejecución real con la API, el worker y Redis muestra el duplicado, el fallo recuperable y el que
+termina en fallidos.
+
 Cada fila enlaza a su escenario de calidad en el arc42. Los nueve escenarios documentados son
 alcanzables desde la fila del aspecto que los realiza.
 
 | ID | Aspecto | Estado | Requisito | Escenario de calidad | Contexto C4 (Nivel 1) | C4 | ADR | Código | Pruebas | Evidencia |
 |---|---|---|---|---|---|---|---|---|---|---|
-| **[A-01](#a-01)** | Carga de examen para calificación | **Construido** | RF-01 | [EC-07](arc42/arc42-template-ES.md#ec-07) | [Rel. 1](c4/doc-c4.md#relaciones): Profesor/TA → Sistema | C1: [QuantIA](c4/doc-c4.md#nivel-1--diagrama-de-contexto-del-sistema) · C2: [Aplicación web](c4/doc-c4.md#nivel-2--diagrama-de-contenedores), [Almacén de imágenes](c4/doc-c4.md#nivel-2--diagrama-de-contenedores), [Cola de trabajos](c4/doc-c4.md#nivel-2--diagrama-de-contenedores) | [0002](adr/0002-procesar-calificacion-de-forma-asincrona.md) · [0006](adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md) · [0016](adr/0016-acotar-la-espera-de-la-cola-y-hacer-idempotente-al-worker.md) · [0018](adr/0018-dar-a-la-hoja-una-identidad-propia-y-derivar-su-estado-de-la-bitacora.md) | [`ingesta/recepcion.py`](../backend/ingesta/recepcion.py) · [`infraestructura/almacen.py`](../backend/infraestructura/almacen.py) · [`infraestructura/bitacora.py`](../backend/infraestructura/bitacora.py) · [`infraestructura/modelo.py`](../backend/infraestructura/modelo.py) · [`api/main.py`](../backend/api/main.py) · [`frontend/lib/features/carga/views/pantalla_carga.dart`](../frontend/lib/features/carga/views/pantalla_carga.dart) · [`infraestructura/cola.py`](../backend/infraestructura/cola.py) · [`worker/main.py`](../backend/worker/main.py) | [`test_recepcion.py`](../backend/tests/test_recepcion.py) · [`test_durabilidad_recepcion.py`](../backend/tests/test_durabilidad_recepcion.py) · [`test_carga_hojas.py`](../backend/tests/test_carga_hojas.py) · [`carga_test.dart`](../frontend/test/features/carga_test.dart) · [`servicio_carga_test.dart`](../frontend/test/features/servicio_carga_test.dart) · [`test_modos_de_fallo.py`](../backend/tests/test_modos_de_fallo.py) · [`test_identidad_de_la_hoja.py`](../backend/tests/test_identidad_de_la_hoja.py) | [Medición de EC-07](evidencia/medicion-ec07.md): 1,744 s contra ≤10 s · 0 % de pérdida silenciosa · [captura](#a-01-evidencia) · [Modos de fallo](evidencia/modos-de-fallo.md) (S11): con la cola lenta, el lote de 200 confirma en 2,017 s (antes 10,017 s) · [Consistencia](evidencia/consistencia-y-cache.md): filas C-01 a C-05 |
+| **[A-01](#a-01)** | Carga de examen para calificación | **Construido** | RF-01 | [EC-07](arc42/arc42-template-ES.md#ec-07) | [Rel. 1](c4/doc-c4.md#relaciones): Profesor/TA → Sistema | C1: [QuantIA](c4/doc-c4.md#nivel-1--diagrama-de-contexto-del-sistema) · C2: [Aplicación web](c4/doc-c4.md#nivel-2--diagrama-de-contenedores), [Almacén de imágenes](c4/doc-c4.md#nivel-2--diagrama-de-contenedores), [Cola de trabajos](c4/doc-c4.md#nivel-2--diagrama-de-contenedores) | [0002](adr/0002-procesar-calificacion-de-forma-asincrona.md) · [0006](adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md) · [0016](adr/0016-acotar-la-espera-de-la-cola-y-hacer-idempotente-al-worker.md) · [0018](adr/0018-dar-a-la-hoja-una-identidad-propia-y-derivar-su-estado-de-la-bitacora.md) · [0020](adr/0020-entregar-los-trabajos-al-menos-una-vez-con-reintentos-y-lista-de-fallidos.md) | [`ingesta/recepcion.py`](../backend/ingesta/recepcion.py) · [`infraestructura/almacen.py`](../backend/infraestructura/almacen.py) · [`infraestructura/bitacora.py`](../backend/infraestructura/bitacora.py) · [`infraestructura/modelo.py`](../backend/infraestructura/modelo.py) · [`api/main.py`](../backend/api/main.py) · [`frontend/lib/features/carga/views/pantalla_carga.dart`](../frontend/lib/features/carga/views/pantalla_carga.dart) · [`infraestructura/cola.py`](../backend/infraestructura/cola.py) · [`worker/main.py`](../backend/worker/main.py) · [`infraestructura/consumo.py`](../backend/infraestructura/consumo.py) · contrato del mensaje: [`trabajo-v1.schema.json`](contrato/trabajo-v1.schema.json) | [`test_recepcion.py`](../backend/tests/test_recepcion.py) · [`test_durabilidad_recepcion.py`](../backend/tests/test_durabilidad_recepcion.py) · [`test_carga_hojas.py`](../backend/tests/test_carga_hojas.py) · [`carga_test.dart`](../frontend/test/features/carga_test.dart) · [`servicio_carga_test.dart`](../frontend/test/features/servicio_carga_test.dart) · [`test_modos_de_fallo.py`](../backend/tests/test_modos_de_fallo.py) · [`test_identidad_de_la_hoja.py`](../backend/tests/test_identidad_de_la_hoja.py) · [`test_mensajeria.py`](../backend/tests/test_mensajeria.py) | [Medición de EC-07](evidencia/medicion-ec07.md): 1,744 s contra ≤10 s · 0 % de pérdida silenciosa · [captura](#a-01-evidencia) · [Modos de fallo](evidencia/modos-de-fallo.md) (S11): con la cola lenta, el lote de 200 confirma en 2,017 s (antes 10,017 s) · [Consistencia](evidencia/consistencia-y-cache.md): filas C-01 a C-05 · [Taller de mensajería](evidencia/taller-mensajeria.md): ejecución con un duplicado, un fallo recuperable y uno que termina en fallidos |
 | **[A-02](#a-02)** | Detección de marcas y nivel de confianza | Declarado | RF-02, RF-03 | [EC-01](arc42/arc42-template-ES.md#ec-01) · [EC-02](arc42/arc42-template-ES.md#ec-02) | **Sin contexto propio** — proceso interno, no cruza la frontera del sistema (ver nota abajo) | Pendiente | ADR de umbral previsto (R-04) | Pendiente | Pendiente | Pendiente |
 | **[A-03](#a-03)** | Calificación contra la clave y publicación | Declarado | RF-04, RF-05, RF-08 | [EC-03](arc42/arc42-template-ES.md#ec-03) · [EC-04](arc42/arc42-template-ES.md#ec-04) | [Rel. 2](c4/doc-c4.md#relaciones): Sistema → Profesor/TA | Pendiente | [0002](adr/0002-procesar-calificacion-de-forma-asincrona.md) | Pendiente | Pendiente | Pendiente |
 | **[A-04](#a-04)** | Registro del banco y habilitación del examen | Declarado | RF-06, RF-07 | [EC-05](arc42/arc42-template-ES.md#ec-05) | [Rel. 1](c4/doc-c4.md#relaciones): Profesor/TA → Sistema | Pendiente | [0003](adr/0003-usar-fastapi-y-flutter.md) · [0004](adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md) · [0005](adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md) | Pendiente | Pendiente | Pendiente |
@@ -373,6 +379,32 @@ aspecto: la identidad de la hoja, de la que va a colgar todo lo que A-02 y A-03 
   [tabla operación → consistencia](evidencia/consistencia-y-cache.md), filas C-01 a C-05.
 - **Sigue abierto:** ninguna ruta deja consultar el estado vigente de una hoja, y hoy obtenerlo es
   releer toda la bitácora (R-26).
+
+### Taller de mensajería: la cola de trabajos
+
+La operación del taller es la de este aspecto: cada hoja aceptada viaja como un mensaje de la API al
+worker por la cola. Es desacoplamiento temporal real, así que no hubo prototipo aparte.
+
+- **Encontrado al revisar:** el mensaje no tenía contrato; la entrega era como mucho una vez (el
+  worker que moría a mitad perdía el trabajo, R-22); la marca de idempotencia iba antes de procesar
+  (R-23); no había reintentos ni lista de fallidos, y el worker daba por recibida una hoja cuya
+  imagen ya no estaba.
+- **Decidir:** [ADR-0020](adr/0020-entregar-los-trabajos-al-menos-una-vez-con-reintentos-y-lista-de-fallidos.md), frente a la alternativa síncrona (procesar en la petición de
+  carga: 16,6 minutos para un lote de 200 contra los 10 s de EC-07). Al menos una vez con
+  idempotencia, con listas de Redis, sin agregar un broker.
+- **Construir:** el contrato versión 1 en [`cola.py`](../backend/infraestructura/cola.py),
+  publicado en [`trabajo-v1.schema.json`](contrato/trabajo-v1.schema.json); el acuse, los reintentos
+  (5, 10 y 20 s, cuatro intentos) y la lista de fallidos en
+  [`consumo.py`](../backend/infraestructura/consumo.py); el worker que abre la imagen; y el rastro de
+  cada mensaje en el registro, con [`seguir_trabajo.py`](../backend/herramientas/seguir_trabajo.py) y
+  [`cola_de_fallidos.py`](../backend/herramientas/cola_de_fallidos.py).
+- **Verificar:** quince pruebas en [`test_mensajeria.py`](../backend/tests/test_mensajeria.py), entre
+  ellas la del duplicado y la del fallo recuperable, validadas con una mutación por propiedad.
+- **Evidenciar:** una [ejecución real](evidencia/taller-mensajeria.md) con la API, el worker y Redis: la hoja 1 se procesa una
+  vez aunque llegó dos y un worker caído la dejó en curso; la 2, en el tercer intento; la 3 termina
+  en la lista de fallidos con su motivo.
+- **Sigue abierto:** todo vive en un Redis sin persistencia (R-28), y la recuperación supone un
+  solo worker (R-29).
 
 ### Por qué se eligió este aspecto primero
 
