@@ -6,21 +6,29 @@ mismo `trabajo` y la misma `hoja`: `trabajo_publicado` en `ingesta`, y `trabajo_
 `reintento_programado`, `trabajo_repetido`, `trabajo_a_fallidos` y `hoja_recibida` en el worker.
 Esta herramienta los junta en orden y dice cómo terminó y cuánto tardó.
 
-Uso, desde backend/, con el registro guardado en un archivo (en local, la salida de error de la API
-y del worker; en Render, lo que se descarga de Logs):
+Uso, desde backend/, con el registro guardado en un archivo dentro del repositorio (en local, la
+salida de error de la API y del worker):
 
     python -m herramientas.seguir_trabajo registro.log --trabajo <trabajo_id>
     python -m herramientas.seguir_trabajo registro.log --hoja <hoja_id>
     python -m herramientas.seguir_trabajo registro.log --todos
+
+La herramienta no abre archivos de fuera del repositorio, para que una ruta manipulada no la ponga
+a leer cualquier archivo de la máquina. Un registro de otra parte, como el que se descarga de Logs
+en Render, entra por la entrada estándar:
+
+    python -m herramientas.seguir_trabajo - --todos < <registro descargado>
 
 Las líneas que no son JSON (lo que imprime uvicorn antes de configurar el registro) se ignoran.
 """
 
 import argparse
 import json
+import os
 import sys
 from collections.abc import Iterable
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 EVENTOS_DEL_RASTRO = {
@@ -32,6 +40,21 @@ EVENTOS_DEL_RASTRO = {
     "hoja_recibida",
 }
 FINALES = {"hoja_recibida": "procesado", "trabajo_a_fallidos": "en la lista de fallidos"}
+CARPETA_DEL_REPOSITORIO = Path(__file__).resolve().parent.parent.parent
+
+
+def _ruta_del_registro(nombre: str) -> str:
+    """Ruta del registro dentro del repositorio. Se resuelve la ruta canónica y se comprueba que
+    siga dentro, con el separador al final para que una carpeta hermana con el mismo prefijo no
+    pase la comprobación."""
+    base = os.path.realpath(CARPETA_DEL_REPOSITORIO)
+    ruta = os.path.realpath(nombre)
+    if not ruta.startswith(base + os.sep):
+        raise SystemExit(
+            f"el registro tiene que estar dentro del repositorio: {nombre!r}. Si está en otra "
+            "parte, pásalo por la entrada estándar: - < ruta"
+        )
+    return ruta
 
 
 def leer_eventos(lineas: Iterable[str]) -> list[dict[str, Any]]:
@@ -94,7 +117,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.registro == "-":
         eventos = leer_eventos(sys.stdin)
     else:
-        with open(args.registro, encoding="utf-8") as archivo:
+        with open(_ruta_del_registro(args.registro), encoding="utf-8") as archivo:
             eventos = leer_eventos(archivo)
 
     if args.todos:

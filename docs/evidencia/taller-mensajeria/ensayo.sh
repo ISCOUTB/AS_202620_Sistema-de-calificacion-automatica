@@ -59,5 +59,5 @@ kill $WORKER $API; wait 2>/dev/null
 echo "== 3. Al final" >> "$ENSAYO/pasos.txt"
 $PY -m herramientas.cola_de_fallidos --cola evidencia --ver >> "$ENSAYO/pasos.txt" 2>/dev/null
 cat "$ENSAYO/api.log" "$ENSAYO/worker.log" | grep '^{' > "$ENSAYO/registro.jsonl"
-$PY -m herramientas.seguir_trabajo "$ENSAYO/registro.jsonl" --todos > "$ENSAYO/seguimiento.json"
+$PY -m herramientas.seguir_trabajo - --todos < "$ENSAYO/registro.jsonl" > "$ENSAYO/seguimiento.json"
 echo "Resultados en $ENSAYO"

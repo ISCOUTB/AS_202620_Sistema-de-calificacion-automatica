@@ -45,6 +45,7 @@ from pathlib import Path
 
 import pytest
 
+import herramientas.seguir_trabajo as seguir_trabajo
 import worker.main as worker_main
 from herramientas.exportar_contrato import (
     RUTA_CONTRATO_DEL_TRABAJO,
@@ -411,6 +412,32 @@ def test_un_mensaje_se_sigue_de_la_api_al_worker_con_el_mismo_trabajo_y_la_misma
     assert (final["estado"], final["intentos"]) == ("procesado", 2)
     assert all(e.get("espera_en_cola_ms") is not None
                for e in eventos if e["evento"] == "trabajo_tomado")
+
+
+def test_el_seguimiento_de_la_evidencia_sale_de_su_registro(capsys):
+    """`seguimiento.json` es lo que la herramienta saca de `registro.jsonl`, leído dentro del
+    repositorio como lo leería quien reproduce la evidencia desde backend/."""
+    carpeta = seguir_trabajo.CARPETA_DEL_REPOSITORIO / "docs" / "evidencia" / "taller-mensajeria"
+
+    assert seguir_trabajo.main([str(carpeta / "registro.jsonl"), "--todos"]) == 0
+    assert json.loads(capsys.readouterr().out) == json.loads(
+        (carpeta / "seguimiento.json").read_text(encoding="utf-8")
+    )
+
+
+def test_seguir_trabajo_no_abre_un_registro_de_fuera_del_repositorio(tmp_path, monkeypatch):
+    """Una ruta manipulada no la pone a leer cualquier archivo: se niega fuera del repositorio,
+    también en una carpeta hermana con el mismo prefijo y con `..` de por medio."""
+    repositorio, hermana = tmp_path / "repo", tmp_path / "repo-otro"
+    for carpeta in (repositorio, hermana):
+        carpeta.mkdir()
+        (carpeta / "registro.jsonl").write_text("", encoding="utf-8")
+    monkeypatch.setattr(seguir_trabajo, "CARPETA_DEL_REPOSITORIO", repositorio)
+
+    assert seguir_trabajo.main([str(repositorio / "registro.jsonl"), "--todos"]) == 0
+    for afuera in (hermana / "registro.jsonl", repositorio / ".." / "repo-otro" / "registro.jsonl"):
+        with pytest.raises(SystemExit, match="dentro del repositorio"):
+            seguir_trabajo.main([str(afuera), "--todos"])
 
 
 def test_el_esquema_del_codigo_exige_los_campos_que_lee_el_consumidor():
