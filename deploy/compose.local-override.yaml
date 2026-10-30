@@ -8,7 +8,7 @@
 #   cd frontend
 #   flutter build web --release --dart-define=BACKEND_URL=http://127.0.0.1:8000
 #   cd ..
-#   cp -r frontend/build/web deploy/sitio/web
+#   cp -r frontend/build/web/. deploy/sitio/web/
 #   cp deploy/.env.example deploy/.env    # y en deploy/.env: ALLOWED_ORIGIN=http://127.0.0.1:8080
 #   docker compose -p calificacion-lab --env-file deploy/.env \
 #     -f deploy/compose.lab.yaml -f deploy/compose.local-override.yaml up -d --build

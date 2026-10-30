@@ -1,0 +1,7 @@
+# A la imagen del sitio solo entran la página provisional y el sitio compilado: lo que no esté en
+# esta lista no llega al contexto de la compilación, aunque alguien lo deje en esta carpeta.
+*
+!provisional/
+!web/
+# Marca la carpeta en `master` para que exista sin el sitio compilado; no se sirve.
+web/.gitkeep

@@ -129,7 +129,8 @@ jobs:
             echo "master ya no está en $GITHUB_SHA: no se publica."
             exit 0
           fi
-          cp -r frontend/build/web deploy/sitio/web
+          # Con `/.` se copia el contenido: la carpeta ya existe, con su `.gitkeep`.
+          cp -r frontend/build/web/. deploy/sitio/web/
           # Qué commit de master está desplegado: https://calificacion.iscoutb.dev/revision.txt
           echo "$GITHUB_SHA" > deploy/sitio/web/revision.txt
           # Que SonarCloud no analice el JavaScript compilado de esta rama.

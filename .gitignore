@@ -28,7 +28,9 @@ frontend/build/
 frontend/.packages
 # El sitio compilado que sirve el servidor del laboratorio. Solo existe en la rama `despliegue`,
 # donde lo agrega el job `publicar-despliegue` del CI; en `master` sería una copia de un build.
-deploy/sitio/web/
+# El `.gitkeep` sí va, para que la carpeta exista y deploy/sitio/Dockerfile la copie sin comodín.
+deploy/sitio/web/*
+!deploy/sitio/web/.gitkeep
 
 # Editor/OS
 .vscode/
