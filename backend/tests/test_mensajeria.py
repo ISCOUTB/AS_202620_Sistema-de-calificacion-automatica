@@ -414,6 +414,42 @@ def test_un_mensaje_se_sigue_de_la_api_al_worker_con_el_mismo_trabajo_y_la_misma
                for e in eventos if e["evento"] == "trabajo_tomado")
 
 
+# Una hoja sintética en el servidor del laboratorio el 29-oct-2026, con los identificadores
+# abreviados, tal como se copia del panel: primero el registro de `worker` y después el de `api`,
+# y el del worker con la marca de tiempo que el panel antepone a cada línea.
+REGISTRO_DEL_PANEL = [
+    '2026-10-30T04:38:08.792Z {"momento": "2026-10-30T04:38:08.792+00:00", "evento": '
+    '"trabajo_tomado", "trabajo": "b4f7061e", "hoja": "ff64200e", "intento": 1, '
+    '"espera_en_cola_ms": 6.1}',
+    '2026-10-30T04:38:08.793Z {"momento": "2026-10-30T04:38:08.793+00:00", "evento": '
+    '"hoja_recibida", "trabajo": "b4f7061e", "hoja": "ff64200e", "intento": 1, "bytes": 74}',
+    '{"momento": "2026-10-30T04:38:08.792+00:00", "evento": "trabajo_publicado", '
+    '"trabajo": "b4f7061e", "hoja": "ff64200e"}',
+]
+
+
+def test_el_registro_copiado_del_panel_se_lee_con_la_marca_de_tiempo_delante():
+    """Leída entera, una línea con la marca del panel delante no es JSON: el rastro perdía los
+    eventos del worker y daba el trabajo por «en camino»."""
+    eventos = leer_eventos(REGISTRO_DEL_PANEL)
+
+    assert sorted(e["evento"] for e in eventos) == [
+        "hoja_recibida", "trabajo_publicado", "trabajo_tomado",
+    ]
+
+
+def test_el_rastro_va_en_el_orden_en_que_pasaron_aunque_los_registros_lleguen_por_separado():
+    """Con el registro del worker antes que el de la API, y la publicación y la toma en el mismo
+    milisegundo, el rastro empieza igual por la publicación y mide 1 ms de punta a punta, no 0."""
+    eventos = rastro(leer_eventos(REGISTRO_DEL_PANEL), trabajo="b4f7061e")
+    final = resumen(eventos)
+
+    assert [e["evento"] for e in eventos] == [
+        "trabajo_publicado", "trabajo_tomado", "hoja_recibida",
+    ]
+    assert (final["estado"], final["de_punta_a_punta_ms"]) == ("procesado", 1.0)
+
+
 def test_el_seguimiento_de_la_evidencia_sale_de_su_registro(capsys):
     """`seguimiento.json` es lo que la herramienta saca de `registro.jsonl`, leído dentro del
     repositorio como lo leería quien reproduce la evidencia desde backend/."""
