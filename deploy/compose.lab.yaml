@@ -1,0 +1,215 @@
+# Entorno de QuantIA en el servidor del laboratorio del curso (iscoutb.dev):
+#   sitio  https://calificacion.iscoutb.dev
+#   API    https://api-calificacion.iscoutb.dev  (/health, /metricas, /docs)
+#
+# Es la infraestructura como código del entorno desplegado. Dokploy lo aplica con:
+#   docker compose -p <app> --env-file deploy/.env -f deploy/compose.lab.yaml up -d --build
+# así que las rutas relativas se resuelven desde esta carpeta (por eso el contexto es
+# `../backend`). El servicio `sistema` del panel no lee `master`, sino la rama `despliegue`, que
+# el job `publicar-despliegue` de `.github/workflows/ci.yml` publica solo cuando las pruebas pasan
+# (sección 3.6 del manual del servidor): es `master` más el sitio ya compilado. El entorno local
+# sigue siendo `docker-compose.yml`, en la raíz: este archivo no lo reemplaza, describe otro
+# entorno con otras reglas.
+#
+# Las reglas del servidor (docs/politicas-uso.md del repositorio ISCOUTB/iscoutb.dev), que una
+# auditoría semanal revisa contenedor por contenedor:
+#   - como máximo 6 contenedores y 1 GB sumando los límites, con 0,5 CPU por contenedor (la cuota
+#     que anuncia el panel, vista el 29-oct-2026; docs/politicas-uso.md todavía dice 4 y 512 MB);
+#   - sin `ports:`: el tráfico público entra por Traefik con el dominio que se asigna en el panel,
+#     y lo interno viaja por la red aislada del equipo con `expose`;
+#   - sin `container_name`, sin bind mounts, sin `privileged` y sin redes externas;
+#   - datos en volúmenes con nombre, y secretos como ${VARIABLE}: el valor va en Dokploy →
+#     Environment y nunca en el repositorio (RNF-11).
+#
+# Qué no está aquí, y por qué:
+#   - Postgres. `docker-compose.yml` lo declara para corresponder con el Nivel 2 de ADR-0002, pero
+#     ningún módulo lo usa: no hay esquema, ni migraciones, ni cliente en `requirements.txt`. Un
+#     contenedor sin uso solo gastaría cuota. La base de datos que cierre R-06 cabe aquí como
+#     quinto contenedor, con su ADR y el código que la use. Cuando entre, el `healthcheck` de la
+#     API tendrá que comprobarla.
+#   - La compilación de Flutter. Su imagen ocupa unos 3 GB y el servidor tiene 2 compilaciones
+#     para 23 equipos: el CI compila el sitio y aquí solo se copia (deploy/sitio/Dockerfile).
+#
+# Los límites de memoria salen de medir este mismo archivo en local el 26 y el 29-oct-2026, en
+# reposo, con hasta cinco lotes simultáneos de 200 hojas de 200 KB (el tamaño de EC-07) y con
+# lotes de hojas de 19 MB, al borde del tope de 20 MB de `ingesta`. Se mide la memoria anónima del
+# contenedor, leída del cgroup cada 0,1 s: es la que no se puede liberar (la caché de archivos el
+# kernel la suelta antes de matar el proceso), y `docker stats` muestrea tan lento que se salta
+# los picos. Cada límite deja margen sobre su pico (en Redis, además, para sus 32 MB de datos).
+# Suman 576 MB: los 448 MB que quedan de la cuota son para lo que todavía no existe, la base de
+# datos de R-06 y el worker cuando A-02 lea las marcas. Si se cambia un límite, se vuelve a medir.
+
+services:
+  api:
+    build: &backend
+      context: ../backend
+    restart: unless-stopped
+    environment:
+      # Cableado interno: el nombre del servicio de la cola y la carpeta donde se monta el volumen
+      # están en este mismo archivo, así que van como literales y no como variables. Si se pudieran
+      # cambiar desde el panel, un RUTA_ALMACEN fuera del volumen guardaría las hojas en la capa
+      # del contenedor y se perderían en el siguiente despliegue sin que nada fallara.
+      REDIS_URL: redis://redis:6379/0
+      RUTA_ALMACEN: /app/almacen_imagenes
+      # Bitácora de recepción (ADR-0006): en el mismo volumen que las hojas, porque relaciona el
+      # archivo guardado con el trabajo encolado y no debe sobrevivir uno sin el otro.
+      RUTA_BITACORA: /app/almacen_imagenes/bitacora-de-recepcion.jsonl
+      # El mismo valor que lee `worker`, abajo: los dos lo toman de la misma variable.
+      NOMBRE_COLA: ${NOMBRE_COLA:-procesamiento}
+      # CORS admite un solo origen (api/settings.py): el del sitio, que se sirve desde `web` en
+      # otro nombre del mismo dominio. Es esquema y host, sin ruta ni barra final.
+      ALLOWED_ORIGIN: ${ALLOWED_ORIGIN:-https://calificacion.iscoutb.dev}
+      # Proveedor de LLM para los distractores (ADR-0013). Solo `api` lo usa. Sin clave, la ruta
+      # /distractores responde 503 y nada más cambia; la clave va solo en Dokploy → Environment.
+      LLM_URL_BASE: ${LLM_URL_BASE:-https://api.groq.com/openai/v1}
+      LLM_MODELO: ${LLM_MODELO:-openai/gpt-oss-120b}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      # Presupuesto del proveedor de LLM (ADR-0015). Vive en la memoria de este proceso, así que
+      # solo `api` lo lee y se vacía en cada despliegue que recrea el contenedor.
+      LLM_SOLICITUDES_POR_MINUTO: ${LLM_SOLICITUDES_POR_MINUTO:-6}
+      LLM_SOLICITUDES_POR_DIA: ${LLM_SOLICITUDES_POR_DIA:-150}
+      # Traefik termina el HTTPS y reenvía la petición con X-Forwarded-For y X-Forwarded-Proto.
+      # Uvicorn solo cree esas cabeceras si vienen de 127.0.0.1, y aquí vienen del contenedor de
+      # Traefik: sin esta línea, una redirección de FastAPI apunta a http:// y el registro de
+      # acceso muestra la IP de Traefik en vez de la del cliente. Confiar en cualquier origen es
+      # seguro porque el contenedor no publica puertos: solo Traefik y los servicios del equipo
+      # llegan a él. Uvicorn lee esta variable por su cuenta, así que el Dockerfile no cambia.
+      FORWARDED_ALLOW_IPS: "*"
+    expose:
+      - "8000"
+    volumes:
+      - almacen_imagenes:/app/almacen_imagenes
+    # La API arranca aunque la cola no esté lista: desde ADR-0006 una hoja que no llega a la cola
+    # queda almacenada, en la bitácora y `pendiente_de_encolar`. Esperar a que Redis esté sano
+    # convertiría una falla de la cola en una caída de toda la API, que es lo contrario.
+    depends_on:
+      redis:
+        condition: service_started
+    # Traefik no enruta hacia un contenedor cuyo healthcheck no está en `healthy`, así que este
+    # bloque decide cuándo empieza a responder la URL pública después de cada despliegue.
+    # `start_interval` hace que durante el arranque se pruebe cada 2 s y no cada 30: sin él, la URL
+    # daría 404 durante el primer medio minuto de cada despliegue.
+    # /health no consulta Redis a propósito (ADR-0006): con la cola caída la API sigue recibiendo
+    # hojas, y marcarla como no sana la sacaría de Traefik justo cuando más importa reportarlas.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=4)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+      start_interval: 2s
+    # La memoria la fija la carga de hojas. Al recibir un lote, Starlette guarda en memoria cada
+    # archivo de menos de 1 MB (los más grandes van a un archivo temporal), así que un lote de EC-07
+    # ocupa unos 40 MB hasta que se responde. Medido: 42 MiB en reposo, 174 MiB con tres lotes de
+    # 200 hojas de 200 KB a la vez y 265 MiB con cinco; con cinco lotes de hojas de 19 MB, 200 MiB.
+    # Con 256 MB, los cinco lotes de EC-07 llegaban a 251 MiB, al borde de que el kernel la matara.
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 384M
+
+  worker:
+    # La misma imagen que `api` (mismo contexto y Dockerfile): BuildKit ejecuta cada paso una sola
+    # vez para los dos servicios, así que declararlo dos veces no duplica la compilación.
+    # En Render el worker corría como segundo proceso de la API (backend/arrancar-api-y-worker.sh,
+    # ADR-0011) porque no había plan gratuito para él; aquí es un servicio propio, como en local,
+    # y `restart` hace lo que hacía el ciclo de ese script.
+    build: *backend
+    command: ["python", "-m", "worker.main"]
+    restart: unless-stopped
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      RUTA_ALMACEN: /app/almacen_imagenes
+      NOMBRE_COLA: ${NOMBRE_COLA:-procesamiento}
+    # Desde ADR-0020 el worker abre la imagen de cada trabajo para comprobar que está, así que
+    # monta el mismo volumen donde la API la guardó.
+    volumes:
+      - almacen_imagenes:/app/almacen_imagenes
+    # Sin cola el worker no tiene nada que hacer: espera a que Redis responda en vez de arrancar
+    # registrando fallos. Si Redis no llega a estar sano, el despliegue falla en el panel, pero la
+    # API ya quedó arriba recibiendo hojas como pendientes.
+    depends_on:
+      redis:
+        condition: service_healthy
+    # Sin healthcheck: no atiende peticiones y ya reintenta solo cuando la cola falla
+    # (worker/main.py). Un estado `unhealthy` no lo reiniciaría ni lo vería nadie.
+    # Medido: 23 MiB en reposo y con hojas de 200 KB, y 42 MiB con hojas de 19 MB, porque lee
+    # cada imagen entera.
+    # Cuando A-02 lea las marcas, este límite y el de CPU se vuelven a medir.
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 96M
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # La cola persiste, que es lo que eligió ADR-0002. En Render no se pudo porque el Key Value
+    # gratuito no persiste (ADR-0011, R-28). Desde ADR-0020 aquí viven, además de la cola, los
+    # trabajos en curso hasta su acuse, los reintentos programados y la lista de fallidos: sin
+    # persistencia, un reinicio de Redis perdería justo lo que la entrega al menos una vez promete
+    # no perder. Y las hojas ya persisten en `almacen_imagenes`: una cola que se vaciara en cada
+    # despliegue dejaría hojas guardadas y marcadas `encolada` en la bitácora cuyo trabajo ya no
+    # existe, una pérdida que la bitácora no puede ver, porque la dio por confirmada.
+    #   --appendonly yes, --appendfsync everysec: cada escritura queda en el AOF; ante una caída
+    #     brusca se pierde como mucho el último segundo, y un `down` ordenado no pierde nada.
+    #   --save "": sin instantáneas RDB periódicas. Con el AOF sobran, y cada una es un fork.
+    #   --maxmemory 32mb, --maxmemory-policy noeviction: como en Render, si la cola se llena no
+    #     descarta trabajos; el encolado falla y la hoja queda `pendiente_de_encolar` (ADR-0006).
+    #     Medido, cada trabajo ocupa unos 290 bytes en la lista: en 32 MB caben más de cien mil, y
+    #     queda margen hasta el límite del contenedor para el fork que reescribe el AOF.
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec", "--save", "",
+              "--maxmemory", "32mb", "--maxmemory-policy", "noeviction"]
+    expose:
+      - "6379"
+    # La imagen declara /data como volumen: sin esta línea Docker crearía uno anónimo, que el
+    # siguiente despliegue no reutiliza.
+    volumes:
+      - datos_cola:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+      start_interval: 1s
+    # Medido, Redis no pasó de 7 MiB con 800 trabajos seguidos; el límite cubre los 32 MB de datos
+    # más la copia que hace al reescribir el AOF.
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 64M
+
+  web:
+    # El sitio: Flutter web ya compilado por el CI, servido por nginx sin privilegios en el puerto
+    # 8080. La URL de la API se hornea al compilar (Flutter web no lee variables en ejecución),
+    # así que no hay variables aquí: se cambia en el job `publicar-despliegue`.
+    build:
+      context: ./sitio
+    restart: unless-stopped
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+      start_interval: 2s
+    # Medido: 12 MiB en reposo y sirviendo el sitio.
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 32M
+
+volumes:
+  # Hojas escaneadas y bitácora de recepción. A diferencia del disco efímero de Render (ADR-0012),
+  # sobrevive a los despliegues. El servidor no garantiza copia de seguridad y borra los volúmenes
+  # después del 30-nov-2026, y el entorno sigue recibiendo solo hojas sintéticas (RNF-12).
+  almacen_imagenes:
+  # AOF de la cola.
+  datos_cola:

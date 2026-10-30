@@ -1,7 +1,7 @@
 # Entorno
 .env
 
-# Configuración local de Claude Code (permisos específicos de esta máquina)
+# Configuración local de Claude Code
 .claude/settings.local.json
 
 # Python (backend)
@@ -26,6 +26,9 @@ frontend/.flutter-plugins-dependencies
 frontend/.flutter-plugins
 frontend/build/
 frontend/.packages
+# El sitio compilado que sirve el servidor del laboratorio. Solo existe en la rama `despliegue`,
+# donde lo agrega el job `publicar-despliegue` del CI; en `master` sería una copia de un build.
+deploy/sitio/web/
 
 # Editor/OS
 .vscode/

@@ -1,0 +1,24 @@
+# Solo para probar en un computador, nunca en el servidor: publica la API y el sitio en 127.0.0.1
+# para poder abrirlos. compose.lab.yaml no puede llevar `ports:` (el tráfico entra por Traefik),
+# así que la prueba local agrega este archivo encima, sin tocar el que despliega Dokploy.
+#
+# El sitio tiene que estar compilado antes, con la URL local de la API horneada (en el servidor lo
+# compila el CI), y deploy/.env tiene que dejar pasar ese origen por CORS:
+#
+#   cd frontend
+#   flutter build web --release --dart-define=BACKEND_URL=http://127.0.0.1:8000
+#   cd ..
+#   cp -r frontend/build/web deploy/sitio/web
+#   cp deploy/.env.example deploy/.env    # y en deploy/.env: ALLOWED_ORIGIN=http://127.0.0.1:8080
+#   docker compose -p calificacion-lab --env-file deploy/.env \
+#     -f deploy/compose.lab.yaml -f deploy/compose.local-override.yaml up -d --build
+#   curl http://127.0.0.1:8000/health     # y el sitio en http://127.0.0.1:8080
+#
+# Dokploy solo lee deploy/compose.lab.yaml, así que este archivo no llega al servidor.
+services:
+  api:
+    ports:
+      - "127.0.0.1:${PUERTO_LOCAL_API:-8000}:8000"
+  web:
+    ports:
+      - "127.0.0.1:${PUERTO_LOCAL_SITIO:-8080}:8080"
