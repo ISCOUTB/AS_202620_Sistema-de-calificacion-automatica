@@ -83,3 +83,61 @@ jobs:
           channel: stable
       - run: flutter pub get --enforce-lockfile
       - run: flutter test
+
+  # Publica en la rama `despliegue` lo que pasó las pruebas, y esa rama es la que lee el servidor
+  # del laboratorio (deploy/compose.lab.yaml). Es la sección 3.6 del manual del servidor sin el
+  # merge a mano: el servidor solo recibe un commit de `master` cuyo CI terminó en verde, como hacía
+  # Render con `autoDeployTrigger: checksPass`. La rama es `master` más un commit con el sitio
+  # compilado, porque Flutter no se compila en el servidor (deploy/sitio/Dockerfile).
+  #
+  # El push lo hace el GITHUB_TOKEN, y GitHub no dispara workflows por un push de ese token: el CI
+  # no vuelve a correr sobre `despliegue`, pero el panel del servidor sí recibe el aviso.
+  publicar-despliegue:
+    needs: [backend-tests, frontend-tests]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    # Con dos push seguidos, el más reciente cancela al anterior: solo importa la punta.
+    concurrency:
+      group: publicar-despliegue
+      cancel-in-progress: true
+    env:
+      # La URL de la API que se hornea en el sitio. Si cambia el dominio de la API en el panel,
+      # cambia aquí y en ALLOWED_ORIGIN.
+      BACKEND_URL: https://api-calificacion.iscoutb.dev
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: "3.44.3"
+          channel: stable
+      - name: Compilar el sitio
+        working-directory: frontend
+        run: |
+          flutter pub get --enforce-lockfile
+          flutter build web --release --no-pub --dart-define=BACKEND_URL="$BACKEND_URL"
+          # Un sitio que llama a otra API carga igual y no avisa de nada: si la URL no quedó
+          # horneada, el job falla aquí y no se publica.
+          grep -q -F "$BACKEND_URL" build/web/main.dart.js
+      - name: Publicar la rama despliegue
+        run: |
+          # Si `master` avanzó mientras corría el CI, este commit ya no es el último: lo publica la
+          # corrida del commit nuevo, y esta no la pisa.
+          git fetch --depth 1 origin master
+          if [ "$(git rev-parse FETCH_HEAD)" != "$GITHUB_SHA" ]; then
+            echo "master ya no está en $GITHUB_SHA: no se publica."
+            exit 0
+          fi
+          cp -r frontend/build/web deploy/sitio/web
+          # Qué commit de master está desplegado: https://calificacion.iscoutb.dev/revision.txt
+          echo "$GITHUB_SHA" > deploy/sitio/web/revision.txt
+          # Que SonarCloud no analice el JavaScript compilado de esta rama.
+          echo "sonar.exclusions=deploy/sitio/web/**" > .sonarcloud.properties
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B despliegue
+          git add -f deploy/sitio/web .sonarcloud.properties
+          git commit -q -m "despliegue: master en ${GITHUB_SHA::7}" \
+            -m "Sitio compilado con BACKEND_URL=$BACKEND_URL en la corrida $GITHUB_RUN_ID."
+          git push --force origin despliegue
