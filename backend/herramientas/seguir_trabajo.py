@@ -33,16 +33,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-# Cada evento del rastro con su lugar en el ciclo de un mensaje, para ordenar los que caen en el
-# mismo milisegundo: el worker puede tomar un trabajo en el mismo milisegundo en que la API lo
-# publica.
 EVENTOS_DEL_RASTRO = {
-    "trabajo_publicado": 0,
-    "trabajo_tomado": 1,
-    "reintento_programado": 2,
-    "trabajo_repetido": 2,
-    "trabajo_a_fallidos": 3,
-    "hoja_recibida": 3,
+    "trabajo_publicado",
+    "trabajo_tomado",
+    "reintento_programado",
+    "trabajo_repetido",
+    "trabajo_a_fallidos",
+    "hoja_recibida",
 }
 FINALES = {"hoja_recibida": "procesado", "trabajo_a_fallidos": "en la lista de fallidos"}
 CARPETA_DEL_REPOSITORIO = Path(__file__).resolve().parent.parent.parent
@@ -82,18 +79,21 @@ def leer_eventos(lineas: Iterable[str]) -> list[dict[str, Any]]:
 
 def rastro(eventos: list[dict[str, Any]], trabajo: str | None = None,
            hoja: str | None = None) -> list[dict[str, Any]]:
-    """Los eventos de un trabajo, o de todos los trabajos de una hoja, en el orden en que pasaron:
-    por `momento` y, dentro del mismo milisegundo, por su lugar en el ciclo. El orden del registro
-    no basta, porque el panel del servidor muestra el de cada contenedor por separado y, al
-    juntarlos, el worker puede quedar antes que la API. `momento` es ISO 8601 en UTC con
-    milisegundos (`infraestructura/registro.py`), así que ordenarlo como texto es ordenarlo en el
-    tiempo."""
+    """Los eventos de un trabajo, o de todos los trabajos de una hoja, en el orden en que pasaron.
+    El orden del registro no basta: el panel del servidor muestra el de cada contenedor por
+    separado y, al juntarlos, el worker puede quedar antes que la API. Se ordena por `momento`,
+    que es ISO 8601 en UTC con milisegundos (`infraestructura/registro.py`), así que ordenarlo como
+    texto es ordenarlo en el tiempo. Dentro del mismo milisegundo, por `intento`: la publicación no
+    lo trae y va primero, y un reintento programado va antes del intento siguiente. A igual
+    intento queda el orden del registro, que dentro de cada proceso es el correcto. El lugar del
+    evento en el ciclo no sirve para desempatar: el `trabajo_tomado` de un reintento viene
+    después de un `reintento_programado`."""
     elegidos = [
         e for e in eventos
         if (trabajo is not None and e.get("trabajo") == trabajo)
         or (hoja is not None and e.get("hoja") == hoja)
     ]
-    return sorted(elegidos, key=lambda e: (e.get("momento", ""), EVENTOS_DEL_RASTRO[e["evento"]]))
+    return sorted(elegidos, key=lambda e: (e.get("momento", ""), e.get("intento", 0)))
 
 
 def resumen(eventos: list[dict[str, Any]]) -> dict[str, Any]:

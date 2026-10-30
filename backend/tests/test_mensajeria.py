@@ -450,6 +450,31 @@ def test_el_rastro_va_en_el_orden_en_que_pasaron_aunque_los_registros_lleguen_po
     assert (final["estado"], final["de_punta_a_punta_ms"]) == ("procesado", 1.0)
 
 
+def test_un_reintento_y_el_intento_siguiente_en_el_mismo_milisegundo_quedan_en_orden():
+    """En el CI, el `reintento_programado` del intento 1 y el `trabajo_tomado` del 2 cayeron en el
+    mismo milisegundo. Desempatar por el lugar del evento en el ciclo ponía la toma antes del
+    reintento; desempatar por `intento` los deja como pasaron."""
+    registro = [
+        '{"momento": "2026-10-30T05:51:16.494+00:00", "evento": "trabajo_publicado", '
+        '"trabajo": "f0298149", "hoja": "c37ea71d"}',
+        '{"momento": "2026-10-30T05:51:16.495+00:00", "evento": "trabajo_tomado", '
+        '"trabajo": "f0298149", "hoja": "c37ea71d", "intento": 1}',
+        '{"momento": "2026-10-30T05:51:16.496+00:00", "evento": "reintento_programado", '
+        '"trabajo": "f0298149", "hoja": "c37ea71d", "intento": 1, "siguiente_intento": 2}',
+        '{"momento": "2026-10-30T05:51:16.496+00:00", "evento": "trabajo_tomado", '
+        '"trabajo": "f0298149", "hoja": "c37ea71d", "intento": 2}',
+        '{"momento": "2026-10-30T05:51:16.497+00:00", "evento": "hoja_recibida", '
+        '"trabajo": "f0298149", "hoja": "c37ea71d", "intento": 2}',
+    ]
+
+    eventos = rastro(leer_eventos(registro), trabajo="f0298149")
+
+    assert [e["evento"] for e in eventos] == [
+        "trabajo_publicado", "trabajo_tomado", "reintento_programado", "trabajo_tomado",
+        "hoja_recibida",
+    ]
+
+
 def test_el_seguimiento_de_la_evidencia_sale_de_su_registro(capsys):
     """`seguimiento.json` es lo que la herramienta saca de `registro.jsonl`, leído dentro del
     repositorio como lo leería quien reproduce la evidencia desde backend/."""
