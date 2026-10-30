@@ -1,0 +1,12 @@
+{
+    "name": "QuantIA",
+    "short_name": "QuantIA",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#0175C2",
+    "theme_color": "#0175C2",
+    "description": "QuantIA, sistema de calificación de exámenes de opción múltiple mediante OMR.",
+    "orientation": "portrait-primary",
+    "prefer_related_applications": false,
+    "icons": []
+}
