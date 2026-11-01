@@ -64,12 +64,15 @@ su frontera.
   - [7.2 Entorno local](#72-entorno-local)
   - [7.3 Lo que no se despliega](#73-lo-que-no-se-despliega)
   - [7.4 Limitaciones de este entorno](#74-limitaciones-de-este-entorno)
+  - [7.5 El entorno anterior: Render (de la S8 al 29-oct)](#75-el-entorno-anterior-render-de-la-s8-al-29-oct)
 - [8. Cross-cutting Concepts](#8-cross-cutting-concepts)
   - [8.1 Mapa de contextos](#81-mapa-de-contextos)
   - [8.2 Lenguaje ubicuo](#82-lenguaje-ubicuo)
   - [8.3 Propiedad de datos](#83-propiedad-de-datos)
   - [8.4 Resiliencia de las integraciones](#84-resiliencia-de-las-integraciones)
   - [8.5 Consistencia de los datos y caché](#85-consistencia-de-los-datos-y-caché)
+  - [8.6 Seguridad](#86-seguridad)
+  - [8.7 Privacidad y datos personales](#87-privacidad-y-datos-personales)
   - [Conceptos transversales todavía sin desarrollar](#conceptos-transversales-todavía-sin-desarrollar)
 - [9. Architecture Decisions](#9-architecture-decisions)
 - [10. Quality Requirements](#10-quality-requirements)
@@ -77,6 +80,7 @@ su frontera.
   - [10.2 Escenarios de calidad priorizados](#102-escenarios-de-calidad-priorizados)
   - [10.3 Escenarios complementarios](#103-escenarios-complementarios)
 - [11. Risks and Technical Debts](#11-risks-and-technical-debts)
+  - [11.1 Amenazas aceptadas (S13)](#111-amenazas-aceptadas-s13)
 - [12. Glossary](#12-glossary)
 
 ---
@@ -845,10 +849,12 @@ hasta que el docente confirme las filas de despliegue de la S8 y el taller. Desp
 
 # 8. Cross-cutting Concepts
 
-Esta sección fija los conceptos que atraviesan más de un módulo. Tres están desarrollados aquí:
-el mapa de contextos (8.1), el lenguaje ubicuo (8.2) y la propiedad de datos (8.3).
+Esta sección fija los conceptos que atraviesan más de un módulo. Siete están desarrollados aquí:
+el mapa de contextos (8.1), el lenguaje ubicuo (8.2), la propiedad de datos (8.3), la resiliencia
+de las integraciones (8.4), la consistencia de los datos (8.5), la seguridad (8.6) y la privacidad
+(8.7).
 
-Antes de los tres, dos acuerdos que el resto de la sección da por sentados. Una vez fijados, no se
+Antes de todos, dos acuerdos que el resto de la sección da por sentados. Una vez fijados, no se
 cambian sin avisar al equipo: renombrar un contexto a mitad de camino descoordina los documentos
 que se apoyan en él.
 
@@ -1488,6 +1494,50 @@ la sostiene, está en [`consistencia-y-cache.md`](../evidencia/consistencia-y-ca
 | **Lo que vive en memoria es correcto con una instancia y se dice** | El presupuesto (R-18) y la caché (R-27): linealizables dentro del proceso, nada entre instancias |
 | **Una caché solo guarda lo que puede estar viejo sin daño, y su invalidación no depende de acordarse** | Solo propuestas de distractores, nunca el estado de una hoja; la versión del modelo y de las instrucciones en la clave, 24 horas, 256 entradas y `otras: true` ([ADR-0019](../adr/0019-guardar-en-cache-las-propuestas-de-distractores.md)) |
 
+## 8.6 Seguridad
+
+Desde la S13 es un concepto transversal: atraviesa `api`, `ingesta`, `infraestructura`, `autoria`,
+el worker, el despliegue y el pipeline. Las amenazas, cada una con su prioridad, su mitigación, su
+dueño y su estado, están en el [modelo de amenazas](../evidencia/modelo-de-amenazas.md); esta sección fija las reglas que las
+mitigan y dónde se aplican.
+
+**Los límites de confianza.** Hasta que exista `identidad` (A-05), todo lo que llega a la API es de
+cualquiera: la URL es pública, y la IP del servidor también, así que se puede llegar sin pasar por
+Cloudflare. Lo único que sale de nuestra red es la llamada a Groq. Lo que entra a `master` y pasa el
+CI se despliega solo. Y el almacén está en un disco que comparten 23 equipos.
+
+| Regla | Dónde se aplica hoy |
+|---|---|
+| **Toda ruta pública tiene un tope**, porque cualquiera puede llamarla | La carga: 20 MB por hoja, 250 hojas por lote, 256 MB por día y 100 MB por petición ([ADR-0022](../adr/0022-poner-un-presupuesto-de-carga-delante-del-almacen.md)). Los distractores: 1 000 caracteres de enunciado, 6 solicitudes por minuto y 150 por día ([ADR-0015](../adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md)) |
+| **Lo que entra se juzga por su contenido, no por su nombre** | La firma de los primeros bytes de cada hoja; el nombre del archivo pasa por `nombre_seguro` y lleva un UUID delante, así que no puede escribir fuera del directorio del examen (`infraestructura/almacen.py`) |
+| **Lo que sale de nuestra red es lo mínimo** | A Groq solo van el enunciado y la respuesta correcta (RNF-13, `PreguntaParaDistractores`), por HTTPS validado con un almacén de certificados al día (`certifi` 2026.10.18) |
+| **Lo que vuelve del modelo es dato, no instrucción** | Instrucciones del sistema separadas del enunciado, respuesta en JSON con forma fija, la regla que descarta repeticiones, texto de Flutter y no HTML en el sitio, y la habilitación del docente antes de usar nada (RF-07) |
+| **Ningún secreto en el repositorio** | La `LLM_API_KEY` se escribe en el panel y Dokploy la pone en `deploy/.env` al desplegar (RNF-11); el barrido de `HEAD` y del historial del 31-oct no encontró ninguna |
+| **Cada contenedor con el mínimo privilegio** | `api` y `worker` como `appuser`; `web` con `nginx-unprivileged`; sin puertos publicados, modo privilegiado ni montajes del servidor; límites de memoria y CPU ([7.1](#71-las-seis-piezas-del-despliegue)) |
+| **Solo se despliega lo que pasó el CI, incluido el análisis de dependencias** | El job `dependencias` (OSV-Scanner) va antes de `publicar-despliegue`; las acciones van fijadas por hash y las dependencias se instalan con `--require-hashes` |
+| **Cada mitigación tiene una prueba que falla sin ella**, como en 8.4 | `test_presupuesto_de_carga.py`, `test_presupuesto.py`, `test_recepcion.py` (el nombre con rutas) y `test_proveedor_llm.py` (la respuesta sin la forma esperada) |
+
+**Lo que todavía no existe:** la autenticación y la autorización por curso (A-05). Hasta entonces, la
+amenaza AM-02 está aceptada con una condición: ninguna hoja real entra antes
+([11.1](#111-amenazas-aceptadas-s13)).
+
+## 8.7 Privacidad y datos personales
+
+Cumple RNF-12 a RNF-15. El detalle, contrastado con el código, está en la
+[sección 6 del modelo de amenazas](../evidencia/modelo-de-amenazas.md#6-privacidad-qué-datos-personales-se-tratan-y-con-qué-base).
+
+| | |
+|---|---|
+| **Qué datos personales se tratan** | La imagen de cada hoja, con el nombre o el código que escribió el estudiante y sus marcas; el nombre del archivo, que es el del estudiante si el docente los nombra así, en la bitácora y en la ruta del almacén; y la IP del docente, en el registro de acceso. Las calificaciones llegan con A-03. No hay cuentas, correos ni base de datos, y a Groq no va nada de esto (RNF-13) |
+| **Quién es el responsable** | La universidad. QuantIA es una herramienta con la que el docente califica en su nombre |
+| **Con qué base** | La Ley 1581 de 2012 y el Decreto 1377 de 2013, compilado en el Decreto 1074 de 2015: la autorización que el estudiante da a la universidad (artículo 9), con la finalidad académica de evaluarlo. Ninguno es un dato sensible (artículo 5) |
+| **Cuánto tiempo** | Hoy nada lo borra, y el servidor borra los volúmenes después del 30-nov. La retención de RNF-14 (borrar o anonimizar al cerrar el periodo de revisión de nota) es parte del ADR que cierra R-06 |
+| **Hoy** | Solo hojas sintéticas, sin datos de ninguna persona |
+
+**Antes de la primera hoja real:** `identidad` (A-05); confirmar con la universidad que su
+autorización cubre calificar con esta herramienta; la retención de RNF-14; y una indicación en la
+pantalla de carga para nombrar los archivos sin datos del estudiante.
+
 ## Conceptos transversales todavía sin desarrollar
 
 Un concepto transversal se documenta cuando ya atraviesa más de un módulo del código, y hoy seis
@@ -1498,13 +1548,15 @@ reescribirlas contra el código. Cada uno queda con la condición que debe cumpl
 - **Manejo de la incertidumbre del OMR:** el nivel de confianza como dato de primera clase que
   acompaña a toda respuesta detectada a lo largo del pipeline. Se escribe cuando A-02 exista y el
   umbral esté medido contra el dataset de R-01.
-- **Seguridad y autorización por curso:** cómo se aplica el aislamiento de RNF-05 y QG-4 de forma
-  uniforme en todos los módulos. Depende de A-05, que hoy es un paquete vacío.
+- **Autorización por curso:** cómo se aplica el aislamiento de RNF-05 y QG-4 de forma uniforme en
+  todos los módulos. Depende de A-05, que hoy es un paquete vacío. La seguridad de lo que ya existe
+  salió de esta lista en la S13: es la [sección 8.6](#86-seguridad).
 - **Auditoría de calificaciones y de aprobaciones de clave:** registro de quién modificó una nota
   y cuándo (RF-10, RNF-15), extendido a quién aprobó una clave de respuestas y cuándo (RF-07,
   [ADR-0004](../adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md)).
 - **Ciclo de vida de los datos personales:** retención y eliminación de escaneos conforme a
-  RNF-14. Hoy nada borra lo que se guarda; lo cierra el ADR de persistencia que resuelve R-06.
+  RNF-14. Hoy nada borra lo que se guarda; lo cierra el ADR de persistencia que resuelve R-06. Qué
+  datos se tratan y con qué base ya está en la [sección 8.7](#87-privacidad-y-datos-personales).
 
 **Salió de esta lista en la S9: el manejo de errores del proveedor de LLM.** [ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md) lo decidió (20 s
 de espera, sin reintentos, 503 con el motivo) y [6.4](#64-solicitud-de-distractores-rf-11--aspecto-a-06--ec-08)
@@ -1547,6 +1599,7 @@ constancia en el commit y en esta sección ([0014](../adr/0014-dejar-constancia-
 | [0019](../adr/0019-guardar-en-cache-las-propuestas-de-distractores.md) | Guardar en caché las propuestas de distractores | **aceptado** | 2026-10-24 | [EC-08](#ec-08), [EC-09](#ec-09) |
 | [0020](../adr/0020-entregar-los-trabajos-al-menos-una-vez-con-reintentos-y-lista-de-fallidos.md) | Entregar los trabajos al menos una vez, con reintentos y lista de fallidos | **aceptado** | 2026-10-25 | [EC-07](#ec-07), [EC-03](#ec-03), [EC-04](#ec-04) |
 | [0021](../adr/0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md) | Desplegar en el servidor del laboratorio, con el sitio compilado en el CI | **aceptado** | 2026-10-29 | [EC-07](#ec-07) |
+| [0022](../adr/0022-poner-un-presupuesto-de-carga-delante-del-almacen.md) | Poner un presupuesto de carga delante del almacén | **aceptado** | 2026-10-31 | [EC-07](#ec-07) |
 
 **Por qué 0002 reemplaza a 0001.** La revisión de coherencia previa al corte 1 encontró que
 EC-03 y EC-04 no se pueden cumplir a la vez con procesamiento síncrono(200 hojas × 5 s son
@@ -1677,6 +1730,11 @@ API bajo iscoutb.dev) y cierra en ese entorno lo que las cuatro dejaban asumido:
 R-28. El código no cambia, así que 0002, 0006, 0016, 0018 y 0020 siguen igual, y 0017 tampoco: el
 worker tiene su propio contenedor, pero es la misma imagen. Las cuatro reemplazadas solo cambian su
 línea de estado.
+
+**Por qué 0022 no reemplaza a ninguno.** Pone un freno delante del almacén, con el mismo patrón que
+0015 delante del proveedor, y no cambia nada de lo que 0006, 0018 y 0021 decidieron sobre cómo y
+dónde se guarda una hoja. Es la única mitigación del modelo de amenazas de la S13 que cambia la
+estructura (AM-01): las demás son reglas de la [sección 8.6](#86-seguridad) o ya existían.
 
 **Decisiones previstas (aún no tomadas):**
 
@@ -1950,11 +2008,11 @@ priorización original.
 | **R-07** | **Deuda: EC-04 supone paralelismo pero no está fijado el número de workers** ni medido el consumo de CPU por hoja. | Medio | Que el límite de 85% de CPU se incumpla con la concurrencia elegida. | Medir el costo de una hoja en el prototipo de R-05 y derivar el número de workers de ese dato. |
 | **R-08** | **Riesgo de erosión de los límites entre módulos** («big ball of mud»), inherente al monolito modular. **Mitigado en lo esencial.** | Bajo | Cambiar la línea `Importa:` de un docstring para acomodar un import, en lugar de corregir el import. | Ya en marcha, no prevista: `backend/tests/test_fronteras.py` corre en cada push y compara los imports reales de cada módulo, leídos con `ast`, contra la línea `Importa:` de su docstring. **Queda un flanco:** verifica el módulo importado, no el símbolo. Cerrarlo exige un `__all__` por módulo (hoy solo lo declara `ingesta`) y extender la prueba para comprobarlo. |
 | **R-09** | **Deuda organizativa: la contribución al repositorio está concentrada en pocas cuentas**, lo que incumple RNF-10. | Alto | Que el reparto por módulos no se traduzca en commits de las cuatro personas. | Asignar módulos por integrante y trabajar con ramas y *pull requests* revisados, de modo que la contribución individual sea verificable en el historial. |
-| **R-10** | **Deuda legal: no está redactada la finalidad del tratamiento de datos ni la política de retención** que exigen RNF-12 y RNF-14. | Medio | Llegar al despliegue con datos reales de estudiantes sin política declarada. | Redactar ambas antes de procesar la primera hoja con datos reales, y consultar la referencia normativa vigente con la coordinación del programa. |
+| **R-10** | **Deuda legal: no está redactada la finalidad del tratamiento de datos ni la política de retención** que exigen RNF-12 y RNF-14. | Medio | Llegar al despliegue con datos reales de estudiantes sin política declarada. | Redactar ambas antes de procesar la primera hoja con datos reales, y consultar la referencia normativa vigente con la coordinación del programa. **Desde la S13**, qué datos se tratan y con qué base está en la [sección 8.7](#87-privacidad-y-datos-personales); siguen abiertas la retención (R-06) y la confirmación con la universidad. |
 | **R-11** | **La aprobación manual de la clave puede pasar por alto una equivalencia algebraica no evidente** entre un distractor y la respuesta correcta, ahora que no hay verificación simbólica automática ([ADR-0004](../adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md)). | Alto | Revisar el examen bajo presión de tiempo, sea la clave propia o con distractores propuestos por el modelo, sin apoyo visual para comparar expresiones. | Diseñar la pantalla de aprobación para mostrar las expresiones simplificadas o graficadas una junto a otra, facilitando la comparación visual sin exigir cómputo simbólico obligatorio. Si la tasa de error resulta alta en la práctica, reevaluar con un ADR nuevo. **Medido en la S9:** La evaluación de EC-08 no encontró ninguna propuesta equivalente a la respuesta correcta en 120 (calificación del equipo, confirmada con un prototipo fuera del sistema); la corrida de prueba previa sí mostró una: `sin(2x)` para `2·sin(x)·cos(x)`. El filtro de las propuestas solo detecta repeticiones textuales; el criterio para reabrir la verificación automática está en [ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md). |
 | **R-12** | **Cerrado en la S9:** RF-11 se construyó como el aspecto A-06 (`autoria` y `POST /distractores`), con su escenario EC-08 medido. | Cerrado | No aplica. | Ver [A-06](../aspectos.md#a-06) y [ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md). |
 | **R-13** | **Cerrado con [ADR-0021](../adr/0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md):** en el servidor del laboratorio los contenedores no se duermen, y `/health` respondió con p95 de 0,53 s desde fuera de la universidad ([evidencia](../evidencia/despliegue-iscoutb.md)). Era el **arranque en frío de Render, medido en 12,5 s, por encima del techo de 10 s de EC-07** y de los 5 s que espera el sitio al consultar `/health`. Medido el 27-sep en `docs/evidencia/medicion-arranque-en-frio.json`: `GET /health` en frío 12,5 s frente a p95 de 0,13 s en caliente; un lote de 20 hojas de 200 KB, 13,5 s y 24,0 s en frío frente a p95 de 1,3 s en caliente. | Cerrado | Que pasen más de 15 minutos sin tráfico antes de que llegue una carga. | Mitigado con un monitor gratuito (UptimeRobot) que consulta `/health` cada 5 minutos y mantiene la instancia despierta; eso consume entre 720 y 744 de las 750 horas compartidas del workspace (ver R-15). Detalle completo en el taller ([`docs/despliegue/taller-despliegue-api.md`](../despliegue/taller-despliegue-api.md)). |
-| **R-14** | **Endpoint de carga público sin autenticación.** `POST /examenes/{id}/hojas` está desplegado y accesible por su URL pública; `identidad` sigue sin construir (5.2), así que nada impide que alguien fuera del curso cargue archivos al almacén de la demostración. Desde ADR-0021 lo cargado ya no se borra en cada despliegue: queda en el volumen hasta el 30-nov, en un disco que comparten 23 equipos. | Medio | Publicar la URL de la API antes de construir `identidad` (aspecto A-05). | Aceptado para la demostración de la S8 porque solo se cargan hojas sintéticas (ADR-0012) y el disco es efímero. Construir `identidad` antes de cualquier uso con datos reales. |
+| **R-14** | **Endpoint de carga público sin autenticación.** `POST /examenes/{id}/hojas` está desplegado y accesible por su URL pública; `identidad` sigue sin construir (5.2), así que nada impide que alguien fuera del curso cargue archivos al almacén de la demostración. Desde ADR-0021 lo cargado ya no se borra en cada despliegue: queda en el volumen hasta el 30-nov, en un disco que comparten 23 equipos. | Medio | Publicar la URL de la API antes de construir `identidad` (aspecto A-05). | Aceptado para la demostración de la S8 porque solo se cargan hojas sintéticas (ADR-0012) y el disco es efímero. Construir `identidad` antes de cualquier uso con datos reales. **Desde la S13** es la amenaza AM-02, aceptada con esa condición ([11.1](#111-amenazas-aceptadas-s13)), y lo que alguien puede cargar tiene tope: 250 hojas por lote, 256 MB por día y 100 MB por petición ([ADR-0022](../adr/0022-poner-un-presupuesto-de-carga-delante-del-almacen.md), AM-01). |
 | **R-15** | **Cerrado con ADR-0021:** el entorno ya no depende de la capa gratuita de Render; la dependencia ahora es el servidor del curso (R-31). Era la **dependencia de la capa gratuita de Render, cuyas condiciones pueden cambiar sin aviso.** Las 750 horas de servicio web son compartidas por todo el workspace, y el monitor que mitiga R-13 ya consume entre 720 y 744 de esas 750: quedan entre 6 horas (mes de 31 días) y 30 (mes de 30) de margen. Se suman el límite de 5 GB de ancho de banda y 500 minutos de build. | Cerrado | Agotar el cupo compartido en la semana de sustentación, con más tráfico del habitual, o que Render cambie las condiciones de su capa gratuita. | Punto de ruptura por recurso documentado en [`docs/despliegue/costo-mensual.md`](../despliegue/costo-mensual.md). Verificar la capa gratuita vigente antes de cada sustentación, como pide la guía del curso. |
 | **R-16** | **Cerrado con ADR-0021:** en el panel del servidor del laboratorio cada integrante entra con su correo institucional, y el manual registra a los cuatro. Era que **solo una persona podía operar el workspace de Render** (el plan gratuito da un único puesto); si Sebastián no está disponible, nadie más del equipo puede redesplegar, cambiar variables o revisar logs en Render. Es el criterio 7 de la guía del curso: «¿Puede operarlo el equipo entero? Si solo una persona sabe redesplegarlo, eso es un riesgo de la sección 11 de arc42, no un detalle.» | Cerrado | Que Sebastián no esté disponible cuando el equipo necesite redesplegar o depurar algo en producción. | El entorno completo se recrea desde `render.yaml` (Blueprint) en la cuenta de cualquier integrante; los pasos quedan en el README, «Cómo se despliega». No depende de configuración manual guardada solo en la cuenta de Sebastián. |
 | **R-17** | **La ruta `POST /distractores` es pública y sin autenticación** en el entorno desplegado, y cada solicitud gasta cuota del proveedor de LLM. | Bajo | Que alguien fuera del curso la use en bucle y agote la cuota diaria de la capa gratuita de Groq (1 000 solicitudes y 200 000 tokens por día para el modelo, consultado el 4-oct-2026 en https://console.groq.com/docs/rate-limits). | Sin tarjeta, el peor caso es agotar la cuota y nunca una factura (RNF-16): la ruta responde 503 y nada más se afecta (EC-08). Se cierra con `identidad` (A-05), igual que R-14. **Mitigado en el segundo corte** ([ADR-0015](../adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md)): la línea base mostró que una ráfaga de 20 agotaba el límite por minuto para todos (8 cortes por cuota); con un presupuesto de 6 por minuto y 150 por día, lo que no cabe se responde con 429 sin gastar cuota ([EC-09](#ec-09)). |
@@ -1971,8 +2029,26 @@ priorización original.
 | **R-28** | **Cerrado en el servidor del laboratorio con [ADR-0021](../adr/0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md):** Redis guarda la cola con AOF (`appendfsync everysec`) en el volumen `datos_cola`, así que ante una caída brusca se pierde como mucho el último segundo; lo que sigue es la falta de copias (R-31). Sigue abierto en Render mientras siga arriba. Era que **toda la cola vive en un Redis sin persistencia** ([ADR-0011](../adr/0011-consumir-la-cola-desde-la-instancia-de-la-api-con-el-key-value-gratuito.md), [ADR-0020](../adr/0020-entregar-los-trabajos-al-menos-una-vez-con-reintentos-y-lista-de-fallidos.md)). Un reinicio del Key Value se lleva los trabajos por tomar, los que están en curso, los que esperan reintento, la lista de fallidos y las marcas de idempotencia. La bitácora sigue diciendo «encolada» para esas hojas, y nada las reintenta. | Cerrado en el servidor del laboratorio; Medio en Render | Un reinicio o un mantenimiento del Key Value gratuito de Render con trabajos en cualquiera de las cuatro listas. | Cuando R-06 elija un medio persistente: un Redis con persistencia (el Key Value de pago) o la cola en la base de datos. Mientras tanto, una conciliación entre la bitácora y lo procesado, que es parte del reintento automático de A-02. |
 | **R-29** | **La recuperación de lo que quedó en curso supone un solo worker** ([ADR-0020](../adr/0020-entregar-los-trabajos-al-menos-una-vez-con-reintentos-y-lista-de-fallidos.md)). Al arrancar, el worker devuelve a la cola todo lo que está en `procesamiento:en-curso`: con dos workers, uno le quitaría al otro lo que está procesando, y ese trabajo se procesaría dos veces (lo absorbe la idempotencia, pero se desperdicia). | Bajo | Agregar un segundo worker, por ejemplo si EC-04 lo pide (ADR-0017). | Antes de un segundo worker, la cola pasa a Redis Streams con grupos de consumidores y `XAUTOCLAIM`, que reclama solo lo abandonado por tiempo. |
 | **R-30** | **La red de la UTB no resuelve `*.iscoutb.dev`** ([ADR-0021](../adr/0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md)). Desde el campus, el DNS devuelve una dirección que no es la del servidor (198.135.184.22), así que el sitio y la API no abren en la universidad. Desde fuera, el DNS público los resuelve sin problema. | Medio | Una sustentación o una demostración desde la red de la universidad. | Presentar con datos móviles o desde fuera de esa red, y comprobarlo el día antes en el lugar donde se presente. |
-| **R-31** | **El servidor del curso es compartido, no hace copias de seguridad y borra los volúmenes después del 30-nov-2026** (ADR-0021). Las hojas, la bitácora y la cola sobreviven a los despliegues, pero no a una pérdida del servidor. Además, la cuota que anunció el panel el 29-oct (6 contenedores y 1 GB) todavía no está en `docs/politicas-uso.md` del manual, que dice 4 y 512 MB, y nuestros límites suman 576 MB. | Medio | Una falla del servidor, el 30-nov, o que la auditoría semanal aplique la cuota escrita. | Solo se cargan hojas sintéticas (RNF-12): perder el entorno no pierde datos reales. La copia y la retención son parte de R-06. Si se aplica la cuota escrita, la API vuelve a 256 MB (448 MB en total): aguanta tres lotes de EC-07 a la vez con margen y queda justa con cinco ([evidencia del despliegue](../evidencia/despliegue-iscoutb.md)). |
+| **R-31** | **El servidor del curso es compartido, no hace copias de seguridad y borra los volúmenes después del 30-nov-2026** (ADR-0021). Las hojas, la bitácora y la cola sobreviven a los despliegues, pero no a una pérdida del servidor. Además, la cuota que anunció el panel el 29-oct (6 contenedores y 1 GB) todavía no está en `docs/politicas-uso.md` del manual, que dice 4 y 512 MB, y nuestros límites suman 576 MB. | Medio | Una falla del servidor, el 30-nov, o que la auditoría semanal aplique la cuota escrita. | Solo se cargan hojas sintéticas (RNF-12): perder el entorno no pierde datos reales. La copia y la retención son parte de R-06. Si se aplica la cuota escrita, la API vuelve a 256 MB (448 MB en total): aguanta tres lotes de EC-07 a la vez con margen y queda justa con cinco ([evidencia del despliegue](../evidencia/despliegue-iscoutb.md)). Desde [ADR-0022](../adr/0022-poner-un-presupuesto-de-carga-delante-del-almacen.md), lo que la ruta pública puede llenar del disco compartido tiene tope (AM-01). |
 | **R-32** | **Con 0,5 CPU por contenedor, cinco lotes de EC-07 a la vez no caben en el plazo del lote.** Medido en local con el compose del servidor: los cinco lotes tardan 11 s y entre el 8 y el 30 % de las hojas quedan `pendiente_de_encolar`. Quedan guardadas y en la bitácora, pero sin trabajo en la cola hasta que algo las reintente. Con tres lotes a la vez, ninguna. | Bajo: un docente carga un lote a la vez | Varios docentes cargando a la vez, o uno que sube varios lotes en paralelo. | El reintento automático de las hojas pendientes desde la bitácora, con A-02. Medir EC-07 en el servidor con un lote de 200 hojas. |
+
+| **R-33** | **El presupuesto de carga es global y vive en la memoria de la API** ([ADR-0022](../adr/0022-poner-un-presupuesto-de-carga-delante-del-almacen.md)). Un cliente puede gastar el cupo del día y dejar al docente sin carga hasta 24 horas, y cada despliegue devuelve el cupo entero: con diez despliegues más hasta el 30-nov, el peor caso sobre el disco sube de 7,5 a unos 10 GB. | Bajo; **Medio** con datos reales | Que alguien use la ruta en bucle, o que `lotes_rechazados_desde_el_arranque` crezca en `GET /metricas` sin que el equipo haya cargado. | A-05, con un cupo por docente. Si aparecen cortes, el presupuesto pasa a Redis, que en el servidor persiste. |
+| **R-34** | **El sistema de las imágenes base no se analiza** (amenaza AM-04 del [modelo de amenazas](../evidencia/modelo-de-amenazas.md)). El job `dependencias` mira los paquetes de Python y de Dart, no `python:3.12-slim`, `nginx-unprivileged:alpine` ni `redis:7-alpine`. | Medio | Una vulnerabilidad publicada en una de esas imágenes. | Escanear las imágenes en el pipeline, con la misma regla de no desplegar con un hallazgo sin decidir. Dueño: Josué, antes del proyecto final. |
+
+## 11.1 Amenazas aceptadas (S13)
+
+Las del [modelo de amenazas](../evidencia/modelo-de-amenazas.md) que se aceptan, con el motivo y lo que las reabre. Las
+pendientes, con su dueño, están en el modelo; las que quedaron como deuda son R-33 y R-34.
+
+| Amenaza | Por qué se acepta | Qué la reabre |
+|---|---|---|
+| **AM-02** · Suplantación en la relación 1 del C4: cualquiera carga hojas y pide distractores sin cuenta | Cerrarla es construir `identidad` (A-05), que no cabe en la semana. Mientras tanto, en el servidor solo hay hojas sintéticas, y los dos presupuestos acotan lo que alguien puede gastar o llenar | **La primera hoja de un estudiante real**: antes tiene que existir A-05. No es un plazo, es una condición |
+| **AM-08** · Repudio: nadie puede probar quién cargó un lote | La bitácora ya dice qué entró y cuándo; el quién necesita cuentas (A-05). Sin notas reales no hay reclamo que responder | Las calificaciones de A-03, o A-05 |
+| **AM-09** · `/docs`, `/openapi.json` y `/metricas`, públicos | Solo exponen esquemas y cuentas, ningún dato personal; el contrato es público por decisión, versionado en el repositorio | Que `/metricas` tenga que publicar algo de un docente o de un curso |
+| **AM-11** · Lo que queda de la inyección de prompt | La salida solo vuelve a quien la pidió, con forma fija, y el docente revisa cada propuesta antes de usarla (RF-07) | Que una propuesta se use sin revisión humana, o que el sitio muestre la salida del modelo como HTML |
+| **AM-12** · Envenenamiento de la caché de propuestas | La clave es el texto completo de la pregunta: quien deje algo guardado tuvo que mandar la misma pregunta, y el modelo respondió a esa | Una caché por docente con A-05, o que la caché guarde algo distinto de la respuesta del modelo |
+| **AM-13** · Quien entra al panel ve la `LLM_API_KEY` | Entran el equipo y el docente, cada uno con su correo institucional; sin tarjeta, el peor caso es la cuota de Groq, no una factura (RNF-16) | Una clave con tarjeta, o alguien ajeno con acceso al panel |
+| **El borde y el panel por dentro** (Cloudflare, Traefik y Dokploy) | Son del curso y no los configuramos | Que el curso nos dé acceso a su configuración |
 
 ---
 
@@ -1994,6 +2070,8 @@ priorización original.
 | **OMR** | *Optical Mark Recognition.* Reconocimiento de marcas en posiciones conocidas de una hoja estructurada. Detecta *si una casilla está rellenada*, no *qué está escrito*. |
 | **Percentil 95 (p95)** | Valor por debajo del cual queda el 95% de las mediciones. Se usa en EC-03 para que un caso lento aislado no invalide el escenario. |
 | **SymPy** | Librería de Python para matemática simbólica. **Ya no es obligatoria en este sistema**: se consideró para verificar automáticamente la equivalencia algebraica de la clave de respuestas, pero el profesor confirmó que no es necesaria y esa verificación pasó a ser una aprobación manual del profesor (ver [ADR-0004](../adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md)). |
+| **Presupuesto de carga** | Tope de lo que la ruta pública de carga deja entrar al almacén: hojas por lote, bytes por día y tamaño de la petición ([ADR-0022](../adr/0022-poner-un-presupuesto-de-carga-delante-del-almacen.md)). Lo que no cabe se responde con 413 o 429, sin que entre ninguna hoja. |
+| **STRIDE** | Clasificación de amenazas en seis categorías: suplantación, manipulación, repudio, divulgación de información, denegación de servicio y elevación de privilegios. Es el método del [modelo de amenazas](../evidencia/modelo-de-amenazas.md) de la S13. |
 | **TA** | *Teaching Assistant.* Asistente de cátedra; usuario operativo del sistema. |
 | **Umbral de confianza** | Valor mínimo de certeza de la detección OMR por debajo del cual una respuesta se envía a revisión manual en lugar de calificarse. |
 | **Worker** | Proceso que consume trabajos de la cola y los ejecuta en segundo plano, independiente del proceso que atiende las peticiones web. |
