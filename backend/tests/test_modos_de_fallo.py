@@ -135,9 +135,11 @@ def test_publicar_contra_un_redis_que_no_contesta_se_rinde_en_la_espera_corta(
     cliente_de_la_api,
 ) -> None:
     """Responde tarde: la API se rinde en su espera corta y no en la del worker."""
+    trabajo = preparar_trabajo({"examen_id": "CALC"})
+
     inicio = time.perf_counter()
     with pytest.raises(ColaNoDisponible):
-        publicar(cliente_de_la_api, "procesamiento", preparar_trabajo({"examen_id": "CALC"}))
+        publicar(cliente_de_la_api, "procesamiento", trabajo)
     transcurrido = time.perf_counter() - inicio
 
     assert transcurrido < TECHO_DE_UNA_PUBLICACION_SEGUNDOS
@@ -175,9 +177,10 @@ def test_el_cliente_no_reintenta_por_su_cuenta(redis_lento: RedisQueNoContesta) 
     """Un solo intento por operación: lo que se reintente lo decide quien llama, con el mismo
     identificador de trabajo, y no redis-py en silencio."""
     cliente = cliente_redis(redis_lento.url, espera_segundos=0.5)
+    trabajo = preparar_trabajo({"examen_id": "CALC"})
 
     with pytest.raises(ColaNoDisponible):
-        publicar(cliente, "procesamiento", preparar_trabajo({"examen_id": "CALC"}))
+        publicar(cliente, "procesamiento", trabajo)
     time.sleep(0.3)
 
     assert redis_lento.conexiones == 1
@@ -423,10 +426,11 @@ def test_un_proveedor_que_no_contesta_se_corta_en_su_espera_y_sin_reintentar(
         url_base=f"http://127.0.0.1:{puerto}/v1", modelo="prueba", clave="prueba",
         tiempo_de_espera=0.5,
     )
+    pregunta = PreguntaParaDistractores("Derivada de x²", "2x")
 
     inicio = time.perf_counter()
     with pytest.raises(ProveedorNoDisponible) as falla:
-        generador.proponer(PreguntaParaDistractores("Derivada de x²", "2x"))
+        generador.proponer(pregunta)
     transcurrido = time.perf_counter() - inicio
 
     assert "no respondió en 0.5 s" in falla.value.motivo
