@@ -3,6 +3,41 @@ name: CI
 on: [push, pull_request]
 
 jobs:
+  # Análisis de dependencias (S13): busca en la base de OSV las vulnerabilidades conocidas de cada
+  # versión fijada en backend/requirements.txt y frontend/pubspec.lock. `publicar-despliegue` lo
+  # espera, así que con una vulnerabilidad sin decidir el servidor no recibe el commit. Decidir es
+  # subir la versión o, si no nos afecta, aceptarla con su motivo y su vencimiento en un
+  # `osv-scanner.toml` junto al archivo afectado. Los hallazgos y qué se hizo con cada uno están en
+  # docs/evidencia/modelo-de-amenazas.md.
+  #
+  # El binario se descarga de la versión publicada y se comprueba su SHA-256 antes de correrlo, como
+  # las acciones van fijadas por hash. El resultado queda en el resumen del run, que se lee sin
+  # iniciar sesión en GitHub; el log no.
+  dependencias:
+    runs-on: ubuntu-latest
+    env:
+      OSV_SCANNER_VERSION: v2.7.0
+      OSV_SCANNER_SHA256: 160c6253e2922e9e0a6a9771c5c4c40a4b3c6090b34a3cdd5e80c96cc2e4218b
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Análisis de dependencias (OSV-Scanner)
+        run: |
+          curl -sSfL -o osv-scanner \
+            "https://github.com/google/osv-scanner/releases/download/$OSV_SCANNER_VERSION/osv-scanner_linux_amd64"
+          echo "$OSV_SCANNER_SHA256  osv-scanner" | sha256sum -c -
+          chmod +x osv-scanner
+          codigo=0
+          ./osv-scanner scan source --format markdown \
+            -L backend/requirements.txt -L frontend/pubspec.lock > resultado.md || codigo=$?
+          {
+            echo "## Análisis de dependencias, OSV-Scanner $OSV_SCANNER_VERSION"
+            if [ "$codigo" -eq 0 ]; then
+              echo "Sin vulnerabilidades conocidas en backend/requirements.txt ni en frontend/pubspec.lock."
+            fi
+            cat resultado.md
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          exit "$codigo"
+
   backend-tests:
     runs-on: ubuntu-latest
     services:
@@ -93,7 +128,7 @@ jobs:
   # El push lo hace el GITHUB_TOKEN, y GitHub no dispara workflows por un push de ese token: el CI
   # no vuelve a correr sobre `despliegue`, pero el panel del servidor sí recibe el aviso.
   publicar-despliegue:
-    needs: [backend-tests, frontend-tests]
+    needs: [dependencias, backend-tests, frontend-tests]
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     permissions:
