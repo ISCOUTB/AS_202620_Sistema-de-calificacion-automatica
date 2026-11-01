@@ -10,8 +10,11 @@ arc42, la plantilla para documentar arquitecturas de software y de sistemas.
 Versión de plantilla 9.0. Creada y mantenida por Dr. Peter Hruschka, Dr. Gernot Starke
 y colaboradores. Ver [https://arc42.org](https://arc42.org).
 
-**Estado de este documento:** las doce secciones están escritas, incluida la 7 (*Deployment
-View*), escrita el 27 de septiembre de 2026 con el despliegue en Render (ADR-0009 a ADR-0012).
+**Estado de este documento:** las doce secciones están escritas. La 7 (*Deployment View*) se
+escribió el 27 de septiembre de 2026 con el despliegue en Render (ADR-0009 a ADR-0012) y se rehízo
+el 29 de octubre con el servidor del laboratorio del curso, en iscoutb.dev
+([ADR-0021](../adr/0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md)),
+junto con las secciones 2, 5, 6, 9, 11 y 12.
 
 **Segundo corte (11 de octubre de 2026).** El escenario operativo de este corte es de **límite
 de costo**: una ráfaga contra la ruta pública de distractores. La respuesta del sistema está en
@@ -189,7 +192,7 @@ describen el espacio dentro del cual se puede diseñar.
 | **RNF-09** | **Equipo de cuatro estudiantes con dedicación parcial y cronograma fijado por el curso** (cortes en las semanas 5 y 10, entrega final en la 16). | Contexto académico | Limita la complejidad operacional asumible: no hay capacidad para operar infraestructura distribuida ni para sostener varios despliegues. Es uno de los argumentos que sostiene la elección de monolito modular frente a microservicios en ADR-0002. |
 | **RNF-10** | **Todos los integrantes deben contribuir al historial del repositorio**, con código y documentación repartidos a lo largo del semestre. | `CONTRATO.md` §10 del curso | Criterio calificado. Obliga a repartir el trabajo por módulos y a usar ramas y *pull requests* en lugar de commits directos de una sola persona, lo que a su vez favorece una descomposición con fronteras claras que puedan asignarse por separado. |
 | **RNF-11** | **Repositorio público, en la organización `ISCOUTB` y con la convención de nombres del curso.** | `CONTRATO.md` del curso | Ninguna parte del sistema puede depender de artefactos privados ni de secretos versionados. Cualquier credencial (por ejemplo, la clave del proveedor de LLM) debe leerse de variables de entorno y nunca del repositorio. |
-| **RNF-16** | **Costo mensual de US$0 y ninguna cuenta con tarjeta vinculada.** | Política de costos de la «Guía de despliegue y costos» del curso: «Ninguna cuenta personal de pago es obligatoria en este curso.» | Obliga a que toda pieza desplegada quepa en capas gratuitas sin tarjeta (Render Hobby): servicio web Free, Key Value Free y sitio estático. Descarta cualquier instancia de pago (Starter US$7, disco persistente US$0,25/GB) y condiciona la elección de Render sobre alternativas que sí piden tarjeta, o que todavía no verifican si la piden (ver [ADR-0011](../adr/0011-consumir-la-cola-desde-la-instancia-de-la-api-con-el-key-value-gratuito.md) y [ADR-0012](../adr/0012-mantener-el-almacen-en-el-disco-efimero-de-la-instancia-hasta-cerrar-r-06.md)). La cuota gratuita del proveedor de LLM cae bajo la misma restricción: como no hay tarjeta, se protege con un presupuesto propio en la API ([ADR-0015](../adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md)). |
+| **RNF-16** | **Costo mensual de US$0 y ninguna cuenta con tarjeta vinculada.** | Política de costos de la «Guía de despliegue y costos» del curso: «Ninguna cuenta personal de pago es obligatoria en este curso.» | Obliga a que toda pieza desplegada quepa en algo que el equipo no paga y que no pide tarjeta. Hasta el 29-oct fue la capa gratuita de Render (servicio web Free, Key Value Free y sitio estático, ADR-0009 a ADR-0012), y descartó cualquier instancia de pago (Starter US$7, disco persistente US$0,25/GB). Desde [ADR-0021](../adr/0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md) el sistema corre en el servidor del laboratorio del curso, dentro de la cuota del equipo (6 contenedores y 1 GB de memoria sumando los límites, 0,5 CPU por contenedor): el servidor lo paga el curso, y lo que nos corresponde está estimado en [`costo-mensual.md`](../despliegue/costo-mensual.md). La cuota gratuita del proveedor de LLM cae bajo la misma restricción: como no hay tarjeta, se protege con un presupuesto propio en la API ([ADR-0015](../adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md)). |
 
 ## 2.3 Restricciones legales
 
@@ -317,7 +320,7 @@ los dos documentos juntos:
 |---|---|---|---|
 | **Aplicación web** *(lado servidor)* | Autenticación, cursos, preguntas, exámenes, carga de escaneos y consulta de resultados; inicia los trabajos de procesamiento. | FastAPI (`backend/api/main.py`), Uvicorn (servicio `api`). | Expone `GET /health`, `POST /examenes/{examen_id}/hojas` (RF-01, aspecto A-01), `POST /distractores` (RF-11, aspecto A-06) y `GET /metricas` (EC-09, ADR-0015). El resto de responsabilidades del contenedor (cursos, preguntas, resultados) siguen sin ruta. Desde [ADR-0019](../adr/0019-guardar-en-cache-las-propuestas-de-distractores.md) guarda en su memoria, 24 horas, las propuestas del proveedor para cada pregunta, y [ADR-0018](../adr/0018-dar-a-la-hoja-una-identidad-propia-y-derivar-su-estado-de-la-bitacora.md) le da a cada hoja aceptada una identidad propia (`hoja_id`). |
 | **Interfaz web** *(parte de «Aplicación web» en el C4)* | Presenta al docente el dashboard, la carga de escaneos y la resolución de marcas ambiguas. | Flutter compilado a web, servido por nginx (servicio `frontend`). | Cuatro pantallas, una carpeta por funcionalidad en `frontend/lib/features/`, con el estado de conexión en la barra superior. **Carga** (A-01) y **Pauta y distractores** (A-06) llaman a la API. **Panel**, **Revisión** y la clave de Pauta muestran datos de ejemplo bajo un aviso visible, porque A-02 a A-04 no están construidos: el dashboard de RNF-04 y la resolución de marcas ambiguas siguen sin datos reales. |
-| **Worker de procesamiento** | Ejecuta el OMR, calcula calificaciones y genera alertas de revisión. | Proceso Python (`backend/worker/main.py`), misma imagen que la aplicación web. | Consume la cola y confirma que la hoja encolada por `ingesta` le llegó, registrando en log su identificador, examen, archivo y referencia. **No ejecuta todavía** el pipeline `omr → calificacion`: ese es el aspecto A-02, aún declarado. Desde la S11 procesa cada trabajo una sola vez aunque la cola lo entregue dos veces ([ADR-0016](../adr/0016-acotar-la-espera-de-la-cola-y-hacer-idempotente-al-worker.md)), y sigue en la instancia de la API por decisión, no por omisión ([ADR-0017](../adr/0017-no-extraer-ningun-modulo-del-monolito-todavia.md)). Desde el taller de mensajería consume con acuse, reintentos y lista de fallidos, y abre la imagen de cada hoja ([ADR-0020](../adr/0020-entregar-los-trabajos-al-menos-una-vez-con-reintentos-y-lista-de-fallidos.md)). |
+| **Worker de procesamiento** | Ejecuta el OMR, calcula calificaciones y genera alertas de revisión. | Proceso Python (`backend/worker/main.py`), misma imagen que la aplicación web. | Consume la cola y confirma que la hoja encolada por `ingesta` le llegó, registrando en log su identificador, examen, archivo y referencia. **No ejecuta todavía** el pipeline `omr → calificacion`: ese es el aspecto A-02, aún declarado. Desde la S11 procesa cada trabajo una sola vez aunque la cola lo entregue dos veces ([ADR-0016](../adr/0016-acotar-la-espera-de-la-cola-y-hacer-idempotente-al-worker.md)), y sigue siendo la misma imagen y el mismo código que la API por decisión, no por omisión ([ADR-0017](../adr/0017-no-extraer-ningun-modulo-del-monolito-todavia.md)); en el servidor del laboratorio corre en su propio contenedor ([ADR-0021](../adr/0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md)). Desde el taller de mensajería consume con acuse, reintentos y lista de fallidos, y abre la imagen de cada hoja ([ADR-0020](../adr/0020-entregar-los-trabajos-al-menos-una-vez-con-reintentos-y-lista-de-fallidos.md)). |
 | **Cola de trabajos** | Desacopla la aplicación web del procesamiento OMR. | Redis 7, adaptador FIFO en `infraestructura/cola.py` (RPUSH/BLPOP). | Implementado y probado contra un Redis real (`backend/tests/test_encolado.py`); sigue siendo, según su propio docstring, «el germen» de lo que EC-07 exige, no una cola de producción con reintentos o acuses de recibo. Desde la S11 la API la espera 2 s y el worker 10 s, sin reintentos ocultos del cliente ([ADR-0016](../adr/0016-acotar-la-espera-de-la-cola-y-hacer-idempotente-al-worker.md)); el acuse de recibo sigue pendiente (R-22). Desde el taller de mensajería, el mensaje tiene contrato versionado ([`trabajo-v1.schema.json`](../contrato/trabajo-v1.schema.json)) y la entrega es al menos una vez: listas en curso y de fallidos y un conjunto de reintentos en el mismo Redis ([ADR-0020](../adr/0020-entregar-los-trabajos-al-menos-una-vez-con-reintentos-y-lista-de-fallidos.md), R-22 cerrado). |
 | **Base de datos** | Almacena usuarios, cursos, preguntas, claves, exámenes y resultados. | PostgreSQL 16, volumen `datos_postgres`. | Declarada en `docker-compose.yml` y `.env.example`; **ningún módulo la usa todavía** — sin esquema ni migraciones. |
 | **Almacén de imágenes** | Conserva las hojas escaneadas, la bitácora de recepción y archivos asociados. | Volumen Docker `almacen_imagenes`, montado en `api` y `worker`. | **Implementado como dos puertos con adaptadores provisionales**: `infraestructura/almacen.py` define el puerto `AlmacenDeImagenes` y el adaptador `AlmacenEnDisco`, que escribe en el volumen con nombres saneados (`nombre_seguro`) para evitar escapes de directorio; `infraestructura/bitacora.py` define `BitacoraDeRecepcion` y `BitacoraEnDisco`, de solo agregado y con `fsync` por línea ([ADR-0006](../adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md)). Los dos son deliberadamente provisionales: el riesgo R-06 (decisión de persistencia) sigue abierto, y cuando se resuelva solo cambian los adaptadores, no los puertos ni quien los consume. La política de retención de RNF-14 aterrizará aquí y hoy no está implementada. |
@@ -699,8 +702,11 @@ sequenceDiagram
 4. **Si murió en cualquier punto antes del acuse**, el mensaje sigue en curso y el paso 2 lo
    devuelve: al menos una vez. Si murió después de marcar, la entrega que vuelve solo se confirma.
 
-**Qué no cubre.** Un segundo worker: el paso 2 le quitaría lo que está procesando (R-29). Y un
-reinicio del Key Value, que se lleva las cuatro listas (R-28).
+**Qué no cubre.** Un segundo worker: el paso 2 le quitaría lo que está procesando (R-29). En
+Render, además, un reinicio del Key Value se llevaba las cuatro listas (R-28); en el servidor del
+laboratorio persisten, con el AOF de Redis ([ADR-0021](../adr/0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md)).
+El recorrido de una hoja en ese entorno está en
+[`despliegue-iscoutb.md`](../evidencia/despliegue-iscoutb.md).
 
 **Pruebas que lo verifican:** `backend/tests/test_mensajeria.py`, contra Redis, y las del worker en
 `backend/tests/test_modos_de_fallo.py`.
@@ -711,96 +717,129 @@ reinicio del Key Value, que se lleva las cuatro listas (R-28).
 
 La «Guía de despliegue y costos» del curso pide una caja por cada una de sus seis piezas: el
 sitio, la API, la base de datos, los ficheros, los trabajos y consumidores de cola, y el
-pipeline. Esta sección sigue ese orden.
+pipeline. Esta sección sigue ese orden. Desde el 29 de octubre de 2026 el entorno desplegado es el
+servidor del laboratorio del curso, en iscoutb.dev
+([ADR-0021](../adr/0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md));
+el anterior, en Render, está resumido en 7.5.
 
 ## 7.1 Las seis piezas del despliegue
 
 | # | Pieza (guía) | Dónde se ejecuta | ADR |
 |---|---|---|---|
-| 1 | El sitio | `quantia-utb`, sitio estático de Render, siempre gratis y sin apagado | [ADR-0010](../adr/0010-servir-el-sitio-como-archivos-estaticos-en-render.md) |
-| 2 | La API | `quantia-utb-api`, servicio web Free de Render (0,1 CPU, 512 MB), que un monitor externo mantiene despierto | [ADR-0009](../adr/0009-desplegar-la-api-en-el-servicio-web-gratuito-de-render-y-mantenerla-despierta.md) |
-| 3 | La base de datos | No desplegada: Postgres está declarado en `docker-compose.yml`, pero ningún módulo la usa todavía | No aplica: no hay decisión de plataforma |
-| 4 | Los ficheros | Disco efímero de la instancia de `quantia-utb-api` | [ADR-0012](../adr/0012-mantener-el-almacen-en-el-disco-efimero-de-la-instancia-hasta-cerrar-r-06.md) |
-| 5 | Trabajos y consumidores de cola | Worker como segundo proceso en la misma instancia de la API (`backend/arrancar-api-y-worker.sh`), leyendo de `quantia-utb-cola` (Key Value Free) | [ADR-0011](../adr/0011-consumir-la-cola-desde-la-instancia-de-la-api-con-el-key-value-gratuito.md) |
-| 6 | El pipeline | GitHub Actions (`.github/workflows/ci.yml`); redespliega solo si el CI del commit termina en verde | Ya existía (`ci.yml`); sin ADR nuevo |
+| 1 | El sitio | Contenedor `web`: nginx sin privilegios sirve el Flutter web que compiló el CI, en https://calificacion.iscoutb.dev | [ADR-0021](../adr/0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md) |
+| 2 | La API | Contenedor `api`, con `backend/Dockerfile`, en https://api-calificacion.iscoutb.dev | ADR-0021 |
+| 3 | La base de datos | No desplegada: Postgres está declarado en `docker-compose.yml`, pero ningún módulo la usa todavía. Con la cuota de 6 contenedores, cabe como quinto | No aplica: la decide R-06 |
+| 4 | Los ficheros | Volumen con nombre `almacen_imagenes`, montado en `api` y en `worker`; sobrevive a los despliegues | ADR-0021 |
+| 5 | Trabajos y consumidores de cola | Contenedor `worker`, con la misma imagen que la API, y contenedor `redis`, con AOF en el volumen `datos_cola` | ADR-0021 y [ADR-0020](../adr/0020-entregar-los-trabajos-al-menos-una-vez-con-reintentos-y-lista-de-fallidos.md) |
+| 6 | El pipeline | GitHub Actions (`.github/workflows/ci.yml`): las pruebas y, si pasan, el job `publicar-despliegue`, que publica la rama `despliegue`; el panel lee esa rama y despliega solo | ADR-0021 |
 
 ```mermaid
 flowchart TB
     profesor["Profesor o TA<br/>(navegador)"]
-    github["GitHub Actions<br/>Pieza 6: el pipeline"]
-    monitor["UptimeRobot<br/>consulta /health cada 5 min"]
+    github["GitHub Actions<br/>Pieza 6: el pipeline<br/>pruebas y rama despliegue"]
+    cloudflare["Cloudflare<br/>DNS y proxy de *.iscoutb.dev"]
 
-    subgraph render["Render, capa gratuita, región virginia, Blueprint desde render.yaml"]
-        sitio["quantia-utb<br/>Pieza 1: el sitio<br/>sitio estático"]
-        subgraph instancia["quantia-utb-api: una sola instancia Free"]
-            api["Proceso API<br/>Pieza 2: la API"]
-            worker["Proceso worker<br/>Pieza 5: consumidor de cola"]
-            disco["Disco efímero<br/>Pieza 4: los ficheros"]
+    subgraph servidor["Servidor del laboratorio: VM de Oracle Cloud compartida por 23 equipos, panel Dokploy"]
+        traefik["Traefik<br/>HTTPS con el certificado *.iscoutb.dev"]
+        subgraph equipo["Proyecto calificacion, servicio sistema: red aislada, deploy/compose.lab.yaml"]
+            web["web<br/>Pieza 1: el sitio<br/>nginx, 32 MB"]
+            api["api<br/>Pieza 2: la API<br/>384 MB, 0,5 CPU"]
+            worker["worker<br/>Pieza 5: consumidor de cola<br/>96 MB"]
+            redis["redis<br/>Pieza 5: la cola<br/>AOF, 64 MB"]
+            almacen[("almacen_imagenes<br/>Pieza 4: los ficheros")]
+            datos[("datos_cola<br/>AOF de Redis")]
         end
-        cola["quantia-utb-cola<br/>Pieza 5: la cola<br/>Key Value Free"]
     end
 
     postgres["Postgres<br/>Pieza 3: la base de datos<br/>no se despliega"]
     groq["Groq<br/>proveedor de LLM externo"]
 
-    profesor -->|HTTPS: descarga el sitio| sitio
-    profesor -->|HTTPS: carga de hojas desde el sitio| api
-    monitor -->|HTTPS: /health| api
-    api -->|guarda hojas y bitácora| disco
-    api -->|RPUSH, red privada| cola
-    cola -->|BLPOP, red privada| worker
+    profesor -->|HTTPS: el sitio y la API| cloudflare
+    cloudflare -->|HTTPS| traefik
+    traefik -->|calificacion, puerto 8080| web
+    traefik -->|api-calificacion, puerto 8000| api
+    api -->|guarda hojas y bitácora| almacen
+    worker -->|abre la imagen| almacen
+    api -->|RPUSH| redis
+    redis -->|BLMOVE| worker
+    redis --- datos
     api -->|HTTPS: distractores, opcional| groq
-    github -->|despliega si el CI queda en verde| render
+    github -->|rama despliegue, el panel despliega solo| servidor
 ```
 
-### Tabla de servicios de Render
+### Contenedores del servicio `sistema`
 
-| Servicio | Tipo (plan) | Recursos | Notas |
+| Contenedor | Imagen | Límite de memoria y CPU | Notas |
 |---|---|---|---|
-| `quantia-utb` | Sitio estático | Siempre gratis | Flutter 3.44.3 compilado por Render, con la URL de la API horneada al compilar (ADR-0010); si la URL cambia, hay que recompilar. |
-| `quantia-utb-api` | Servicio web Free | 0,1 CPU, 512 MB | Docker con `backend/Dockerfile`. API y worker en la misma instancia (`backend/arrancar-api-y-worker.sh`), porque Render no ofrece plan gratuito para *background workers*. Se apagaría a los 15 min sin tráfico; el monitor externo lo evita (ADR-0009, R-13). Lee `LLM_URL_BASE`, `LLM_MODELO` y `LLM_API_KEY` para el proveedor de LLM; la clave se escribe en el panel de Render (`sync: false`, [ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)). Lee también `LLM_SOLICITUDES_POR_MINUTO` (6) y `LLM_SOLICITUDES_POR_DIA` (150), el presupuesto del proveedor, que vive en la memoria de su único proceso de uvicorn y se vacía en cada despliegue ([ADR-0015](../adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md), R-18). |
-| `quantia-utb-cola` | Key Value Free | 25 MB, 50 conexiones | Sin persistencia, solo red privada (`ipAllowList: []`), política `noeviction` (ADR-0011). |
+| `web` | [`deploy/sitio/Dockerfile`](../../deploy/sitio/Dockerfile): `nginxinc/nginx-unprivileged:alpine` con el sitio compilado | 32 MB, 0,25 | El CI compila el sitio con `BACKEND_URL=https://api-calificacion.iscoutb.dev`; si la URL cambia, hay que recompilar. En `master` la imagen sirve una página provisional, y en la rama `despliegue`, el sitio. `revision.txt` dice qué commit de `master` está desplegado. |
+| `api` | `backend/Dockerfile` | 384 MB, 0,50 | Lee `ALLOWED_ORIGIN` (el origen del sitio, el único que acepta CORS), `LLM_URL_BASE`, `LLM_MODELO` y `LLM_API_KEY` ([ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)), y el presupuesto `LLM_SOLICITUDES_POR_MINUTO` (6) y `LLM_SOLICITUDES_POR_DIA` (150), que vive en la memoria de su único proceso de uvicorn y se vacía cada vez que el contenedor se recrea ([ADR-0015](../adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md), R-18). Su *healthcheck* en `/health` decide cuándo Traefik le manda tráfico. |
+| `worker` | La misma imagen, con `python -m worker.main` | 96 MB, 0,25 | Espera a que Redis esté sano. Abre cada imagen del volumen (ADR-0020). |
+| `redis` | `redis:7-alpine` | 64 MB, 0,25 | AOF con `appendfsync everysec`, sin instantáneas RDB, `maxmemory 32mb` y `noeviction`. |
 
-`REDIS_URL` la inyecta Render desde `quantia-utb-cola` hacia `quantia-utb-api` con `fromService`, y
-`LLM_API_KEY` se escribe a mano en el panel de Render; no hay secretos versionados en el código.
+Suman 576 MB de 1 GB y 4 de los 6 contenedores de la cuota. Los límites salen de medir el compose:
+están en la sección 5 de [`despliegue-iscoutb.md`](../evidencia/despliegue-iscoutb.md).
 
-**URL declarada del sistema:** https://quantia-utb.onrender.com. La raíz de la API
-(https://quantia-utb-api.onrender.com) responde 404 porque no existe `GET /`; eso es normal y no
-se declara como URL del sistema. El *health check* está en
-https://quantia-utb-api.onrender.com/health. El estado del presupuesto del proveedor de LLM se
-consulta en https://quantia-utb-api.onrender.com/metricas (EC-09).
+`ALLOWED_ORIGIN` y `LLM_API_KEY` se escriben en el panel, en *Environment*. Dokploy genera con ellas
+`deploy/.env` al desplegar y el compose las lee como `${VARIABLE}`: no hay secretos versionados.
+
+**URL declaradas:** el sitio, https://calificacion.iscoutb.dev; la API,
+https://api-calificacion.iscoutb.dev, con su *health check* en `/health`, el estado del
+presupuesto en `/metricas` (EC-09) y la documentación interactiva en `/docs`. La raíz de la API
+responde 404 porque no existe `GET /`. La revisión desplegada está en
+https://calificacion.iscoutb.dev/revision.txt.
 
 ## 7.2 Entorno local
 
 `docker-compose.yml` levanta cinco servicios en una sola máquina con un solo comando (RNF-07):
 `redis`, `postgres`, `api`, `worker` y `frontend`, que es el sitio compilado y servido por nginx
-en el puerto 8080. A diferencia de Render, `api` y `worker` son servicios separados, el almacén
-vive en un volumen de Docker que sí persiste entre reinicios, y Postgres está declarado aunque
-ningún módulo lo usa. El pipeline no usa este archivo: `.github/workflows/ci.yml` corre las
-pruebas del backend con Redis como servicio y las del frontend con Flutter 3.44.3.
+en el puerto 8080. Como en el servidor del laboratorio, `api` y `worker` son servicios separados y
+el almacén vive en un volumen de Docker que persiste entre reinicios. A diferencia de él, publica
+puertos, compila el sitio en su propia imagen (`frontend/Dockerfile`) y declara Postgres aunque
+ningún módulo lo usa. `deploy/compose.lab.yaml` también se puede levantar en un computador, con
+`deploy/compose.local-override.yaml`, que publica la API y el sitio en `127.0.0.1`. El pipeline no
+usa ninguno de los dos: `.github/workflows/ci.yml` corre las pruebas del backend con Redis como
+servicio y las del frontend con Flutter 3.44.3.
 
 ## 7.3 Lo que no se despliega
 
 - **Postgres (pieza 3).** Ningún módulo lo usa todavía; `infraestructura` sigue sin persistencia
-  estructurada (5.2, R-06).
+  estructurada (5.2, R-06). Un contenedor sin uso solo gastaría cuota: entra con el ADR de R-06 y
+  el código que la use.
 - **El proveedor de LLM.** No es una pieza nuestra: es Groq, un servicio externo al que la API
   llama por HTTPS ([ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)). No se despliega nada para él; solo se configura su clave.
+- **La compilación de Flutter.** La hace el CI: el manual del servidor pide no compilar Flutter ahí
+  (ADR-0021).
 
 ## 7.4 Limitaciones de este entorno
 
-- **Disco efímero (pieza 4):** las hojas y la bitácora se pierden en cada despliegue o reinicio;
-  solo se cargan hojas sintéticas (ADR-0012, RNF-12).
-- **Redespliegue condicionado (pieza 6):** solo ocurre si el CI del commit termina en verde
-  (`autoDeployTrigger: checksPass`) y cambió la carpeta correspondiente (`buildFilter`); un commit
-  de documentación no reinicia nada.
-- **Arranque en frío, medido en 12,5 s:** ver R-13.
+- **Servidor compartido, sin copias de seguridad:** los volúmenes se borran después del
+  30-nov-2026, así que solo se cargan hojas sintéticas (RNF-12). Ver R-31.
+- **0,5 CPU por contenedor:** con cinco lotes de EC-07 a la vez vence el plazo del lote. Ver R-32.
+- **La red de la UTB no resuelve `*.iscoutb.dev`:** ver R-30.
+- **Redespliegue condicionado (pieza 6):** solo se despliega lo que pasó el CI, pero cada push a
+  `master` que lo pasa redespliega, también uno de documentación: el contenedor del sitio se recrea
+  porque cambia `revision.txt`.
 - **Un endpoint de carga sin autenticación:** ver R-14.
-- **Dependencia de la capa gratuita, con condiciones que pueden cambiar:** ver R-15. El punto de
-  ruptura por recurso está en [`docs/despliegue/costo-mensual.md`](../despliegue/costo-mensual.md).
-- **Un solo operador de Render:** ver R-16.
 - **Una ruta de distractores sin autenticación, que gasta cuota del proveedor:** ver R-17. Desde el
   segundo corte, acotada por un presupuesto en memoria (ADR-0015): ver R-18 y R-19.
 - **Divergencias conocidas entre esta documentación y lo desplegado:** ver R-20.
+- **El costo** que nos corresponde del servidor está en
+  [`docs/despliegue/costo-mensual.md`](../despliegue/costo-mensual.md).
+
+## 7.5 El entorno anterior: Render (de la S8 al 29-oct)
+
+Del 27-sep al 29-oct el sistema corrió en la capa gratuita de Render, declarado en `render.yaml`
+(ADR-0009 a ADR-0012, reemplazados por ADR-0021):
+
+- el sitio, como sitio estático (`quantia-utb`);
+- la API y el worker, en una sola instancia Free (`quantia-utb-api`, 0,1 CPU);
+- la cola, en el Key Value Free, que no persiste (`quantia-utb-cola`);
+- las hojas, en el disco efímero de la instancia.
+
+Un monitor de UptimeRobot mantenía despierta la API, que en frío tardaba 12,5 s. El entorno sigue
+arriba, sin cambios, en https://quantia-utb.onrender.com y https://quantia-utb-api.onrender.com,
+hasta que el docente confirme las filas de despliegue de la S8 y el taller. Después se apaga y
+`render.yaml` sale del repositorio.
 
 ---
 
@@ -1495,10 +1534,10 @@ constancia en el commit y en esta sección ([0014](../adr/0014-dejar-constancia-
 | [0006](../adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md) | Registrar la recepción en una bitácora antes de encolar | **aceptado** | 2026-09-06 | [EC-07](#ec-07) |
 | [0007](../adr/0007-declarar-los-contextos-delimitados-y-la-regla-de-dueno-unico.md) | Declarar los contextos delimitados y la regla de dueño único de los datos | **aceptado** | 2026-09-13 | ninguno declarado |
 | [0008](../adr/0008-renombrar-el-sistema-a-quantia.md) | Renombrar el sistema a QuantIA | **aceptado** | 2026-09-22 | ninguno declarado |
-| [0009](../adr/0009-desplegar-la-api-en-el-servicio-web-gratuito-de-render-y-mantenerla-despierta.md) | Desplegar la API en el servicio web gratuito de Render y mantenerla despierta | **aceptado** | 2026-09-27 | [EC-07](#ec-07) |
-| [0010](../adr/0010-servir-el-sitio-como-archivos-estaticos-en-render.md) | Servir el sitio como archivos estáticos en Render | **aceptado** | 2026-09-27 | ninguno declarado |
-| [0011](../adr/0011-consumir-la-cola-desde-la-instancia-de-la-api-con-el-key-value-gratuito.md) | Consumir la cola desde la instancia de la API con el Key Value gratuito | **aceptado** | 2026-09-27 | ninguno declarado |
-| [0012](../adr/0012-mantener-el-almacen-en-el-disco-efimero-de-la-instancia-hasta-cerrar-r-06.md) | Mantener el almacén en el disco efímero de la instancia hasta cerrar R-06 | **aceptado** | 2026-09-27 | [EC-07](#ec-07) |
+| [0009](../adr/0009-desplegar-la-api-en-el-servicio-web-gratuito-de-render-y-mantenerla-despierta.md) | Desplegar la API en el servicio web gratuito de Render y mantenerla despierta | reemplazado por 0021 | 2026-09-27 | [EC-07](#ec-07) |
+| [0010](../adr/0010-servir-el-sitio-como-archivos-estaticos-en-render.md) | Servir el sitio como archivos estáticos en Render | reemplazado por 0021 | 2026-09-27 | ninguno declarado |
+| [0011](../adr/0011-consumir-la-cola-desde-la-instancia-de-la-api-con-el-key-value-gratuito.md) | Consumir la cola desde la instancia de la API con el Key Value gratuito | reemplazado por 0021 | 2026-09-27 | ninguno declarado |
+| [0012](../adr/0012-mantener-el-almacen-en-el-disco-efimero-de-la-instancia-hasta-cerrar-r-06.md) | Mantener el almacén en el disco efímero de la instancia hasta cerrar R-06 | reemplazado por 0021 | 2026-09-27 | [EC-07](#ec-07) |
 | [0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md) | Consumir Groq detrás de un puerto y degradar sin bloquear la autoría | **aceptado** | 2026-10-04 | [EC-08](#ec-08) |
 | [0014](../adr/0014-dejar-constancia-del-ajuste-de-enlaces-en-adr-0007.md) | Dejar constancia del ajuste de enlaces en ADR-0007 | **aceptado** | 2026-10-04 | ninguno declarado |
 | [0015](../adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md) | Limitar el gasto del proveedor de LLM con un presupuesto en la API | **aceptado** | 2026-10-11 | [EC-09](#ec-09) |
@@ -1507,6 +1546,7 @@ constancia en el commit y en esta sección ([0014](../adr/0014-dejar-constancia-
 | [0018](../adr/0018-dar-a-la-hoja-una-identidad-propia-y-derivar-su-estado-de-la-bitacora.md) | Dar a la hoja una identidad propia y derivar su estado de la bitácora | **aceptado** | 2026-10-24 | [EC-07](#ec-07), [EC-03](#ec-03), [EC-04](#ec-04) |
 | [0019](../adr/0019-guardar-en-cache-las-propuestas-de-distractores.md) | Guardar en caché las propuestas de distractores | **aceptado** | 2026-10-24 | [EC-08](#ec-08), [EC-09](#ec-09) |
 | [0020](../adr/0020-entregar-los-trabajos-al-menos-una-vez-con-reintentos-y-lista-de-fallidos.md) | Entregar los trabajos al menos una vez, con reintentos y lista de fallidos | **aceptado** | 2026-10-25 | [EC-07](#ec-07), [EC-03](#ec-03), [EC-04](#ec-04) |
+| [0021](../adr/0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md) | Desplegar en el servidor del laboratorio, con el sitio compilado en el CI | **aceptado** | 2026-10-29 | [EC-07](#ec-07) |
 
 **Por qué 0002 reemplaza a 0001.** La revisión de coherencia previa al corte 1 encontró que
 EC-03 y EC-04 no se pueden cumplir a la vez con procesamiento síncrono(200 hojas × 5 s son
@@ -1627,6 +1667,17 @@ desde entonces: procesar en la petición de carga serían 16,6 minutos para un l
 solo dónde va la marca de idempotencia, después de procesar, que su punto 5 ya anticipaba; las
 esperas y la idempotencia por `trabajo_id` siguen.
 
+**Por qué 0021 reemplaza a 0009, 0010, 0011 y 0012.** Las cuatro decidían el entorno de Render: la
+API despierta con un monitor, el sitio estático, el worker dentro de la instancia de la API con el
+Key Value gratuito y las hojas en el disco efímero. 0021 cambia las cuatro a la vez, porque cambia
+el lugar donde corre todo: el servidor del laboratorio del curso, con un compose de cuatro
+contenedores, Redis con persistencia, las hojas en un volumen con nombre y el sitio compilado por el
+CI en una rama que solo recibe lo que pasó las pruebas. Nace del requisito del docente (el sitio y la
+API bajo iscoutb.dev) y cierra en ese entorno lo que las cuatro dejaban asumido: R-13, R-15, R-16 y
+R-28. El código no cambia, así que 0002, 0006, 0016, 0018 y 0020 siguen igual, y 0017 tampoco: el
+worker tiene su propio contenedor, pero es la misma imagen. Las cuatro reemplazadas solo cambian su
+línea de estado.
+
 **Decisiones previstas (aún no tomadas):**
 
 - La verificación automática de equivalencias en las propuestas de distractores, con SymPy, que
@@ -1636,7 +1687,9 @@ esperas y la idempotencia por `trabajo_id` siguen.
   (RNF-14). **Sigue abierta después de ADR-0006**, que cubrió solo el registro de la recepción y
   dejó el medio definitivo sin elegir, detrás del mismo puerto que ya aislaba el almacén. **Desde
   ADR-0018 ya tiene fijado lo que debe respetar**: `hoja_id` como clave de la hoja y la bitácora como
-  tabla de hechos de solo agregado, no como una columna de estado.
+  tabla de hechos de solo agregado, no como una columna de estado. **Desde ADR-0021**, las hojas
+  persisten en un volumen con nombre del servidor del laboratorio, y la base de datos cabe ahí como
+  quinto contenedor.
 - Estrategia de calibración del umbral de confianza del OMR.
 - Si EC-05 necesita una medida de tiempo de revisión, y con qué valor — ver ADR-0004.
 - Si la calificación de riesgo técnico de EC-05 en el árbol de utilidad (hoy *Alto*) debe
@@ -1893,17 +1946,17 @@ priorización original.
 | **R-03** | **Dependencia de un servicio externo no controlado** si el LLM es una API alojada: cuotas, latencia variable, cambios de modelo, indisponibilidad. | Medio | Superar la cuota gratuita durante una sesión de generación intensiva. | **Mitigado en la S9** ([ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)): el adaptador espera 20 s y no reintenta, y cualquier falla del proveedor se convierte en 503 con un motivo; nada más del sistema depende de él. Medido en EC-08: con el proveedor caído, 503 en 2,2 s; lento, en 20,25 s. |
 | **R-04** | **El umbral de confianza del 70% es un valor supuesto, no medido.** Mal calibrado dispara falsos positivos (todo va a revisión manual y el sistema deja de ahorrar tiempo) o falsos negativos (errores silenciosos, se rompe QG-3). | Alto | Fijar el umbral sin evidencia y descubrirlo en producción. | Calibrar sobre el dataset de R-01 y documentar la curva de precisión frente a umbral en un ADR. |
 | **R-05** | **El equipo no tiene experiencia previa medible con OpenCV / OMR**, que es la parte de mayor riesgo técnico del sistema. | Alto | Dejar el módulo `omr` para el final del cronograma. | Construir un prototipo desechable de detección de marcas antes de especificar A-02, aunque sea sobre una sola hoja, para convertir la incertidumbre en información. |
-| **R-06** | **Deuda: no hay decisión de persistencia ni de almacenamiento de imágenes**, ni política de retención (RNF-14). **Dejó de bloquear la construcción** y **dejó de bloquear la medición**: A-01 se construyó con el almacenamiento detrás del puerto `AlmacenDeImagenes` y un adaptador en disco declarado provisional (ver 5.1 y 5.3), y [ADR-0006](../adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md) cubrió la parte de recepción que impedía medir [EC-07](#ec-07), con el mismo mecanismo de puerto y adaptador provisional. Las dos cifras del escenario ya están medidas ([evidencia](../evidencia/medicion-ec07.md)). Lo que sigue abierto es el medio definitivo, la persistencia estructurada y la retención, y ninguno de los tres se tomó por omisión. | **Medio** (bajó de *Alto*: ya no bloquea ni la construcción ni la medición) | Llegar al despliegue sin política de retención, o escalar la API a más de una instancia, que es el día en que `BitacoraEnDisco` deja de ser correcto. | ADR propio, que debe cubrir el ciclo de vida de los escaneos y de la bitácora, no solo el guardado. Cuando exista, lo que cambia son los adaptadores: `ingesta`, el modelo de datos y las pruebas del aspecto no se tocan. |
+| **R-06** | **Deuda: no hay decisión de persistencia ni de almacenamiento de imágenes**, ni política de retención (RNF-14). **Dejó de bloquear la construcción** y **dejó de bloquear la medición**: A-01 se construyó con el almacenamiento detrás del puerto `AlmacenDeImagenes` y un adaptador en disco declarado provisional (ver 5.1 y 5.3), y [ADR-0006](../adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md) cubrió la parte de recepción que impedía medir [EC-07](#ec-07), con el mismo mecanismo de puerto y adaptador provisional. Las dos cifras del escenario ya están medidas ([evidencia](../evidencia/medicion-ec07.md)). Lo que sigue abierto es el medio definitivo, la persistencia estructurada y la retención, y ninguno de los tres se tomó por omisión. **Desde [ADR-0021](../adr/0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md)** las hojas y la bitácora sobreviven a los despliegues en un volumen con nombre, pero el servidor no hace copias y borra los volúmenes después del 30-nov-2026 (R-31); la base de datos cabe ahí como quinto contenedor. | **Medio** (bajó de *Alto*: ya no bloquea ni la construcción ni la medición) | Llegar al despliegue sin política de retención, o escalar la API a más de una instancia, que es el día en que `BitacoraEnDisco` deja de ser correcto. | ADR propio, que debe cubrir el ciclo de vida de los escaneos y de la bitácora, no solo el guardado. Cuando exista, lo que cambia son los adaptadores: `ingesta`, el modelo de datos y las pruebas del aspecto no se tocan. |
 | **R-07** | **Deuda: EC-04 supone paralelismo pero no está fijado el número de workers** ni medido el consumo de CPU por hoja. | Medio | Que el límite de 85% de CPU se incumpla con la concurrencia elegida. | Medir el costo de una hoja en el prototipo de R-05 y derivar el número de workers de ese dato. |
 | **R-08** | **Riesgo de erosión de los límites entre módulos** («big ball of mud»), inherente al monolito modular. **Mitigado en lo esencial.** | Bajo | Cambiar la línea `Importa:` de un docstring para acomodar un import, en lugar de corregir el import. | Ya en marcha, no prevista: `backend/tests/test_fronteras.py` corre en cada push y compara los imports reales de cada módulo, leídos con `ast`, contra la línea `Importa:` de su docstring. **Queda un flanco:** verifica el módulo importado, no el símbolo. Cerrarlo exige un `__all__` por módulo (hoy solo lo declara `ingesta`) y extender la prueba para comprobarlo. |
 | **R-09** | **Deuda organizativa: la contribución al repositorio está concentrada en pocas cuentas**, lo que incumple RNF-10. | Alto | Que el reparto por módulos no se traduzca en commits de las cuatro personas. | Asignar módulos por integrante y trabajar con ramas y *pull requests* revisados, de modo que la contribución individual sea verificable en el historial. |
 | **R-10** | **Deuda legal: no está redactada la finalidad del tratamiento de datos ni la política de retención** que exigen RNF-12 y RNF-14. | Medio | Llegar al despliegue con datos reales de estudiantes sin política declarada. | Redactar ambas antes de procesar la primera hoja con datos reales, y consultar la referencia normativa vigente con la coordinación del programa. |
 | **R-11** | **La aprobación manual de la clave puede pasar por alto una equivalencia algebraica no evidente** entre un distractor y la respuesta correcta, ahora que no hay verificación simbólica automática ([ADR-0004](../adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md)). | Alto | Revisar el examen bajo presión de tiempo, sea la clave propia o con distractores propuestos por el modelo, sin apoyo visual para comparar expresiones. | Diseñar la pantalla de aprobación para mostrar las expresiones simplificadas o graficadas una junto a otra, facilitando la comparación visual sin exigir cómputo simbólico obligatorio. Si la tasa de error resulta alta en la práctica, reevaluar con un ADR nuevo. **Medido en la S9:** La evaluación de EC-08 no encontró ninguna propuesta equivalente a la respuesta correcta en 120 (calificación del equipo, confirmada con un prototipo fuera del sistema); la corrida de prueba previa sí mostró una: `sin(2x)` para `2·sin(x)·cos(x)`. El filtro de las propuestas solo detecta repeticiones textuales; el criterio para reabrir la verificación automática está en [ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md). |
 | **R-12** | **Cerrado en la S9:** RF-11 se construyó como el aspecto A-06 (`autoria` y `POST /distractores`), con su escenario EC-08 medido. | Cerrado | No aplica. | Ver [A-06](../aspectos.md#a-06) y [ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md). |
-| **R-13** | **Arranque en frío medido en 12,5 s, por encima del techo de 10 s de EC-07** y de los 5 s que espera el sitio al consultar `/health`. Medido el 27-sep en `docs/evidencia/medicion-arranque-en-frio.json`: `GET /health` en frío 12,5 s frente a p95 de 0,13 s en caliente; un lote de 20 hojas de 200 KB, 13,5 s y 24,0 s en frío frente a p95 de 1,3 s en caliente. | Alto si la instancia está dormida | Que pasen más de 15 minutos sin tráfico antes de que llegue una carga. | Mitigado con un monitor gratuito (UptimeRobot) que consulta `/health` cada 5 minutos y mantiene la instancia despierta; eso consume entre 720 y 744 de las 750 horas compartidas del workspace (ver R-15). Detalle completo en el taller ([`docs/despliegue/taller-despliegue-api.md`](../despliegue/taller-despliegue-api.md)). |
-| **R-14** | **Endpoint de carga público sin autenticación.** `POST /examenes/{id}/hojas` está desplegado y accesible por su URL pública; `identidad` sigue sin construir (5.2), así que nada impide que alguien fuera del curso cargue archivos al almacén efímero de la demostración. | Medio | Publicar la URL de la API antes de construir `identidad` (aspecto A-05). | Aceptado para la demostración de la S8 porque solo se cargan hojas sintéticas (ADR-0012) y el disco es efímero. Construir `identidad` antes de cualquier uso con datos reales. |
-| **R-15** | **Dependencia de la capa gratuita de Render, cuyas condiciones pueden cambiar sin aviso.** Las 750 horas de servicio web son compartidas por todo el workspace, y el monitor que mitiga R-13 ya consume entre 720 y 744 de esas 750: quedan entre 6 horas (mes de 31 días) y 30 (mes de 30) de margen. Se suman el límite de 5 GB de ancho de banda y 500 minutos de build. | Alto | Agotar el cupo compartido en la semana de sustentación, con más tráfico del habitual, o que Render cambie las condiciones de su capa gratuita. | Punto de ruptura por recurso documentado en [`docs/despliegue/costo-mensual.md`](../despliegue/costo-mensual.md). Verificar la capa gratuita vigente antes de cada sustentación, como pide la guía del curso. |
-| **R-16** | **Solo una persona puede operar el workspace de Render** (el plan gratuito da un único puesto); si Sebastián no está disponible, nadie más del equipo puede redesplegar, cambiar variables o revisar logs en Render. Es el criterio 7 de la guía del curso: «¿Puede operarlo el equipo entero? Si solo una persona sabe redesplegarlo, eso es un riesgo de la sección 11 de arc42, no un detalle.» | Medio | Que Sebastián no esté disponible cuando el equipo necesite redesplegar o depurar algo en producción. | El entorno completo se recrea desde `render.yaml` (Blueprint) en la cuenta de cualquier integrante; los pasos quedan en el README, «Cómo se despliega». No depende de configuración manual guardada solo en la cuenta de Sebastián. |
+| **R-13** | **Cerrado con [ADR-0021](../adr/0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md):** en el servidor del laboratorio los contenedores no se duermen, y `/health` respondió con p95 de 0,53 s desde fuera de la universidad ([evidencia](../evidencia/despliegue-iscoutb.md)). Era el **arranque en frío de Render, medido en 12,5 s, por encima del techo de 10 s de EC-07** y de los 5 s que espera el sitio al consultar `/health`. Medido el 27-sep en `docs/evidencia/medicion-arranque-en-frio.json`: `GET /health` en frío 12,5 s frente a p95 de 0,13 s en caliente; un lote de 20 hojas de 200 KB, 13,5 s y 24,0 s en frío frente a p95 de 1,3 s en caliente. | Cerrado | Que pasen más de 15 minutos sin tráfico antes de que llegue una carga. | Mitigado con un monitor gratuito (UptimeRobot) que consulta `/health` cada 5 minutos y mantiene la instancia despierta; eso consume entre 720 y 744 de las 750 horas compartidas del workspace (ver R-15). Detalle completo en el taller ([`docs/despliegue/taller-despliegue-api.md`](../despliegue/taller-despliegue-api.md)). |
+| **R-14** | **Endpoint de carga público sin autenticación.** `POST /examenes/{id}/hojas` está desplegado y accesible por su URL pública; `identidad` sigue sin construir (5.2), así que nada impide que alguien fuera del curso cargue archivos al almacén de la demostración. Desde ADR-0021 lo cargado ya no se borra en cada despliegue: queda en el volumen hasta el 30-nov, en un disco que comparten 23 equipos. | Medio | Publicar la URL de la API antes de construir `identidad` (aspecto A-05). | Aceptado para la demostración de la S8 porque solo se cargan hojas sintéticas (ADR-0012) y el disco es efímero. Construir `identidad` antes de cualquier uso con datos reales. |
+| **R-15** | **Cerrado con ADR-0021:** el entorno ya no depende de la capa gratuita de Render; la dependencia ahora es el servidor del curso (R-31). Era la **dependencia de la capa gratuita de Render, cuyas condiciones pueden cambiar sin aviso.** Las 750 horas de servicio web son compartidas por todo el workspace, y el monitor que mitiga R-13 ya consume entre 720 y 744 de esas 750: quedan entre 6 horas (mes de 31 días) y 30 (mes de 30) de margen. Se suman el límite de 5 GB de ancho de banda y 500 minutos de build. | Cerrado | Agotar el cupo compartido en la semana de sustentación, con más tráfico del habitual, o que Render cambie las condiciones de su capa gratuita. | Punto de ruptura por recurso documentado en [`docs/despliegue/costo-mensual.md`](../despliegue/costo-mensual.md). Verificar la capa gratuita vigente antes de cada sustentación, como pide la guía del curso. |
+| **R-16** | **Cerrado con ADR-0021:** en el panel del servidor del laboratorio cada integrante entra con su correo institucional, y el manual registra a los cuatro. Era que **solo una persona podía operar el workspace de Render** (el plan gratuito da un único puesto); si Sebastián no está disponible, nadie más del equipo puede redesplegar, cambiar variables o revisar logs en Render. Es el criterio 7 de la guía del curso: «¿Puede operarlo el equipo entero? Si solo una persona sabe redesplegarlo, eso es un riesgo de la sección 11 de arc42, no un detalle.» | Cerrado | Que Sebastián no esté disponible cuando el equipo necesite redesplegar o depurar algo en producción. | El entorno completo se recrea desde `render.yaml` (Blueprint) en la cuenta de cualquier integrante; los pasos quedan en el README, «Cómo se despliega». No depende de configuración manual guardada solo en la cuenta de Sebastián. |
 | **R-17** | **La ruta `POST /distractores` es pública y sin autenticación** en el entorno desplegado, y cada solicitud gasta cuota del proveedor de LLM. | Bajo | Que alguien fuera del curso la use en bucle y agote la cuota diaria de la capa gratuita de Groq (1 000 solicitudes y 200 000 tokens por día para el modelo, consultado el 4-oct-2026 en https://console.groq.com/docs/rate-limits). | Sin tarjeta, el peor caso es agotar la cuota y nunca una factura (RNF-16): la ruta responde 503 y nada más se afecta (EC-08). Se cierra con `identidad` (A-05), igual que R-14. **Mitigado en el segundo corte** ([ADR-0015](../adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md)): la línea base mostró que una ráfaga de 20 agotaba el límite por minuto para todos (8 cortes por cuota); con un presupuesto de 6 por minuto y 150 por día, lo que no cabe se responde con 429 sin gastar cuota ([EC-09](#ec-09)). |
 | **R-18** | **El presupuesto del proveedor de LLM vive en la memoria del proceso de la API** ([ADR-0015](../adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md)). Se vacía en cada despliegue y cada reinicio, y con más de una instancia o más de un proceso de uvicorn cada uno tendría el suyo. | Bajo | Un reinicio a mitad del día, que devuelve el cupo diario completo (hasta 300 solicitudes en 24 h, más de las que caben en la cuota diaria de Groq); o escalar la API horizontalmente. | Mientras haya una instancia y un proceso, se acepta: el último freno sigue siendo el 503 del proveedor. Si la API escala, el presupuesto pasa a Redis detrás del mismo adaptador `GeneradorConPresupuesto`. |
 | **R-19** | **El presupuesto es global, no por profesor.** Un cliente puede gastar el cupo de los demás: un minuto si lanza una ráfaga, un día si insiste 150 veces. | Medio | Que alguien fuera del curso use la URL pública en bucle. | Lo cierra `identidad` (A-05), con un cupo por profesor autenticado, igual que R-14 y R-17. Mientras tanto, el presupuesto protege la cuota del proveedor, aunque no la reparte. |
@@ -1912,11 +1965,14 @@ priorización original.
 | **R-22** | **La cola no tiene acuse de recibo** (modo de fallo MF-06 de la [tabla de la S11](../evidencia/modos-de-fallo.md)). Si el worker muere después del `BLPOP` y antes de terminar, el trabajo sale de la lista y no vuelve. La hoja sigue en el almacén y en la bitácora, pero marcada como encolada, así que nada la reintenta. | Bajo hoy, porque procesar es escribir una línea de log; **Alto** con A-02 | Un despliegue o un reinicio de la instancia mientras el worker tiene un trabajo en la mano: en Render pasa con cada push que cambia `backend/`. | Con A-02: `BLMOVE` a una lista de trabajos en curso y `LREM` al terminar, con un barrido que devuelva a la cola los que lleven demasiado tiempo en curso; o Redis Streams con `XACK` y `XAUTOCLAIM`. Lo decide un ADR propio. Mientras tanto, la hoja se puede recuperar a mano desde la bitácora. **Cerrado en el taller de mensajería** ([ADR-0020](../adr/0020-entregar-los-trabajos-al-menos-una-vez-con-reintentos-y-lista-de-fallidos.md)): `BLMOVE` a una lista en curso, `LREM` como acuse y la recuperación de lo que quedó en curso al arrancar. El barrido por tiempo no hizo falta con un solo worker; queda para cuando haya dos (R-29). |
 | **R-23** | **La marca de idempotencia del worker va antes de procesar y vive en un Redis sin persistencia** ([ADR-0016](../adr/0016-acotar-la-espera-de-la-cola-y-hacer-idempotente-al-worker.md)). Hoy es correcto, porque procesar es registrar. Con A-02, una caída a mitad dejaría el trabajo marcado y sin hacer; y un reinicio del Key Value borra las marcas, así que un duplicado posterior pasaría. | Bajo | Construir A-02 sin mover la marca; o un reinicio del Key Value seguido de un reintento desde la bitácora. | Con A-02, la marca pasa a después de terminar, o a dos estados (en curso, con vencimiento corto, y hecho). La persistencia de las marcas se resuelve con la de la cola, cuando se cierre R-06. Está escrito en el docstring del worker. **Cerrado en el taller de mensajería** ([ADR-0020](../adr/0020-entregar-los-trabajos-al-menos-una-vez-con-reintentos-y-lista-de-fallidos.md)): la marca va después de procesar y antes del acuse. Sigue sin persistencia, con el resto de la cola (R-28). |
 | **R-24** | **La API no detecta una hoja subida dos veces** (MF-13). Si la respuesta de una carga se corta, el docente no sabe qué entró y puede volver a subir el lote; las hojas repetidas se almacenan y se encolan otra vez, con otro `trabajo_id`, así que la idempotencia del worker no las ve. | Medio | Una carga con la red inestable seguida de un reenvío; con A-02, dos calificaciones de la misma hoja. | Diseñado en la [sección 4 de la tabla](../evidencia/modos-de-fallo.md): clave `(examen_id, SHA-256 del contenido)` en la bitácora y un estado `ya_recibida` con el `trabajo_id` original, como cambio menor del contrato. Se construye antes de que A-02 califique. Mientras tanto, el sitio quita de la selección lo recibido y avisa cuando la respuesta no llegó. |
-| **R-25** | **El worker comparte 0,1 CPU y 512 MB con la API** y no se extrae ([ADR-0017](../adr/0017-no-extraer-ningun-modulo-del-monolito-todavia.md)). Hoy no pesa, porque el worker solo registra. Con el OMR, un lote grande puede hacer más lenta la API mientras se procesa, y EC-04 puede no cumplirse. | Bajo hoy; **Medio** con A-02 | Que EC-04 se mida con el OMR y no se cumpla, o que `/health` pase de 1 s mientras se procesa un lote. | Extraer el worker a un servicio propio, como describe la reversión de ADR-0017, después de cerrar R-06 con un almacén de objetos (sin eso, otro servicio no ve las hojas). |
+| **R-25** | **En Render, el worker compartía 0,1 CPU y 512 MB con la API** y no se extrae ([ADR-0017](../adr/0017-no-extraer-ningun-modulo-del-monolito-todavia.md)). Con el OMR, un lote grande podía hacer más lenta la API mientras se procesaba, y EC-04 podía no cumplirse. **En el servidor del laboratorio** ([ADR-0021](../adr/0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md)) el worker tiene su propio contenedor, con la misma imagen, 0,25 CPU y 96 MB, y la API 0,5 CPU y 384 MB: lo que queda es medir el worker cuando lea las marcas. | Bajo hoy; **Medio** con A-02 | Que EC-04 se mida con el OMR y no se cumpla, o que `/health` pase de 1 s mientras se procesa un lote. | Extraer el worker a un servicio propio, como describe la reversión de ADR-0017, después de cerrar R-06 con un almacén de objetos (sin eso, otro servicio no ve las hojas). |
 | **R-26** | **Saber el estado vigente de una hoja es releer toda la bitácora.** [ADR-0018](../adr/0018-dar-a-la-hoja-una-identidad-propia-y-derivar-su-estado-de-la-bitacora.md) la declara fuente de verdad, pero hoy la única lectura es `pendientes()`, que recorre el archivo entero, y ninguna ruta le permite al docente preguntar por una hoja: el reporte que tiene en pantalla es una instantánea que no se actualiza (V-3). | Bajo hoy; **Medio** con A-02 | Construir el reintento automático o una pantalla que consulte el estado, con una bitácora que crece con cada lote. | Una proyección del estado por `hoja_id`, reconstruible desde los hechos, cuando exista la primera consulta; con la base de R-06, una tabla de hechos con índice por `hoja_id`. Lo que no se hace: guardar el estado en una caché ([ADR-0019](../adr/0019-guardar-en-cache-las-propuestas-de-distractores.md), punto que lo excluye). |
 | **R-27** | **La caché de propuestas vive en la memoria de cada proceso** ([ADR-0019](../adr/0019-guardar-en-cache-las-propuestas-de-distractores.md)). Se vacía en cada despliegue, y con más de una instancia cada una tendría la suya: los aciertos bajarían y un profesor podría recibir propuestas distintas para la misma pregunta según la instancia que lo atienda. Dos pedidos simultáneos de una pregunta nueva salen los dos al proveedor. | Bajo | Escalar la API a más de una instancia o de un proceso; o que `GET /metricas` muestre pocos aciertos con tráfico real. | Mientras haya una instancia, se acepta. Si escala, la caché pasa a Redis con la misma clave y `SET … EX 86400`, detrás del mismo `GeneradorConCache`, junto con el presupuesto (R-18). |
-| **R-28** | **Toda la cola vive en un Redis sin persistencia** ([ADR-0011](../adr/0011-consumir-la-cola-desde-la-instancia-de-la-api-con-el-key-value-gratuito.md), [ADR-0020](../adr/0020-entregar-los-trabajos-al-menos-una-vez-con-reintentos-y-lista-de-fallidos.md)). Un reinicio del Key Value se lleva los trabajos por tomar, los que están en curso, los que esperan reintento, la lista de fallidos y las marcas de idempotencia. La bitácora sigue diciendo «encolada» para esas hojas, y nada las reintenta. | Medio | Un reinicio o un mantenimiento del Key Value gratuito de Render con trabajos en cualquiera de las cuatro listas. | Cuando R-06 elija un medio persistente: un Redis con persistencia (el Key Value de pago) o la cola en la base de datos. Mientras tanto, una conciliación entre la bitácora y lo procesado, que es parte del reintento automático de A-02. |
+| **R-28** | **Cerrado en el servidor del laboratorio con [ADR-0021](../adr/0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md):** Redis guarda la cola con AOF (`appendfsync everysec`) en el volumen `datos_cola`, así que ante una caída brusca se pierde como mucho el último segundo; lo que sigue es la falta de copias (R-31). Sigue abierto en Render mientras siga arriba. Era que **toda la cola vive en un Redis sin persistencia** ([ADR-0011](../adr/0011-consumir-la-cola-desde-la-instancia-de-la-api-con-el-key-value-gratuito.md), [ADR-0020](../adr/0020-entregar-los-trabajos-al-menos-una-vez-con-reintentos-y-lista-de-fallidos.md)). Un reinicio del Key Value se lleva los trabajos por tomar, los que están en curso, los que esperan reintento, la lista de fallidos y las marcas de idempotencia. La bitácora sigue diciendo «encolada» para esas hojas, y nada las reintenta. | Cerrado en el servidor del laboratorio; Medio en Render | Un reinicio o un mantenimiento del Key Value gratuito de Render con trabajos en cualquiera de las cuatro listas. | Cuando R-06 elija un medio persistente: un Redis con persistencia (el Key Value de pago) o la cola en la base de datos. Mientras tanto, una conciliación entre la bitácora y lo procesado, que es parte del reintento automático de A-02. |
 | **R-29** | **La recuperación de lo que quedó en curso supone un solo worker** ([ADR-0020](../adr/0020-entregar-los-trabajos-al-menos-una-vez-con-reintentos-y-lista-de-fallidos.md)). Al arrancar, el worker devuelve a la cola todo lo que está en `procesamiento:en-curso`: con dos workers, uno le quitaría al otro lo que está procesando, y ese trabajo se procesaría dos veces (lo absorbe la idempotencia, pero se desperdicia). | Bajo | Agregar un segundo worker, por ejemplo si EC-04 lo pide (ADR-0017). | Antes de un segundo worker, la cola pasa a Redis Streams con grupos de consumidores y `XAUTOCLAIM`, que reclama solo lo abandonado por tiempo. |
+| **R-30** | **La red de la UTB no resuelve `*.iscoutb.dev`** ([ADR-0021](../adr/0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md)). Desde el campus, el DNS devuelve una dirección que no es la del servidor (198.135.184.22), así que el sitio y la API no abren en la universidad. Desde fuera, el DNS público los resuelve sin problema. | Medio | Una sustentación o una demostración desde la red de la universidad. | Presentar con datos móviles o desde fuera de esa red, y comprobarlo el día antes en el lugar donde se presente. |
+| **R-31** | **El servidor del curso es compartido, no hace copias de seguridad y borra los volúmenes después del 30-nov-2026** (ADR-0021). Las hojas, la bitácora y la cola sobreviven a los despliegues, pero no a una pérdida del servidor. Además, la cuota que anunció el panel el 29-oct (6 contenedores y 1 GB) todavía no está en `docs/politicas-uso.md` del manual, que dice 4 y 512 MB, y nuestros límites suman 576 MB. | Medio | Una falla del servidor, el 30-nov, o que la auditoría semanal aplique la cuota escrita. | Solo se cargan hojas sintéticas (RNF-12): perder el entorno no pierde datos reales. La copia y la retención son parte de R-06. Si se aplica la cuota escrita, la API vuelve a 256 MB (448 MB en total): aguanta tres lotes de EC-07 a la vez con margen y queda justa con cinco ([evidencia del despliegue](../evidencia/despliegue-iscoutb.md)). |
+| **R-32** | **Con 0,5 CPU por contenedor, cinco lotes de EC-07 a la vez no caben en el plazo del lote.** Medido en local con el compose del servidor: los cinco lotes tardan 11 s y entre el 8 y el 30 % de las hojas quedan `pendiente_de_encolar`. Quedan guardadas y en la bitácora, pero sin trabajo en la cola hasta que algo las reintente. Con tres lotes a la vez, ninguna. | Bajo: un docente carga un lote a la vez | Varios docentes cargando a la vez, o uno que sube varios lotes en paralelo. | El reintento automático de las hojas pendientes desde la bitácora, con A-02. Medir EC-07 en el servidor con un lote de 200 hojas. |
 
 ---
 
@@ -1927,7 +1983,7 @@ priorización original.
 | **ADR** | *Architecture Decision Record.* Registro de una decisión arquitectónica: contexto, alternativas evaluadas, lo decidido y sus consecuencias. |
 | **Aspecto** | Corte vertical del sistema con valor propio, recorrible completo desde la necesidad hasta la evidencia. No es una capa ni un módulo. Ver [`../aspectos.md`](../aspectos.md). |
 | **Clave de respuestas** | Conjunto de opciones correctas de un examen, contra el cual se comparan las marcas detectadas. |
-| **Cola de trabajos** | Lista de tareas pendientes de procesar, que separa la carga de las hojas de su procesamiento. En este sistema es una lista de Redis sin persistencia configurada: lo que garantiza que ninguna hoja recibida se pierda es la bitácora de recepción ([ADR-0006](../adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md)), no la cola. Desde el taller de mensajería la entrega es al menos una vez, con acuse, reintentos y lista de fallidos ([ADR-0020](../adr/0020-entregar-los-trabajos-al-menos-una-vez-con-reintentos-y-lista-de-fallidos.md)), pero la lista sigue sin persistencia (R-28). |
+| **Cola de trabajos** | Lista de tareas pendientes de procesar, que separa la carga de las hojas de su procesamiento. En este sistema es una lista de Redis: lo que garantiza que ninguna hoja recibida se pierda es la bitácora de recepción ([ADR-0006](../adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md)), no la cola. Desde el taller de mensajería la entrega es al menos una vez, con acuse, reintentos y lista de fallidos ([ADR-0020](../adr/0020-entregar-los-trabajos-al-menos-una-vez-con-reintentos-y-lista-de-fallidos.md)). En Render la lista no persistía (R-28); en el servidor del laboratorio, Redis la guarda con AOF ([ADR-0021](../adr/0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md)). |
 | **Distractor** | Opción incorrecta de una pregunta de opción múltiple, diseñada para ser plausible. Un distractor equivalente a la respuesta correcta invalida la pregunta. |
 | **Escenario de calidad (EC)** | Especificación medible de un atributo de calidad en seis partes: fuente, estímulo, artefacto, entorno, respuesta y medida de respuesta. |
 | **Habeas data** | Derecho de toda persona a conocer, actualizar y rectificar los datos personales que sobre ella se hayan recogido. Base de RNF-12. |
