@@ -12,6 +12,18 @@ Sebastián Cañas Plata (`scp1109`) · Josué David Ortega De Arco (`josueacadem
 María Del Mar Restrepo Licona (`Mariadelmar-restrepo`) · Susana Marcela Rosales Castellar
 (`SusanaRosales`).
 
+## Entorno desplegado
+
+| Pieza | URL |
+|---|---|
+| Sitio (frontend) | https://calificacion.iscoutb.dev |
+| API | https://api-calificacion.iscoutb.dev · salud en `/health` · métricas en `/metricas` |
+| Revisión desplegada | https://calificacion.iscoutb.dev/revision.txt |
+
+En el servidor del laboratorio del curso, desde `deploy/compose.lab.yaml`. El panel lee la rama
+`despliegue`, que el CI publica solo si las pruebas pasan ([ADR-0021](docs/adr/0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md)).
+Detalle en [Entorno desplegado, en detalle](#entorno-desplegado-en-detalle).
+
 ## Evidencia: consistencia de los datos y caché
 
 Lo que se entrega: la tabla operación → garantía de consistencia, el diseño de una caché con su
@@ -166,36 +178,56 @@ qué archivo y en qué sección está.
 | Corte 2 | Escenario operativo de límite de costo: decisión, experimento, CI, observabilidad y documentación sincronizada | [Segundo corte](#segundo-corte-límite-de-costo) |
 | S11 | Modos de fallo de las integraciones, idempotencia, saga y decisión de no extraer | [Evidencia S11](#evidencia-s11-fallos-parciales-y-decisión-de-extracción) |
 | Consistencia y caché | Tabla operación → consistencia, caché con su invalidación y ADR de la decisión de datos más costosa de revertir | [Evidencia: consistencia de los datos y caché](#evidencia-consistencia-de-los-datos-y-caché) |
+| Taller de mensajería | Contrato del mensaje, entrega al menos una vez, duplicados, reintentos, seguimiento y ADR frente a la alternativa síncrona | [`docs/evidencia/taller-mensajeria.md`](docs/evidencia/taller-mensajeria.md) · [ADR-0020](docs/adr/0020-entregar-los-trabajos-al-menos-una-vez-con-reintentos-y-lista-de-fallidos.md) |
+| Despliegue en iscoutb.dev | Revisión desplegada, comprobación desde fuera de la universidad, recorrido de una hoja de la API al worker y límites de memoria medidos | [`docs/evidencia/despliegue-iscoutb.md`](docs/evidencia/despliegue-iscoutb.md) · [ADR-0021](docs/adr/0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md) |
 | Todas | Pipeline de integración continua | [Runs de GitHub Actions](https://github.com/ISCOUTB/AS_202620_Sistema-de-calificacion-automatica/actions) |
 | Todas | Análisis estático y su *Quality Gate* | [SonarQube Cloud](https://sonarcloud.io/summary/new_code?id=ISCOUTB_AS_202620_Sistema-de-calificacion-automatica) |
 | Todas | Respuesta a la retroalimentación automática | [`correcciones.md`](correcciones.md) |
 
-## Entorno desplegado (S8)
+## Entorno desplegado, en detalle
 
-Entorno de demostración: solo se cargan hojas sintéticas, nunca hojas de estudiantes (RNF-12), y
-lo cargado se pierde en cada despliegue ([ADR-0012](docs/adr/0012-mantener-el-almacen-en-el-disco-efimero-de-la-instancia-hasta-cerrar-r-06.md)).
+El servidor del laboratorio del curso, en iscoutb.dev, desde el 29-oct-2026
+([ADR-0021](docs/adr/0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md)).
+Solo se cargan hojas sintéticas, nunca hojas de estudiantes (RNF-12): el servidor no hace copias de
+seguridad y borra los volúmenes después del 30-nov-2026.
 
 | | |
 |---|---|
-| Sistema | https://quantia-utb.onrender.com |
-| API y *health check* | https://quantia-utb-api.onrender.com/health → `200 {"status":"ok"}`. La raíz de la API responde 404 porque no existe `GET /` |
-| Comprobación desde fuera de la universidad | 2026-09-27, 18:59 (−05:00), internet residencial en Cartagena: sitio `http=200 tiempo=0,37 s` · API `health=200 tiempo=0,20 s` |
-| Infraestructura como código | [`render.yaml`](render.yaml) (producción, Blueprint de Render) · [`docker-compose.yml`](docker-compose.yml) (local) · [`backend/Dockerfile`](backend/Dockerfile) · [`frontend/Dockerfile`](frontend/Dockerfile) · [`ci.yml`](.github/workflows/ci.yml) |
+| Sitio | https://calificacion.iscoutb.dev |
+| API y *health check* | https://api-calificacion.iscoutb.dev/health → `200 {"status":"ok"}`. La raíz de la API responde 404 porque no existe `GET /` |
+| Revisión desplegada | https://calificacion.iscoutb.dev/revision.txt: el commit de `master` que está corriendo, escrito por el CI al compilar el sitio |
+| Comprobación desde fuera de la universidad | 2026-10-29, de 23:30 a 00:05 (−05:00), internet residencial: `/health` con mediana de 0,28 s y p95 de 0,53 s en 30 peticiones; el sitio, CORS y los certificados, bien ([evidencia](docs/evidencia/despliegue-iscoutb.md)) |
+| Infraestructura como código | [`deploy/compose.lab.yaml`](deploy/compose.lab.yaml) (servidor) · [`deploy/sitio/Dockerfile`](deploy/sitio/Dockerfile) · [`docker-compose.yml`](docker-compose.yml) (local) · [`backend/Dockerfile`](backend/Dockerfile) · [`ci.yml`](.github/workflows/ci.yml) |
 | Cómo recrearlo | [Cómo se despliega](#cómo-se-despliega) |
-| Pipeline | [Runs de `master`](https://github.com/ISCOUTB/AS_202620_Sistema-de-calificacion-automatica/actions/workflows/ci.yml?query=branch%3Amaster). Render solo despliega un commit cuyo CI terminó en verde |
+| Pipeline | [Runs de `master`](https://github.com/ISCOUTB/AS_202620_Sistema-de-calificacion-automatica/actions/workflows/ci.yml?query=branch%3Amaster). Si las pruebas pasan, el job `publicar-despliegue` compila el sitio y publica la rama `despliegue`, que es la que despliega el panel |
+| Recursos | 4 de los 6 contenedores de la cuota (`api`, `worker`, `redis` con AOF y `web`) y 576 MB de 1 GB, con límites medidos |
 | Logs estructurados | Una línea JSON por evento, con `logging.config.dictConfig`, en [`backend/infraestructura/registro.py`](backend/infraestructura/registro.py). Líneas reales abajo |
-| Métrica y escenario | `duracion_confirmacion_ms` del evento `lote_confirmado` ↔ [EC-07](docs/arc42/arc42-template-ES.md#ec-07) (confirmación ≤ 10 s, 0 % de pérdida). En una carga real desde el sitio: 14,1 ms |
-| Secretos | Ninguno en el código: [`.env.example`](.env.example) para lo local; en Render, `REDIS_URL` la inyecta la plataforma desde la cola (`fromService`) y `LLM_API_KEY` se escribe en el panel (`sync: false`) |
-| Costo mensual | US$0 al volumen supuesto. Primer punto de ruptura: las 750 h de instancia al mes del workspace, de las que la API despierta gasta 720 a 744; un segundo servicio web despierto lo rompe ([estimación](docs/despliegue/costo-mensual.md)) |
+| Métrica y escenario | `duracion_confirmacion_ms` del evento `lote_confirmado` ↔ [EC-07](docs/arc42/arc42-template-ES.md#ec-07) (confirmación ≤ 10 s, 0 % de pérdida). En la primera carga en este servidor: 7,9 ms. El presupuesto del proveedor de LLM, en https://api-calificacion.iscoutb.dev/metricas (EC-09) |
+| Seguimiento de un mensaje | `trabajo_publicado` en la API, `trabajo_tomado` y `hoja_recibida` en el worker, con el mismo `trabajo` y la misma `hoja`, juntados por `herramientas/seguir_trabajo.py` ([evidencia](docs/evidencia/despliegue-iscoutb.md)) |
+| Secretos | Ninguno en el código: [`.env.example`](.env.example) para lo local y [`deploy/.env.example`](deploy/.env.example) para el servidor. En el panel, *Environment* guarda `ALLOWED_ORIGIN` y `LLM_API_KEY`, y el compose las lee como `${VARIABLE}` |
+| Costo mensual | US$0 para el equipo: el servidor lo paga el curso. La parte que nos corresponde, con la lista de precios de Oracle, es de unos US$2 al mes; lo primero que se rompe es la CPU de la API con cinco lotes a la vez ([estimación](docs/despliegue/costo-mensual.md)) |
 | arc42 | [§7 Deployment View](docs/arc42/arc42-template-ES.md#7-deployment-view) · [§2.2, RNF-16](docs/arc42/arc42-template-ES.md#22-restricciones-organizativas) |
-| ADR de plataforma | [0009](docs/adr/0009-desplegar-la-api-en-el-servicio-web-gratuito-de-render-y-mantenerla-despierta.md) API · [0010](docs/adr/0010-servir-el-sitio-como-archivos-estaticos-en-render.md) sitio · [0011](docs/adr/0011-consumir-la-cola-desde-la-instancia-de-la-api-con-el-key-value-gratuito.md) cola y worker · [0012](docs/adr/0012-mantener-el-almacen-en-el-disco-efimero-de-la-instancia-hasta-cerrar-r-06.md) ficheros |
+| ADR de plataforma | [0021](docs/adr/0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md), que reemplaza a 0009 a 0012 |
+
+Líneas reales del log en el entorno desplegado (API y worker; el panel muestra el de cada
+contenedor por separado):
+
+    {"momento": "2026-10-30T04:38:08.792+00:00", "nivel": "INFO", "registro": "ingesta", "mensaje": "Trabajo publicado", "evento": "trabajo_publicado", "trabajo": "b4f7061e-4444-4f6e-a132-f8e929c38047", "hoja": "ff64200e-7ffc-4b60-ae67-28fe3b1b0c68", "examen": "Calculo 2", "cola": "procesamiento"}
+    {"momento": "2026-10-30T04:38:08.793+00:00", "nivel": "INFO", "registro": "worker", "mensaje": "Hoja recibida", "evento": "hoja_recibida", "trabajo": "b4f7061e-4444-4f6e-a132-f8e929c38047", "hoja": "ff64200e-7ffc-4b60-ae67-28fe3b1b0c68", "intento": 1, "examen": "Calculo 2", "archivo": "hoja-real.png", "referencia": "Calculo_2-20b4f352/35158635-8806-469c-8522-416de15e71e2-hoja-real.png", "bytes": 74}
+    {"momento": "2026-10-30T04:38:08.793+00:00", "nivel": "INFO", "registro": "api", "mensaje": "Lote confirmado", "evento": "lote_confirmado", "examen": "Calculo 2", "hojas_aceptadas": 1, "hojas_pendientes_de_encolar": 0, "hojas_rechazadas": 1, "duracion_confirmacion_ms": 7.9}
+
+### El entorno anterior: Render (S8)
+
+Del 27-sep al 29-oct el sistema corrió en la capa gratuita de Render, desde [`render.yaml`](render.yaml)
+(ADR-0009 a ADR-0012, reemplazados por ADR-0021). Sigue arriba, sin cambios, hasta que el docente
+confirme las filas de despliegue de la S8 y el taller.
+
+| | |
+|---|---|
+| Sistema y API | https://quantia-utb.onrender.com · https://quantia-utb-api.onrender.com/health |
+| Comprobación de la S8 | 2026-09-27, 18:59 (−05:00), internet residencial en Cartagena: sitio `http=200 tiempo=0,37 s` · API `health=200 tiempo=0,20 s` |
 | Escenario del segundo corte | Límite de costo sobre `POST /distractores`: presupuesto de 6 por minuto y 150 por día, 429 si no cabe, y su estado en https://quantia-utb-api.onrender.com/metricas ([ADR-0015](docs/adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md)) |
 | Taller de despliegue | Condición: **patrón de carga**, definida por el equipo por indicación del docente. Pieza: **la API**. Arranque en frío medido: **12,5 s** frente a los 10 s de EC-07; con el monitor que la mantiene despierta, 0,2 a 0,4 s ([comparación](docs/despliegue/taller-despliegue-api.md) · [medición](docs/evidencia/medicion-arranque-en-frio.json) · [ADR-0009](docs/adr/0009-desplegar-la-api-en-el-servicio-web-gratuito-de-render-y-mantenerla-despierta.md)) |
-
-Líneas reales del log en el entorno desplegado (worker y API):
-
-    {"momento": "2026-09-27T21:58:41.572+00:00", "nivel": "INFO", "registro": "worker", "mensaje": "Hoja recibida", "evento": "hoja_recibida", "trabajo": "a3691012-4b72-45f4-a1a7-9446b2ff5cc6", "examen": "prueba-s8", "archivo": "mapa-del-codigo-omr.png", "referencia": "prueba-s8/f372843d-f673-47ab-8edf-005317e54ffd-mapa-del-codigo-omr.png"}
-    {"momento": "2026-09-27T21:58:41.573+00:00", "nivel": "INFO", "registro": "api", "mensaje": "Lote confirmado", "evento": "lote_confirmado", "examen": "prueba-s8", "hojas_aceptadas": 1, "hojas_pendientes_de_encolar": 0, "hojas_rechazadas": 0, "duracion_confirmacion_ms": 14.1}
 
 ## Cómo se arranca
 
@@ -229,26 +261,27 @@ Alternativas para desarrollo, que no reemplazan el comando oficial de arriba:
 
 ## Cómo se despliega
 
-El entorno de demostración se recrea desde [`render.yaml`](render.yaml) en cualquier cuenta de
-Render, sin depender de la de un integrante ([ADR-0009](docs/adr/0009-desplegar-la-api-en-el-servicio-web-gratuito-de-render-y-mantenerla-despierta.md)).
+El entorno desplegado es el servicio `sistema` del proyecto `calificacion` en el panel del servidor
+del laboratorio (https://panel.iscoutb.dev), al que entra cualquier integrante con su correo
+institucional ([ADR-0021](docs/adr/0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md)).
+Desde la red de la UTB no abre, porque ahí `*.iscoutb.dev` no resuelve. Para dejarlo configurado
+desde cero:
 
-1. Crear una cuenta en Render iniciando sesión con GitHub; la capa gratuita no pide tarjeta.
-2. En Render: *New → Blueprint*, conectar GitHub y elegir este repositorio, rama `master`. Render lee
-   `render.yaml` y propone tres servicios: `quantia-utb-api` (servicio web, Docker), `quantia-utb-cola`
-   (Key Value) y `quantia-utb` (sitio estático). Aplicar.
-3. Esperar a que terminen las construcciones: la API construye `backend/Dockerfile`; el sitio descarga
-   Flutter 3.44.3 y compila `frontend/`.
-4. Si Render asignó URL distintas (cuando un nombre ya está tomado le agrega un sufijo), poner las
-   reales en `ALLOWED_ORIGIN` (servicio de la API) y `BACKEND_URL` (sitio) de `render.yaml`, y volver a
-   desplegar el sitio: la URL de la API queda horneada al compilar.
-5. Crear en UptimeRobot, en su plan gratuito, un monitor HTTP(s) a `https://quantia-utb-api.onrender.com/health` (o a la URL que Render le haya asignado a la API) cada
-   5 minutos. Mantiene despierta la API, que en frío tarda 12,5 s en responder.
-6. Comprobar desde fuera de la universidad que el sitio y el `/health` de la API responden 200,
-   cargar una hoja sintética desde el sitio y buscar en los logs de `quantia-utb-api` los eventos
-   `lote_confirmado` y `hoja_recibida`.
+1. En el panel, proyecto `calificacion` → `production` → `sistema`, pestaña **General → Provider**:
+   este repositorio, rama `despliegue` y *Compose Path* `./deploy/compose.lab.yaml`. **Save**.
+2. **Environment**: `ALLOWED_ORIGIN=https://calificacion.iscoutb.dev` y `LLM_API_KEY` con la clave de
+   Groq, que no se versiona. *Create Environment File* encendido. **Save**.
+3. **Domains**, dos dominios con HTTPS y Let's Encrypt: `calificacion.iscoutb.dev` al servicio `web`,
+   puerto 8080, y `api-calificacion.iscoutb.dev` al servicio `api`, puerto 8000.
+4. **General**: *Autodeploy* encendido y **Deploy**. En **Deployments**, esperar *Done*.
+5. Comprobar desde fuera de la universidad el `/health` de la API, el sitio y `revision.txt`;
+   cargar una hoja sintética desde el sitio y seguirla con `herramientas/seguir_trabajo.py` en los
+   **Logs** de `api` y `worker`.
 
-Desde ahí, cada commit a `master` cuyo CI termina en verde redespliega solo el servicio cuya
-carpeta cambió (`backend/` o `frontend/`).
+La rama `despliegue` no se edita a mano: el job `publicar-despliegue` de `ci.yml` la vuelve a crear
+en cada push a `master` cuyas pruebas pasan, como `master` más el sitio compilado. Desde ahí, cada
+push así se despliega solo. Los pasos para levantar el compose del servidor en un computador están
+en el encabezado de [`deploy/compose.local-override.yaml`](deploy/compose.local-override.yaml).
 
 ## Corte vertical: carga de examen (aspecto A-01)
 
@@ -547,10 +580,10 @@ El desarrollo sigue Aspect Driven Development (ADD): cada funcionalidad se decla
 | [0006](docs/adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md) | Registrar la recepción en una bitácora antes de encolar | aceptado |
 | [0007](docs/adr/0007-declarar-los-contextos-delimitados-y-la-regla-de-dueno-unico.md) | Declarar los contextos delimitados y la regla de dueño único de los datos | aceptado |
 | [0008](docs/adr/0008-renombrar-el-sistema-a-quantia.md) | Renombrar el sistema a QuantIA | aceptado |
-| [0009](docs/adr/0009-desplegar-la-api-en-el-servicio-web-gratuito-de-render-y-mantenerla-despierta.md) | Desplegar la API en el servicio web gratuito de Render y mantenerla despierta | aceptado |
-| [0010](docs/adr/0010-servir-el-sitio-como-archivos-estaticos-en-render.md) | Servir el sitio como archivos estáticos en Render | aceptado |
-| [0011](docs/adr/0011-consumir-la-cola-desde-la-instancia-de-la-api-con-el-key-value-gratuito.md) | Consumir la cola desde la instancia de la API con el Key Value gratuito | aceptado |
-| [0012](docs/adr/0012-mantener-el-almacen-en-el-disco-efimero-de-la-instancia-hasta-cerrar-r-06.md) | Mantener el almacén en el disco efímero de la instancia hasta cerrar R-06 | aceptado |
+| [0009](docs/adr/0009-desplegar-la-api-en-el-servicio-web-gratuito-de-render-y-mantenerla-despierta.md) | Desplegar la API en el servicio web gratuito de Render y mantenerla despierta | reemplazado por 0021 |
+| [0010](docs/adr/0010-servir-el-sitio-como-archivos-estaticos-en-render.md) | Servir el sitio como archivos estáticos en Render | reemplazado por 0021 |
+| [0011](docs/adr/0011-consumir-la-cola-desde-la-instancia-de-la-api-con-el-key-value-gratuito.md) | Consumir la cola desde la instancia de la API con el Key Value gratuito | reemplazado por 0021 |
+| [0012](docs/adr/0012-mantener-el-almacen-en-el-disco-efimero-de-la-instancia-hasta-cerrar-r-06.md) | Mantener el almacén en el disco efímero de la instancia hasta cerrar R-06 | reemplazado por 0021 |
 | [0013](docs/adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md) | Consumir Groq detrás de un puerto y degradar sin bloquear la autoría | aceptado |
 | [0014](docs/adr/0014-dejar-constancia-del-ajuste-de-enlaces-en-adr-0007.md) | Dejar constancia del ajuste de enlaces en ADR-0007 | aceptado |
 | [0015](docs/adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md) | Limitar el gasto del proveedor de LLM con un presupuesto en la API | aceptado |
@@ -558,6 +591,8 @@ El desarrollo sigue Aspect Driven Development (ADD): cada funcionalidad se decla
 | [0017](docs/adr/0017-no-extraer-ningun-modulo-del-monolito-todavia.md) | No extraer ningún módulo del monolito todavía | aceptado |
 | [0018](docs/adr/0018-dar-a-la-hoja-una-identidad-propia-y-derivar-su-estado-de-la-bitacora.md) | Dar a la hoja una identidad propia y derivar su estado de la bitácora | aceptado |
 | [0019](docs/adr/0019-guardar-en-cache-las-propuestas-de-distractores.md) | Guardar en caché las propuestas de distractores | aceptado |
+| [0020](docs/adr/0020-entregar-los-trabajos-al-menos-una-vez-con-reintentos-y-lista-de-fallidos.md) | Entregar los trabajos al menos una vez, con reintentos y lista de fallidos | aceptado |
+| [0021](docs/adr/0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md) | Desplegar en el servidor del laboratorio, con el sitio compilado en el CI | aceptado |
 
 Las decisiones de un ADR aceptado no se editan ni se borran: si una decisión cambia, se escribe uno nuevo y el anterior pasa a estado *reemplazado por*. Los ajustes menores que no son de arquitectura, como un enlace roto, se permiten dejando constancia ([ADR-0014](docs/adr/0014-dejar-constancia-del-ajuste-de-enlaces-en-adr-0007.md)).
 
@@ -571,12 +606,14 @@ Las decisiones de un ADR aceptado no se editan ni se borran: si una decisión ca
 - [x] arc42: Deployment View (sección 7)
 - [x] Escenarios de calidad: 5 priorizados y 4 complementarios; EC-07, EC-08 y EC-09 medidos
 - [x] C4 Niveles 1, 2 y 3
-- [x] ADR 0001 a 0019
+- [x] ADR 0001 a 0021
 - [x] Elección de stack: FastAPI en el backend, Flutter en el frontend
 - [x] Esqueleto ejecutable
 - [x] Corte vertical de A-01: `ingesta`, almacén, bitácora, encolado y pantalla de carga
 - [x] Contrato de la API (OpenAPI) versionado y su prueba en el pipeline
-- [x] Despliegue en Render con URL pública, logs estructurados y métrica de EC-07
+- [x] Despliegue con URL pública, logs estructurados y métrica de EC-07: en Render desde la S8 y en
+  el servidor del laboratorio (iscoutb.dev) desde el 29-oct, con la cola y las hojas persistentes
+  (ADR-0021)
 - [ ] ADR de persistencia y almacenamiento (riesgo R-06); el adaptador actual es provisional
 - [ ] Modelo de datos compartido más allá de lo que A-01 necesitó
 - [x] Proveedor de LLM: Groq, detrás de un puerto de `autoria` (ADR-0013)
@@ -584,7 +621,8 @@ Las decisiones de un ADR aceptado no se editan ni se borran: si una decisión ca
 - [x] S11: modos de fallo de las tres integraciones, esperas acotadas de la cola y worker idempotente (ADR-0016); decisión de no extraer (ADR-0017)
 - [x] Arreglos del 19-oct: el lote ya no se cae por un error del disco,
   tiene un plazo para la cola, no congela la API (R-21 cerrado) y se lee de a una hoja con tope
-- [ ] Acuse de recibo en la cola y detección de hojas subidas dos veces (R-22 y R-24, con A-02)
+- [x] Acuse de recibo, reintentos y lista de fallidos en la cola (ADR-0020, R-22 cerrado)
+- [ ] Detección de hojas subidas dos veces (R-24, con A-02)
 - [x] Consistencia y caché: tabla operación → consistencia, `hoja_id` propio con la bitácora como
   fuente de verdad (ADR-0018) y caché de propuestas con su invalidación (ADR-0019)
 - [ ] Consulta del estado vigente de una hoja (R-26, con A-02)
@@ -596,13 +634,13 @@ Las decisiones de un ADR aceptado no se editan ni se borran: si una decisión ca
 docs/
 ├── arc42/
 │   └── arc42-template-ES.md                            # documento de arquitectura (arc42)
-├── adr/                                                # 0001 a 0019; el 0001, reemplazado por el 0002
+├── adr/                                                # 0001 a 0021; el 0001, reemplazado por el 0002, y del 0009 al 0012, por el 0021
 ├── c4/
 │   └── doc-c4.md                                       # modelo C4 (Niveles 1, 2 y 3)
 ├── contrato/
 │   └── openapi.json                                    # contrato HTTP (OpenAPI 3.1), generado
 ├── despliegue/                                        # estimación de costo y taller de despliegue
-├── evidencia/                                          # EC-07, arranque en frío, prueba de contrato, SonarQube; de la S9: EC-08, prueba del defecto y auditoría; del corte 2: experimento de EC-09; de la S11: modos de fallo; de consistencia y caché: la tabla de garantías y el diseño de la caché
+├── evidencia/                                          # EC-07, arranque en frío, prueba de contrato, SonarQube; de la S9: EC-08, prueba del defecto y auditoría; del corte 2: experimento de EC-09; de la S11: modos de fallo; de consistencia y caché: la tabla de garantías y el diseño de la caché; del taller de mensajería: su ejecución; del despliegue en iscoutb.dev: la verificación
 ├── ficha-problema.md                                   # el problema, usuarios y alcance
 ├── aspectos.md                                         # aspectos y tabla de trazabilidad
 └── ia.md                                               # registro de uso de IA
