@@ -1,6 +1,6 @@
 # 0009 · Desplegar la API en el servicio web gratuito de Render y mantenerla despierta
 
-- **Estado:** aceptado
+- **Estado:** reemplazado por [0021](0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md)
 - **Fecha:** 2026-09-27
 - **Decide:** Josué Ortega De Arco, María Restrepo Licona, Sebastián Cañas Plata, Susana Rosales Castellar
 - **Escenario de calidad relacionado:** [EC-07](../arc42/arc42-template-ES.md#ec-07) (confirmación del lote en ≤ 10 s, 0 % de pérdida silenciosa)

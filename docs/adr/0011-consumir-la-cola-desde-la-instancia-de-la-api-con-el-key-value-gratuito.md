@@ -1,6 +1,6 @@
 # 0011 · Consumir la cola desde la instancia de la API con el Key Value gratuito
 
-- **Estado:** aceptado
+- **Estado:** reemplazado por [0021](0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md)
 - **Fecha:** 2026-09-27
 - **Decide:** Josué Ortega De Arco, María Restrepo Licona, Sebastián Cañas Plata, Susana Rosales Castellar
 - **Escenario de calidad relacionado:** ninguno directo. Responde a la restricción de costo (costo mensual de US$0 y ninguna cuenta con tarjeta)

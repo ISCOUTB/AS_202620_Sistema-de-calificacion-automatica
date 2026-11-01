@@ -1,6 +1,6 @@
 # 0012 · Mantener el almacén en el disco efímero de la instancia hasta cerrar R-06
 
-- **Estado:** aceptado
+- **Estado:** reemplazado por [0021](0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md)
 - **Fecha:** 2026-09-27
 - **Decide:** Josué Ortega De Arco, María Restrepo Licona, Sebastián Cañas Plata, Susana Rosales Castellar
 - **Escenario de calidad relacionado:** [EC-07](../arc42/arc42-template-ES.md#ec-07) (0 % de pérdida silenciosa), que en este entorno se cumple solo dentro del proceso vivo
