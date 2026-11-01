@@ -39,7 +39,11 @@ from infraestructura.modelo import ENCOLADA, PENDIENTE_DE_ENCOLAR
 # 1.4.0 agrega la cache de propuestas (ADR-0019): el campo opcional `otras` en la solicitud de
 # distractores, `desde_la_cache` en su respuesta y el estado de la cache en `GET /metricas`. Todo
 # agrega; un cliente que no manda `otras` recibe lo mismo que antes, ahora quiza sin gastar cupo.
-VERSION_DEL_CONTRATO = "1.4.0"
+#
+# 1.5.0 agrega el presupuesto de carga (S13, ADR-0022): el 413 y el 429 de la ruta de carga y su
+# estado en `GET /metricas`. Vuelve a subir la menor: un lote que cabe recibe la misma respuesta
+# que antes, y los dos codigos nuevos solo aparecen donde antes el lote habria entrado sin tope.
+VERSION_DEL_CONTRATO = "1.5.0"
 
 EstadoDeHoja = Literal["encolada", "pendiente_de_encolar"]
 
@@ -253,11 +257,45 @@ class EstadoDeLaCacheEnRespuesta(BaseModel):
     expulsadas: int = Field(description="Entradas que salieron porque la cache estaba llena.")
 
 
+class LoteFueraDePresupuestoEnRespuesta(BaseModel):
+    """Cuerpo del 413 y del 429 de la ruta de carga: el lote no cabe en el presupuesto de carga y
+    no entro ninguna de sus hojas (ADR-0022).
+
+    El 429 lleva ademas la cabecera `Retry-After` con los segundos que faltan para que el lote
+    quepa. Usa `detail`, como los demas errores, para que un cliente los lea igual."""
+
+    detail: str = Field(description="Que paso y que hacer, redactado para el docente.")
+
+
+class EstadoDelPresupuestoDeCargaEnRespuesta(BaseModel):
+    """Cuanto del presupuesto de carga se ha usado (ADR-0022).
+
+    La ventana de 24 horas es la que decide si un lote cabe. Los contadores `desde_el_arranque`
+    son observabilidad y vuelven a cero cuando el proceso se reinicia."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    limite_de_hojas_por_lote: int = Field(description="Hojas que admite un lote como mucho.")
+    limite_de_bytes_por_dia: int = Field(description="Bytes de hojas admitidos en 24 horas.")
+    bytes_en_las_ultimas_24_horas: int = Field(
+        description="Bytes de los lotes que entraron en las ultimas 24 horas."
+    )
+    lotes_admitidos_desde_el_arranque: int = Field(
+        description="Lotes que cupieron en el presupuesto desde que arranco el proceso."
+    )
+    lotes_rechazados_desde_el_arranque: int = Field(
+        description="Lotes cortados con 413 o 429, sin leer sus hojas, desde que arranco el proceso."
+    )
+    arrancado_en: datetime = Field(description="Momento en que arranco el proceso de la API.")
+
+
 class RespuestaDeMetricas(BaseModel):
     """Lo que devuelve `GET /metricas`: el estado del presupuesto del proveedor de LLM.
 
     Es la metrica de EC-09 consultable en vivo, como `lote_confirmado` en el registro lo es de
-    EC-07. Solo publica cuentas: ningun dato de un profesor ni de una pregunta."""
+    EC-07. Desde la S13 publica tambien el presupuesto de carga (ADR-0022). Solo publica cuentas:
+    ningun dato de un profesor, de una pregunta ni de una hoja."""
 
     presupuesto_de_distractores: EstadoDelPresupuestoEnRespuesta
     cache_de_distractores: EstadoDeLaCacheEnRespuesta
+    presupuesto_de_carga: EstadoDelPresupuestoDeCargaEnRespuesta

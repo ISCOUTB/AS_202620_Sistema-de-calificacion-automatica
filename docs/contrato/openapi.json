@@ -138,6 +138,52 @@
         "title": "EstadoDeLaCacheEnRespuesta",
         "type": "object"
       },
+      "EstadoDelPresupuestoDeCargaEnRespuesta": {
+        "description": "Cuanto del presupuesto de carga se ha usado (ADR-0022).\n\nLa ventana de 24 horas es la que decide si un lote cabe. Los contadores `desde_el_arranque`\nson observabilidad y vuelven a cero cuando el proceso se reinicia.",
+        "properties": {
+          "arrancado_en": {
+            "description": "Momento en que arranco el proceso de la API.",
+            "format": "date-time",
+            "title": "Arrancado En",
+            "type": "string"
+          },
+          "bytes_en_las_ultimas_24_horas": {
+            "description": "Bytes de los lotes que entraron en las ultimas 24 horas.",
+            "title": "Bytes En Las Ultimas 24 Horas",
+            "type": "integer"
+          },
+          "limite_de_bytes_por_dia": {
+            "description": "Bytes de hojas admitidos en 24 horas.",
+            "title": "Limite De Bytes Por Dia",
+            "type": "integer"
+          },
+          "limite_de_hojas_por_lote": {
+            "description": "Hojas que admite un lote como mucho.",
+            "title": "Limite De Hojas Por Lote",
+            "type": "integer"
+          },
+          "lotes_admitidos_desde_el_arranque": {
+            "description": "Lotes que cupieron en el presupuesto desde que arranco el proceso.",
+            "title": "Lotes Admitidos Desde El Arranque",
+            "type": "integer"
+          },
+          "lotes_rechazados_desde_el_arranque": {
+            "description": "Lotes cortados con 413 o 429, sin leer sus hojas, desde que arranco el proceso.",
+            "title": "Lotes Rechazados Desde El Arranque",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "limite_de_hojas_por_lote",
+          "limite_de_bytes_por_dia",
+          "bytes_en_las_ultimas_24_horas",
+          "lotes_admitidos_desde_el_arranque",
+          "lotes_rechazados_desde_el_arranque",
+          "arrancado_en"
+        ],
+        "title": "EstadoDelPresupuestoDeCargaEnRespuesta",
+        "type": "object"
+      },
       "EstadoDelPresupuestoEnRespuesta": {
         "description": "Cuanto del presupuesto de solicitudes al proveedor de LLM se ha usado.\n\nLas dos ventanas deslizantes son las que deciden si una solicitud cabe. Los contadores\n`desde_el_arranque` son observabilidad y vuelven a cero cuando el proceso se reinicia.",
         "properties": {
@@ -253,6 +299,21 @@
         "title": "HojaAceptadaEnRespuesta",
         "type": "object"
       },
+      "LoteFueraDePresupuestoEnRespuesta": {
+        "description": "Cuerpo del 413 y del 429 de la ruta de carga: el lote no cabe en el presupuesto de carga y\nno entro ninguna de sus hojas (ADR-0022).\n\nEl 429 lleva ademas la cabecera `Retry-After` con los segundos que faltan para que el lote\nquepa. Usa `detail`, como los demas errores, para que un cliente los lea igual.",
+        "properties": {
+          "detail": {
+            "description": "Que paso y que hacer, redactado para el docente.",
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "LoteFueraDePresupuestoEnRespuesta",
+        "type": "object"
+      },
       "PresupuestoAgotadoEnRespuesta": {
         "description": "Cuerpo del 429: la solicitud no cabe en el presupuesto y no se envio al proveedor (ADR-0015).\n\nLa respuesta lleva ademas la cabecera `Retry-After` con los segundos que faltan para que haya\ncupo. Usa `detail`, como el 503, para que un cliente lea los dos errores igual.",
         "properties": {
@@ -352,10 +413,13 @@
         "type": "object"
       },
       "RespuestaDeMetricas": {
-        "description": "Lo que devuelve `GET /metricas`: el estado del presupuesto del proveedor de LLM.\n\nEs la metrica de EC-09 consultable en vivo, como `lote_confirmado` en el registro lo es de\nEC-07. Solo publica cuentas: ningun dato de un profesor ni de una pregunta.",
+        "description": "Lo que devuelve `GET /metricas`: el estado del presupuesto del proveedor de LLM.\n\nEs la metrica de EC-09 consultable en vivo, como `lote_confirmado` en el registro lo es de\nEC-07. Desde la S13 publica tambien el presupuesto de carga (ADR-0022). Solo publica cuentas:\nningun dato de un profesor, de una pregunta ni de una hoja.",
         "properties": {
           "cache_de_distractores": {
             "$ref": "#/components/schemas/EstadoDeLaCacheEnRespuesta"
+          },
+          "presupuesto_de_carga": {
+            "$ref": "#/components/schemas/EstadoDelPresupuestoDeCargaEnRespuesta"
           },
           "presupuesto_de_distractores": {
             "$ref": "#/components/schemas/EstadoDelPresupuestoEnRespuesta"
@@ -363,7 +427,8 @@
         },
         "required": [
           "presupuesto_de_distractores",
-          "cache_de_distractores"
+          "cache_de_distractores",
+          "presupuesto_de_carga"
         ],
         "title": "RespuestaDeMetricas",
         "type": "object"
@@ -466,9 +531,9 @@
     }
   },
   "info": {
-    "description": "Interfaz HTTP de QuantIA, sistema de calificación de exámenes de opción múltiple. Hoy cubre el aspecto A-01 (carga de hojas escaneadas para calificación) y el A-06 (propuesta opcional de distractores diagnósticos), con el presupuesto que protege la cuota del proveedor de LLM y su métrica en `GET /metricas` (EC-09).",
+    "description": "Interfaz HTTP de QuantIA, sistema de calificación de exámenes de opción múltiple. Hoy cubre el aspecto A-01 (carga de hojas escaneadas para calificación) y el A-06 (propuesta opcional de distractores diagnósticos), con el presupuesto que protege la cuota del proveedor de LLM y su métrica en `GET /metricas` (EC-09). Desde la S13, un presupuesto de carga limita las hojas por lote y los bytes por día (ADR-0022).",
     "title": "QuantIA",
-    "version": "1.4.0"
+    "version": "1.5.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -533,7 +598,7 @@
     },
     "/examenes/{examen_id}/hojas": {
       "post": {
-        "description": "Recibe una o varias hojas escaneadas de un examen y confirma qué entró y qué no (RF-01).\n\n**Responde 200 aunque haya archivos rechazados, y eso es deliberado.** La petición se\natendió por completo: el 200 confirma que el sistema procesó el lote entero, y el cuerpo\ndice archivo por archivo qué pasó. Devolver un error por un rechazo obligaría al cliente a\nreenviar el lote completo, que es justo lo que EC-07 quiere evitar.\n\n**Una hoja puede volver como aceptada y todavía pendiente de encolar.** Desde ADR-0006 el\ncampo `estado` de cada aceptada vale `encolada` o `pendiente_de_encolar`: la segunda es una\nhoja almacenada y registrada en la bitácora cuyo trabajo no llegó a la cola. Se reporta en\nvez de omitirse porque EC-07 exige que ningún archivo cargado desaparezca sin traza, y\nreintentarla es asunto del sistema, no del docente: el archivo ya está adentro.\n\n**El `examen_id` todavía no se verifica contra nada, y es un hueco conocido, no un olvido.**\nEl módulo `autoria` es el que registrará los exámenes, y esa parte (aspecto A-04) aún no\nexiste; `identidad` (A-05) es el que comprobará que el docente puede cargar en ese curso, y\ntampoco. La ruta ya tiene la forma definitiva para que cuando esas partes lleguen solo\nhaya que sumar la comprobación, sin migrar el frontend.",
+        "description": "Recibe una o varias hojas escaneadas de un examen y confirma qué entró y qué no (RF-01).\n\n**Responde 200 aunque haya archivos rechazados, y eso es deliberado.** La petición se\natendió por completo: el 200 confirma que el sistema procesó el lote entero, y el cuerpo\ndice archivo por archivo qué pasó. Devolver un error por un rechazo obligaría al cliente a\nreenviar el lote completo, que es justo lo que EC-07 quiere evitar.\n\n**Una hoja puede volver como aceptada y todavía pendiente de encolar.** Desde ADR-0006 el\ncampo `estado` de cada aceptada vale `encolada` o `pendiente_de_encolar`: la segunda es una\nhoja almacenada y registrada en la bitácora cuyo trabajo no llegó a la cola. Se reporta en\nvez de omitirse porque EC-07 exige que ningún archivo cargado desaparezca sin traza, y\nreintentarla es asunto del sistema, no del docente: el archivo ya está adentro.\n\n**El `examen_id` todavía no se verifica contra nada, y es un hueco conocido, no un olvido.**\nEl módulo `autoria` es el que registrará los exámenes, y esa parte (aspecto A-04) aún no\nexiste; `identidad` (A-05) es el que comprobará que el docente puede cargar en ese curso, y\ntampoco. La ruta ya tiene la forma definitiva para que cuando esas partes lleguen solo\nhaya que sumar la comprobación, sin migrar el frontend.\n\n**Un lote que no cabe en el presupuesto de carga no entra entero** (ADR-0022). Responde 413\nsi trae más hojas de las que admite un lote o pesa más que el cupo de un día, y 429 con\n`Retry-After` si ya no cabe en lo que queda del cupo de las últimas 24 horas. En los dos\ncasos no se lee ninguna hoja, así que no hay nada que revisar antes de volver a subirlo.",
         "operationId": "cargar_hojas_examenes__examen_id__hojas_post",
         "parameters": [
           {
@@ -567,6 +632,16 @@
             },
             "description": "Qué entró y qué no, archivo por archivo."
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoteFueraDePresupuestoEnRespuesta"
+                }
+              }
+            },
+            "description": "El lote trae más hojas de las que admite uno, pesa más que el cupo de un día, o la petición pasa de 100 MB (ADR-0022). No entró ninguna hoja; hay que dividirlo."
+          },
           "422": {
             "content": {
               "application/json": {
@@ -576,6 +651,16 @@
               }
             },
             "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoteFueraDePresupuestoEnRespuesta"
+                }
+              }
+            },
+            "description": "El lote no cabe en lo que queda del cupo de bytes de las últimas 24 horas (ADR-0022). No entró ninguna hoja. La cabecera `Retry-After` dice en cuántos segundos cabrá."
           }
         },
         "summary": "Cargar hojas escaneadas de un examen"
@@ -601,7 +686,7 @@
     },
     "/metricas": {
       "get": {
-        "description": "La métrica de EC-09 consultable en vivo (ADR-0015).\n\nDice cuántas solicitudes al proveedor caben todavía y cuántas se cortaron con 429, sin\nrevisar el registro. Solo publica cuentas, ningún dato de un profesor ni de una pregunta, y no\ntoca la red ni el disco, así que responde aunque el proveedor esté caído. Desde ADR-0019\npublica también los aciertos, fallos y entradas de la caché de propuestas.",
+        "description": "La métrica de EC-09 consultable en vivo (ADR-0015).\n\nDice cuántas solicitudes al proveedor caben todavía y cuántas se cortaron con 429, sin\nrevisar el registro. Solo publica cuentas, ningún dato de un profesor ni de una pregunta, y no\ntoca la red ni el disco, así que responde aunque el proveedor esté caído. Desde ADR-0019\npublica también los aciertos, fallos y entradas de la caché de propuestas, y desde ADR-0022,\nlos bytes cargados en las últimas 24 horas y los lotes admitidos y cortados.",
         "operationId": "metricas_metricas_get",
         "responses": {
           "200": {
@@ -612,10 +697,10 @@
                 }
               }
             },
-            "description": "Lo usado en las dos ventanas y lo enviado y cortado desde el arranque."
+            "description": "Lo usado en cada ventana y lo admitido y cortado desde el arranque."
           }
         },
-        "summary": "Estado del presupuesto del proveedor de LLM y de la caché de propuestas"
+        "summary": "Estado de los presupuestos del proveedor de LLM y de carga, y de la caché"
       }
     }
   }

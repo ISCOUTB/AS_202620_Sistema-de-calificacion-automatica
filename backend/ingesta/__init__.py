@@ -4,6 +4,15 @@ Requisitos: RF-01
 Importa: infraestructura, identidad
 """
 
+from ingesta.presupuesto import (
+    HOJAS_POR_LOTE,
+    MB_POR_DIA,
+    CargaDiariaAgotada,
+    EstadoDelPresupuestoDeCarga,
+    LoteDemasiadoGrande,
+    LoteFueraDePresupuesto,
+    PresupuestoDeCarga,
+)
 from ingesta.recepcion import (
     EXTENSIONES_ACEPTADAS,
     TAMANO_MAXIMO_DE_UNA_HOJA_BYTES,
@@ -12,11 +21,18 @@ from ingesta.recepcion import (
 )
 
 # Interfaz pública del módulo. Quien use `ingesta` importa de aquí y no de sus archivos
-# internos: `recepcion.py` puede reorganizarse sin romper a nadie mientras estos cuatro nombres
-# sigan significando lo mismo.
+# internos: `recepcion.py` y `presupuesto.py` pueden reorganizarse sin romper a nadie mientras
+# estos nombres sigan significando lo mismo.
 __all__ = [
     "recibir_lote",
     "motivo_de_rechazo",
     "EXTENSIONES_ACEPTADAS",
     "TAMANO_MAXIMO_DE_UNA_HOJA_BYTES",
+    "PresupuestoDeCarga",
+    "EstadoDelPresupuestoDeCarga",
+    "LoteFueraDePresupuesto",
+    "LoteDemasiadoGrande",
+    "CargaDiariaAgotada",
+    "HOJAS_POR_LOTE",
+    "MB_POR_DIA",
 ]

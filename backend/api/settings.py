@@ -3,6 +3,7 @@ import os
 from autoria import SOLICITUDES_POR_DIA, SOLICITUDES_POR_MINUTO
 from infraestructura.almacen import RUTA_ALMACEN_POR_OMISION
 from infraestructura.cola import REDIS_URL_POR_OMISION
+from ingesta import HOJAS_POR_LOTE, MB_POR_DIA
 
 # El valor por omisión viene de `infraestructura/cola.py`, el mismo que usa el worker.
 REDIS_URL = os.environ.get("REDIS_URL", REDIS_URL_POR_OMISION)
@@ -40,3 +41,9 @@ LLM_SOLICITUDES_POR_MINUTO = int(
     os.environ.get("LLM_SOLICITUDES_POR_MINUTO", SOLICITUDES_POR_MINUTO)
 )
 LLM_SOLICITUDES_POR_DIA = int(os.environ.get("LLM_SOLICITUDES_POR_DIA", SOLICITUDES_POR_DIA))
+
+# Presupuesto de carga (S13, ADR-0022): hojas por lote y MB por día que admite la ruta de carga.
+# Por la misma razón, los valores por omisión y su justificación están en `ingesta`
+# (`presupuesto.py`).
+CARGA_HOJAS_POR_LOTE = int(os.environ.get("CARGA_HOJAS_POR_LOTE", HOJAS_POR_LOTE))
+CARGA_MB_POR_DIA = int(os.environ.get("CARGA_MB_POR_DIA", MB_POR_DIA))

@@ -1,7 +1,7 @@
 """Entrada HTTP del sistema. No es dominio: traduce peticiones a llamadas de módulo y de
 vuelta, y ese es todo su trabajo. La validación, el almacenamiento y el encolado viven en
-`ingesta` e `infraestructura`; la regla de los distractores y el presupuesto del proveedor, en
-`autoria`."""
+`ingesta` e `infraestructura`, igual que el presupuesto de carga; la regla de los distractores y
+el presupuesto del proveedor, en `autoria`."""
 
 import functools
 import logging
@@ -19,8 +19,10 @@ from api.esquemas import (
     DescartadoEnRespuesta,
     DistractorEnRespuesta,
     EstadoDeLaCacheEnRespuesta,
+    EstadoDelPresupuestoDeCargaEnRespuesta,
     EstadoDelPresupuestoEnRespuesta,
     HojaAceptadaEnRespuesta,
+    LoteFueraDePresupuestoEnRespuesta,
     PresupuestoAgotadoEnRespuesta,
     ProveedorNoDisponibleEnRespuesta,
     RespuestaDeCarga,
@@ -29,8 +31,11 @@ from api.esquemas import (
     RespuestaDeSalud,
     SolicitudDeDistractores,
 )
+from api.limite_del_cuerpo import LimiteDelCuerpo
 from api.settings import (
     ALLOWED_ORIGIN,
+    CARGA_HOJAS_POR_LOTE,
+    CARGA_MB_POR_DIA,
     LLM_API_KEY,
     LLM_MODELO,
     LLM_SOLICITUDES_POR_DIA,
@@ -59,7 +64,13 @@ from infraestructura.bitacora import BitacoraDeRecepcion, BitacoraEnDisco
 from infraestructura.cola import ESPERA_AL_PUBLICAR_SEGUNDOS, cliente_redis
 from infraestructura.modelo import PENDIENTE_DE_ENCOLAR, ArchivoCargado
 from infraestructura.registro import configurar_registro
-from ingesta import TAMANO_MAXIMO_DE_UNA_HOJA_BYTES, recibir_lote
+from ingesta import (
+    TAMANO_MAXIMO_DE_UNA_HOJA_BYTES,
+    CargaDiariaAgotada,
+    LoteDemasiadoGrande,
+    PresupuestoDeCarga,
+    recibir_lote,
+)
 
 configurar_registro()
 logger = logging.getLogger("api")
@@ -74,9 +85,14 @@ app = FastAPI(
         "Interfaz HTTP de QuantIA, sistema de calificación de exámenes de opción múltiple. "
         "Hoy cubre el aspecto A-01 (carga de hojas escaneadas para calificación) y el A-06 "
         "(propuesta opcional de distractores diagnósticos), con el presupuesto que protege la "
-        "cuota del proveedor de LLM y su métrica en `GET /metricas` (EC-09)."
+        "cuota del proveedor de LLM y su métrica en `GET /metricas` (EC-09). Desde la S13, un "
+        "presupuesto de carga limita las hojas por lote y los bytes por día (ADR-0022)."
     ),
 )
+
+# El tope del cuerpo de la petición (ADR-0022) se agrega antes que CORS para quedar por dentro: así
+# su 413 sale con las cabeceras de CORS y el sitio lo puede leer.
+app.add_middleware(LimiteDelCuerpo)
 
 app.add_middleware(
     CORSMiddleware,
@@ -139,6 +155,31 @@ def obtener_presupuesto() -> PresupuestoDeSolicitudes:
     return PRESUPUESTO_DE_DISTRACTORES
 
 
+# El presupuesto de carga (S13, ADR-0022). Una sola vez al importar, como el del proveedor y por la
+# misma razón: lo que cuenta tiene que sobrevivir de un lote al siguiente. También vive en la
+# memoria de este proceso y se vacía con cada reinicio y cada despliegue.
+PRESUPUESTO_DE_CARGA = PresupuestoDeCarga(
+    hojas_por_lote=CARGA_HOJAS_POR_LOTE, mb_por_dia=CARGA_MB_POR_DIA
+)
+
+
+def obtener_presupuesto_de_carga() -> PresupuestoDeCarga:
+    """Dependencia del presupuesto de carga. Sustituible: una prueba que lo agota recibe uno
+    propio y no le quita el cupo a las demás."""
+    return PRESUPUESTO_DE_CARGA
+
+
+def _tamano(archivo: UploadFile) -> int:
+    """Bytes de un archivo subido. Starlette los cuenta mientras guarda el temporal; si no los
+    contó, se miden yendo al final del temporal, que ya está completo, y se vuelve al principio."""
+    if archivo.size is not None:
+        return archivo.size
+    archivo.file.seek(0, 2)
+    tamano = archivo.file.tell()
+    archivo.file.seek(0)
+    return tamano
+
+
 # La caché de propuestas (ADR-0019). Como el presupuesto, una sola, creada al importar, en la
 # memoria de este proceso: lo guardado tiene que sobrevivir de una solicitud a la siguiente, y se
 # vacía con cada reinicio. Crearla no toca la red ni el disco.
@@ -181,10 +222,45 @@ def salud_para_monitores() -> Response:
     return Response(status_code=200)
 
 
+def _registrar_lote_fuera_de_presupuesto(
+    evento: str, examen_id: str, hojas: int, presupuesto: PresupuestoDeCarga
+) -> None:
+    """La métrica de la mitigación en el registro: cada lote cortado deja un evento, con lo usado
+    en ese momento, igual que `presupuesto_agotado` en la ruta de distractores."""
+    estado = presupuesto.estado()
+    logger.warning(
+        "Lote fuera del presupuesto de carga",
+        extra={
+            "evento": evento,
+            "examen": examen_id,
+            "hojas": hojas,
+            "bytes_en_las_ultimas_24_horas": estado.bytes_en_las_ultimas_24_horas,
+            "lotes_rechazados_desde_el_arranque": estado.lotes_rechazados_desde_el_arranque,
+        },
+    )
+
+
 @app.post(
     "/examenes/{examen_id}/hojas",
     summary="Cargar hojas escaneadas de un examen",
     response_description="Qué entró y qué no, archivo por archivo.",
+    responses={
+        413: {
+            "model": LoteFueraDePresupuestoEnRespuesta,
+            "description": (
+                "El lote trae más hojas de las que admite uno, pesa más que el cupo de un día, o "
+                "la petición pasa de 100 MB (ADR-0022). No entró ninguna hoja; hay que dividirlo."
+            ),
+        },
+        429: {
+            "model": LoteFueraDePresupuestoEnRespuesta,
+            "description": (
+                "El lote no cabe en lo que queda del cupo de bytes de las últimas 24 horas "
+                "(ADR-0022). No entró ninguna hoja. La cabecera `Retry-After` dice en cuántos "
+                "segundos cabrá."
+            ),
+        },
+    },
 )
 async def cargar_hojas(
     examen_id: str,
@@ -192,6 +268,7 @@ async def cargar_hojas(
     almacen: AlmacenDeImagenes = Depends(obtener_almacen),
     cliente_cola=Depends(obtener_cliente_cola),
     bitacora: BitacoraDeRecepcion = Depends(obtener_bitacora),
+    presupuesto_de_carga: PresupuestoDeCarga = Depends(obtener_presupuesto_de_carga),
 ) -> RespuestaDeCarga:
     """Recibe una o varias hojas escaneadas de un examen y confirma qué entró y qué no (RF-01).
 
@@ -211,8 +288,35 @@ async def cargar_hojas(
     existe; `identidad` (A-05) es el que comprobará que el docente puede cargar en ese curso, y
     tampoco. La ruta ya tiene la forma definitiva para que cuando esas partes lleguen solo
     haya que sumar la comprobación, sin migrar el frontend.
+
+    **Un lote que no cabe en el presupuesto de carga no entra entero** (ADR-0022). Responde 413
+    si trae más hojas de las que admite un lote o pesa más que el cupo de un día, y 429 con
+    `Retry-After` si ya no cabe en lo que queda del cupo de las últimas 24 horas. En los dos
+    casos no se lee ninguna hoja, así que no hay nada que revisar antes de volver a subirlo.
     """
     inicio = time.perf_counter()
+
+    # El presupuesto va antes de leer la primera hoja: lo que no cabe no llega al almacén, que es
+    # el disco que comparten los equipos del servidor. Se reserva el lote entero, con lo que pesó
+    # al subir, también lo que la validación rechace después.
+    try:
+        presupuesto_de_carga.reservar(
+            hojas=len(archivos), bytes_del_lote=sum(_tamano(archivo) for archivo in archivos)
+        )
+    except LoteDemasiadoGrande as grande:
+        _registrar_lote_fuera_de_presupuesto(
+            "lote_demasiado_grande", examen_id, len(archivos), presupuesto_de_carga
+        )
+        raise HTTPException(status_code=413, detail=grande.motivo) from grande
+    except CargaDiariaAgotada as agotada:
+        _registrar_lote_fuera_de_presupuesto(
+            "carga_diaria_agotada", examen_id, len(archivos), presupuesto_de_carga
+        )
+        raise HTTPException(
+            status_code=429,
+            detail=agotada.motivo,
+            headers={"Retry-After": str(agotada.reintentar_en_segundos)},
+        ) from agotada
 
     # Las hojas se leen de a una, cuando `recibir_lote` llega a cada una, y no todas antes de
     # empezar: leer el lote entero a una lista eran 200 escaneos a la vez en la memoria de una
@@ -397,22 +501,27 @@ def proponer_distractores_para_una_pregunta(
 
 @app.get(
     "/metricas",
-    summary="Estado del presupuesto del proveedor de LLM y de la caché de propuestas",
-    response_description="Lo usado en las dos ventanas y lo enviado y cortado desde el arranque.",
+    summary="Estado de los presupuestos del proveedor de LLM y de carga, y de la caché",
+    response_description="Lo usado en cada ventana y lo admitido y cortado desde el arranque.",
 )
 def metricas(
     presupuesto: PresupuestoDeSolicitudes = Depends(obtener_presupuesto),
     cache: CacheDePropuestas = Depends(obtener_cache),
+    presupuesto_de_carga: PresupuestoDeCarga = Depends(obtener_presupuesto_de_carga),
 ) -> RespuestaDeMetricas:
     """La métrica de EC-09 consultable en vivo (ADR-0015).
 
     Dice cuántas solicitudes al proveedor caben todavía y cuántas se cortaron con 429, sin
     revisar el registro. Solo publica cuentas, ningún dato de un profesor ni de una pregunta, y no
     toca la red ni el disco, así que responde aunque el proveedor esté caído. Desde ADR-0019
-    publica también los aciertos, fallos y entradas de la caché de propuestas."""
+    publica también los aciertos, fallos y entradas de la caché de propuestas, y desde ADR-0022,
+    los bytes cargados en las últimas 24 horas y los lotes admitidos y cortados."""
     return RespuestaDeMetricas(
         presupuesto_de_distractores=EstadoDelPresupuestoEnRespuesta.model_validate(
             presupuesto.estado()
         ),
         cache_de_distractores=EstadoDeLaCacheEnRespuesta.model_validate(cache.estado()),
+        presupuesto_de_carga=EstadoDelPresupuestoDeCargaEnRespuesta.model_validate(
+            presupuesto_de_carga.estado()
+        ),
     )

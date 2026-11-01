@@ -68,6 +68,10 @@ services:
       # solo `api` lo lee y se vacía en cada despliegue que recrea el contenedor.
       LLM_SOLICITUDES_POR_MINUTO: ${LLM_SOLICITUDES_POR_MINUTO:-6}
       LLM_SOLICITUDES_POR_DIA: ${LLM_SOLICITUDES_POR_DIA:-150}
+      # Presupuesto de carga (ADR-0022): lo que la ruta pública de carga deja entrar al volumen,
+      # que está en el disco compartido del servidor. También vive en la memoria de este proceso.
+      CARGA_HOJAS_POR_LOTE: ${CARGA_HOJAS_POR_LOTE:-250}
+      CARGA_MB_POR_DIA: ${CARGA_MB_POR_DIA:-256}
       # Traefik termina el HTTPS y reenvía la petición con X-Forwarded-For y X-Forwarded-Proto.
       # Uvicorn solo cree esas cabeceras si vienen de 127.0.0.1, y aquí vienen del contenedor de
       # Traefik: sin esta línea, una redirección de FastAPI apunta a http:// y el registro de
