@@ -1,146 +1,161 @@
 # Estimación de costo mensual del entorno desplegado
 
-Estima cuánto cuesta al mes el entorno de demostración de QuantIA en Render, con el método del
-apartado «Cómo estimar el costo mensual» de la «Guía de despliegue y costos» del curso:
+Estima cuánto cuesta al mes el entorno de QuantIA en el servidor del laboratorio del curso, en
+iscoutb.dev. Sigue lo que pide el manual del servidor:
 
-- cuatro números salidos del escenario del proyecto (operaciones al mes, tamaño de los datos
-  almacenados, tráfico de salida y horas de ejecución);
-- un resultado que se espera en cero;
-- **el punto en que la capa gratuita se rompe**;
-- los costos que no son dinero.
+- los precios de la lista pública de Oracle Cloud, por OCPU-hora, por GB de RAM-hora y por GB de
+  disco al mes;
+- los supuestos declarados: la parte del servidor que nos corresponde y las horas al mes;
+- el punto en que dejaríamos de caber.
 
-Las cifras de los proveedores se consultaron el 27-sep-2026 en sus páginas oficiales (fuentes al
-final). El despliegue está descrito en [`render.yaml`](../../render.yaml) y en la
-[sección 7 del arc42](../arc42/arc42-template-ES.md#7-deployment-view). La restricción que
-fija el objetivo de US$0 es RNF-16 (costo mensual de US$0 y ninguna cuenta con tarjeta).
+Conserva la forma del apartado «Cómo estimar el costo mensual» de la «Guía de despliegue y costos»
+del curso: supuestos, cuatro números, un resultado, el punto de ruptura y los costos que no son
+dinero.
+
+Los precios se consultaron el 29-oct-2026 en la API pública del estimador de costos de Oracle, cuya
+lista se actualizó el 8-oct-2026 (fuentes al final). El despliegue está en
+[`deploy/compose.lab.yaml`](../../deploy/compose.lab.yaml), en la
+[sección 7 del arc42](../arc42/arc42-template-ES.md#7-deployment-view) y en
+[ADR-0021](../adr/0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md).
+La restricción que fija el objetivo de US$0 es RNF-16 (costo mensual de US$0 y ninguna cuenta con
+tarjeta).
 
 ## 1. Supuestos
 
-Salen del proyecto, no del catálogo del proveedor.
-
 | Supuesto | Valor | De dónde sale |
 |---|---|---|
-| Hojas por corte | 200 | [Ficha del problema](../ficha-problema.md): «del orden de doscientos estudiantes por corte»; es el lote de EC-04 y EC-07 |
-| Tamaño de una hoja | 200 KB, así que un lote de 200 hojas pesa unos 40 MB | Parámetro de la [medición de EC-07](../evidencia/medicion-ec07.md) (`--kb 200`) |
-| Lotes al mes | 4 | El curso tiene tres cortes por semestre (semanas 5, 10 y 16), así que un mes de corte trae a lo sumo un lote por curso. Se calcula con 4 para dejar margen |
-| Concurrencia | Un docente cargando a la vez | Un docente carga el lote de su curso; no hay cargas simultáneas en este entorno |
-| Visitas al sitio | 50 primeras visitas al mes | Supuesto: docentes y evaluadores. Cada primera visita descarga el sitio completo |
-| Monitor | Una consulta `HEAD /health` cada 5 minutos | [ADR-0009](../adr/0009-desplegar-la-api-en-el-servicio-web-gratuito-de-render-y-mantenerla-despierta.md) |
-| Espera del worker | Una `BLPOP` cada 5 s, aunque no haya trabajo | `backend/worker/main.py` |
-| Días del mes | 30 y 31 | Los dos casos, porque el cupo de horas cambia con el mes |
+| El servidor | VM de Oracle Cloud `VM.Standard.E5.Flex` con 1 OCPU (2 vCPU) y 12 GB de RAM, en la región Phoenix, compartida entre 23 equipos | Manual del servidor, sección 5 |
+| Disco del servidor | 200 GB | Aviso del panel del 29-oct (el manual decía 45 GB) |
+| Nivel de rendimiento del disco | *Balanced*, 10 unidades de rendimiento (VPU) por GB | Es el nivel por omisión de los volúmenes de Oracle |
+| Horas al mes | 720 (mes de 30 días) y 744 (mes de 31) | El servidor está encendido todo el mes |
+| Nuestra parte, forma A | 1/23 del servidor, por partes iguales | 23 equipos |
+| Nuestra parte, forma B | 1/23 de la CPU, más lo que suman nuestros límites de memoria (576 MB) y lo que ocupamos en disco (1 GB, una cota) | La CPU es compartida: los límites de 0,5 CPU son topes, no reservas. La memoria es como el docente reparte la cuota («sumando los límites») |
+| Hojas por corte | 200 de 200 KB, así que un lote pesa unos 40 MB | [Ficha del problema](../ficha-problema.md) y la [medición de EC-07](../evidencia/medicion-ec07.md) |
+| Lotes al mes | 4 | Tres cortes por semestre; se calcula con 4 para dejar margen |
+| Visitas al sitio | 50 primeras visitas al mes | Supuesto: docentes y evaluadores |
 
 ## 2. Los cuatro números
 
 **Operaciones al mes**
 - Cargas: 4 peticiones de lote, con 800 hojas en total.
-- Monitor: 288 consultas al día, es decir 8 640 al mes (30 días) o 8 928 (31 días).
-- Cola: 800 escrituras (`RPUSH`, una por hoja) y 518 400 o 535 680 `BLPOP` de la espera del
-  worker. La espera es casi todo el tráfico de la cola, y el Key Value de Render no cobra por
-  comando.
-- Las comprobaciones de salud internas de Render no se facturan.
+- Cola: 800 publicaciones y la espera del worker. Redis corre en nuestro contenedor y no se cobra
+  por comando.
+- Comprobaciones de salud: las hace Docker dentro del servidor (la API y el sitio cada 30 s, Redis
+  cada 10 s) y no salen a la red. No hace falta un monitor externo, porque nada se duerme.
 
 **Tamaño de los datos almacenados**
-- Disco de la instancia de la API: hasta 160 MB al mes (4 lotes de 40 MB), más la bitácora,
-  que suma unos KB. Es efímero y se borra en cada despliegue
-  ([ADR-0012](../adr/0012-mantener-el-almacen-en-el-disco-efimero-de-la-instancia-hasta-cerrar-r-06.md)).
-- Cola: casi vacía, porque el worker toma cada trabajo al llegar. En el peor caso, un lote
-  completo con el worker detenido son 200 trabajos de unos 300 bytes: unos 60 KB de los 25 MB.
+- Hojas y bitácora, en el volumen `almacen_imagenes`: hasta 160 MB al mes. Persisten hasta el
+  30-nov-2026, cuando el servidor borra los volúmenes, así que no pasan de unos 200 MB.
+- Cola, en el AOF de Redis (`datos_cola`): unos 290 bytes por trabajo, del orden de KB.
+- Imágenes: la del backend (que comparten `api` y `worker`), la del sitio y la de Redis. Con los
+  volúmenes, se toma 1 GB como cota de lo que ocupamos en disco.
 - Base de datos: 0, porque no se despliega.
 
 **Tráfico de salida**
-- Sitio: 50 primeras visitas × 1,18 MB son unos 59 MB. Los 1,18 MB se midieron sobre el sitio
-  desplegado, con compresión, y son todo lo que Render sirve en una primera visita: `main.dart.js`
-  (0,81 MB), el HTML, los manifiestos, la fuente de íconos y las cinco fuentes del diseño, que el
-  frontend empaqueta desde el 18-oct. CanvasKit lo baja el navegador del CDN de Google, no de
-  Render.
-- API: 4 respuestas de lote de unos 50 KB, más las de `/health`: menos de 1 MB.
-- Monitor: respuestas sin cuerpo, del orden de 2 MB al mes.
-- La subida de las hojas (160 MB) es tráfico de entrada.
-- Total: **unos 61 MB de salida, alrededor del 1 % de los 5 GB incluidos.**
+- Sitio: 50 primeras visitas × 1,60 MB son unos 80 MB. Los 1,60 MB se midieron el 30-oct sobre el
+  sitio desplegado ([evidencia](../evidencia/despliegue-iscoutb.md)). Cloudflare, que está delante,
+  guarda en caché los archivos del sitio, así que del servidor sale menos.
+- API: 4 respuestas de lote de unos 50 KB, más las de `/health` y `/metricas`: menos de 1 MB.
+- Total: **unos 81 MB.** Oracle no cobra los primeros 10 TB de salida al mes.
 
 **Horas de ejecución**
-- API con el worker adentro: 720 h (mes de 30 días) o 744 h (mes de 31), porque el monitor la
-  mantiene despierta todo el mes.
-- Sitio estático: no consume horas de instancia.
-- Cola: es una instancia gratuita propia (Key Value Free).
-- Construcciones: la imagen de la API tarda unos 20 s (en el log del primer despliegue fue de
-  19:35:06 a 19:35:24). Para el sitio, que compila Flutter, se supone una cota de 10 minutos. Cada
-  servicio se reconstruye solo cuando cambia su carpeta, así que con 10 despliegues de cada uno al
-  mes son unos 100 minutos de los 500.
-- Integración continua: unos 84 s por run (mediana de los últimos 12 en GitHub Actions). El
-  repositorio es público, así que no consume cuota de minutos.
+- Los cuatro contenedores, 720 o 744 h: están encendidos todo el mes.
+- Compilación en el servidor: segundos por despliegue, porque Flutter no se compila ahí. El primer
+  despliegue instaló las dependencias de Python en 6,9 s.
+- Integración continua: 3 min 9 s el run que publicó el despliegue (Flutter se compila dos veces:
+  en las pruebas y al publicar). El repositorio es público, así que no consume cuota de minutos.
 
-## 3. Resultado: US$0 al mes
+## 3. Resultado: US$0 al mes para el equipo
 
-| Pieza | Plataforma y plan | Consumo al volumen supuesto | Costo |
+El servidor lo paga el curso, y nadie del equipo tiene una cuenta con tarjeta: RNF-16 se cumple.
+Lo que sigue es cuánto del servidor nos corresponde.
+
+**El servidor completo:**
+
+| Recurso | Precio | Mes de 30 días | Mes de 31 días |
 |---|---|---|---|
-| Sitio | Sitio estático de Render | unos 59 MB de salida | US$0 |
-| API y worker | Servicio web Free de Render | 720 a 744 h de las 750 | US$0 |
-| Cola | Key Value Free de Render | unos 60 KB en el peor caso; 50 conexiones | US$0 |
-| Ficheros | Disco efímero de la instancia de la API | hasta 160 MB, que se borran al desplegar | US$0 |
-| Base de datos | No se despliega | nada | US$0 |
-| Pipeline | GitHub Actions, repositorio público | unos 84 s por run | US$0 |
-| Monitor | UptimeRobot, plan gratuito | 1 de 50 monitores | US$0 |
+| CPU: 1 OCPU | US$0,03 por OCPU-hora | US$21,60 | US$22,32 |
+| Memoria: 12 GB | US$0,002 por GB-hora | US$17,28 | US$17,86 |
+| Disco: 200 GB | US$0,0255 por GB al mes, más 10 VPU × US$0,0017 | US$8,50 | US$8,50 |
+| Salida | Gratis hasta 10 TB al mes | US$0 | US$0 |
+| **Total** | | **US$47,38** | **US$48,68** |
 
-## 4. Dónde se rompe la capa gratuita
+**Nuestra parte:**
 
-**Con un solo servicio web despierto, hasta unas 4 200 primeras visitas al sitio y hasta unos 50
-despliegues del sitio al mes, el costo sigue en cero.** A partir de ahí:
+| Forma | Cálculo, mes de 31 días | Mes de 30 días | Mes de 31 días |
+|---|---|---|---|
+| A, partes iguales | US$48,68 / 23 | US$2,06 | US$2,12 |
+| B, por recursos | CPU: US$0,03 / 23 × 744 = US$0,97. Memoria: 0,5625 GB × US$0,002 × 744 = US$0,84. Disco: 1 GB × US$0,0425 = US$0,04 | US$1,79 | US$1,85 |
 
-| Recurso | Cupo gratuito | Consumo supuesto | Se rompe cuando | Qué pasa y cuánto cuesta después |
+**Unos US$2 al mes**, por cualquiera de las dos formas. Oracle cobra la VM entera, se use o no: esta
+parte es una forma de repartir el costo, no lo que pagaría el curso de menos si no estuviéramos.
+
+| Pieza | Dónde corre | Límite | Costo para el equipo |
+|---|---|---|---|
+| Sitio | Contenedor `web` (nginx) | 32 MB, 0,25 CPU | US$0 |
+| API | Contenedor `api` | 384 MB, 0,50 CPU | US$0 |
+| Worker | Contenedor `worker` | 96 MB, 0,25 CPU | US$0 |
+| Cola | Contenedor `redis`, con AOF | 64 MB, 0,25 CPU | US$0 |
+| Ficheros | Volumen `almacen_imagenes` | hasta unos 200 MB | US$0 |
+| Base de datos | No se despliega | | US$0 |
+| Pipeline | GitHub Actions, repositorio público | unos 3 min por run | US$0 |
+
+## 4. Dónde dejaríamos de caber
+
+**Con la cuota del equipo, el entorno de hoy cabe con margen: usa 4 de 6 contenedores y 576 MB de
+1 GB.** Lo primero que se rompe no es la memoria sino la CPU de un contenedor, con varios lotes a la
+vez:
+
+| Recurso | Cuota | Uso | Se rompe cuando | Qué pasa |
 |---|---|---|---|---|
-| **Horas de instancia** (el primero que se rompe) | 750 h al mes por workspace, compartidas por todos los servicios web gratuitos | 720 a 744 h | Un segundo servicio web queda despierto todo el mes: el cupo se agota hacia la mitad del mes | Render suspende los servicios gratuitos hasta el mes siguiente. Para evitarlo, una instancia Starter: US$7 al mes por servicio, con tarjeta |
-| Ancho de banda | 5 GB al mes | unos 61 MB | Unas 4 200 primeras visitas al sitio al mes (a 1,18 MB cada una) | US$0,15 por GB. Por ejemplo, 10 000 primeras visitas son unos 11,8 GB: 6,8 GB de más, unos US$1,02 |
-| Minutos de build | 500 al mes | unos 100 | Unos 50 despliegues del sitio al mes, a 10 minutos cada uno | US$5 por cada 1000 minutos |
-| Key Value | 25 MB y 50 conexiones | unos 60 KB en el peor caso | Del orden de 80 000 trabajos pendientes, que solo se acumulan con el worker detenido | Las escrituras fallan (`noeviction`) y las hojas quedan `pendiente_de_encolar`. El plan siguiente cuesta US$10 al mes (256 MB, con persistencia en disco) |
-| Disco persistente | No existe en el plan gratuito | | Cuando haga falta conservar hojas entre despliegues (R-06) | US$0,25 por GB al mes, más la instancia de pago de US$7 |
+| **CPU de la API** (lo primero que se rompe) | 0,5 CPU por contenedor | Un lote de EC-07 la ocupa unos segundos | Cinco lotes de 200 hojas a la vez: tardan 11 s y vence el plazo de 8 s del lote | Entre el 8 y el 30 % de las hojas quedan `pendiente_de_encolar`, guardadas y en la bitácora (R-32). Con tres lotes a la vez no pasa |
+| Memoria (suma de los límites) | 1 GB (el manual todavía dice 512 MB) | 576 MB | La base de datos de R-06 y el worker leyendo marcas con A-02 piden más de los 448 MB que quedan | Hay que bajar límites o sacar una pieza. Si un contenedor pasa su propio límite, el kernel lo mata y Docker lo reinicia |
+| Contenedores | 6 (el manual todavía dice 4) | 4 | La base de datos y un segundo worker ocupan los dos que quedan; un séptimo no cabe | |
+| Disco | 200 GB para 23 equipos, sin cuota publicada por equipo (unos 8,7 GB en promedio) | menos de 1 GB | Unos 200 lotes de 40 MB | No se alcanza antes del 30-nov |
+| Tiempo | Los volúmenes se borran después del 30-nov-2026 | | El 30-nov | El entorno termina con el curso (R-31) |
 
-**Las dos alternativas del taller frente al volumen.**
-- **A, el servicio gratuito:** cuesta US$0 hasta los puntos de ruptura de arriba.
-- **B, la instancia siempre encendida:** cuesta US$7 al mes desde el primer día, cualquiera sea el
-  volumen.
-
-A deja de ser la más barata solo cuando hace falta un segundo servicio siempre encendido. Con el
-patrón de carga del proyecto, que son ráfagas en fechas de corte, eso no ocurre
-([comparación completa](taller-despliegue-api.md)).
-
-**La cola en Upstash, alternativa descartada en
-[ADR-0011](../adr/0011-consumir-la-cola-desde-la-instancia-de-la-api-con-el-key-value-gratuito.md):**
-su plan gratuito da 500 000 comandos al mes, y la espera del worker sola hace 518 400 o 535 680.
-Se rompería sin ninguna carga.
+**Si se aplica la cuota escrita en el manual** (512 MB), la API vuelve a 256 MB y el total queda en
+448 MB. Aguanta tres lotes de EC-07 a la vez con margen y queda justa con cinco (251 MiB de 256).
 
 ## 5. Lo que no es dinero
 
-- **Integración continua:** unos 84 s por run y sin cuota de minutos, porque el repositorio es
-  público.
-- **Despliegue:** no hay despliegue manual. Render despliega solo los commits cuyo CI termina en
-  verde (`autoDeployTrigger: checksPass`) y solo el servicio cuya carpeta cambió.
-- **Cuánta gente sabe rehacerlo:** el workspace gratuito de Render tiene un solo puesto, así que
-  hoy lo opera una sola persona (riesgo R-16). Cualquier integrante puede recrear el entorno en su
-  propia cuenta desde `render.yaml`, siguiendo la sección «Cómo se despliega» del
-  [README](../../README.md).
-- **Latencia:** si se apaga el monitor, el costo pasa a ser de tiempo. La primera petición después
-  de 15 minutos sin tráfico tarda 12,5 s
-  ([medición](../evidencia/medicion-arranque-en-frio.json)).
-- **Dependencia de terceros:** el monitor depende del plan gratuito de UptimeRobot, y todo el
-  entorno depende de que Render mantenga su capa gratuita (R-15).
+- **Integración continua:** unos 3 minutos por push a `master`, sin cuota de minutos, porque el
+  repositorio es público.
+- **Despliegue:** no hay despliegue manual. El panel despliega solo lo que pasó el CI, y lo hace en
+  cada push a `master`, también en uno de documentación. Si otros equipos están compilando, espera
+  turno: hay 2 compilaciones simultáneas para todo el servidor.
+- **Cuánta gente sabe rehacerlo:** los cuatro integrantes entran al panel con su correo
+  institucional, y los pasos están en «Cómo se despliega» del [README](../../README.md).
+- **Latencia:** no hay arranque en frío. Desde Colombia, `/health` responde con p95 de 0,53 s,
+  pasando por Cloudflare hasta Phoenix.
+- **Dependencias:** el servidor del curso no hace copias de seguridad y se borra el 30-nov (R-31), y
+  la red de la UTB no resuelve `*.iscoutb.dev` (R-30).
 
 ## 6. Cómo recalcular
 
-- **Horas al mes** = horas del mes × servicios web despiertos todo el mes. Tiene que quedar en 750
-  o menos.
-- **Salida al mes (MB)** ≈ primeras visitas × 1,18 + lotes × 0,05 + 2 (monitor). Tiene que
-  quedar en 5 000 o menos.
-- **Minutos de build al mes** ≈ despliegues del sitio × 10 + despliegues de la API × 0,3. Tiene
-  que quedar en 500 o menos.
-- **Comandos de la cola al mes** = 12 × 60 × 24 × días (espera) + hojas del mes.
+- **Servidor al mes (US$)** = (OCPU × 0,03 + GB de RAM × 0,002) × horas + GB de disco × 0,0425.
+- **Nuestra parte, forma A** = servidor al mes / número de equipos.
+- **Nuestra parte, forma B** = 0,03 / número de equipos × horas + GB de nuestros límites × 0,002 ×
+  horas + GB que ocupamos × 0,0425.
+- **Memoria** = suma de los `deploy.resources.limits.memory` de `compose.lab.yaml`. Tiene que quedar
+  dentro de la cuota.
+
+## 7. El entorno anterior, en Render
+
+Del 27-sep al 29-oct el entorno corrió en la capa gratuita de Render, también por US$0. Su primer
+punto de ruptura eran las 750 h de instancia del workspace, de las que la API, despierta con un
+monitor, gastaba 720 a 744. La estimación completa está en el historial de este archivo (commit
+`58147b8`). Render sigue arriba, sin cambios, hasta que el docente confirme las filas de despliegue
+de la S8; mientras tanto, sigue en US$0.
 
 ## Fuentes
 
-- Render, precios (planes, ancho de banda, minutos de build, disco, Key Value): https://render.com/pricing, consultada el 27-sep-2026
-- Render, capa gratuita (750 h por workspace, apagado a los 15 minutos, sin disco persistente): https://render.com/docs/free
-- Render, planes de Key Value (25 MB y 50 conexiones en el gratuito): https://render.com/docs/compute-plans
-- UptimeRobot, plan gratuito (50 monitores, cada 5 minutos, sin tarjeta): https://uptimerobot.com/pricing/
-- Upstash, plan gratuito (500 000 comandos al mes): https://upstash.com/docs/redis/overall/pricing
-- Medición del arranque en frío: [`medicion-arranque-en-frio.json`](../evidencia/medicion-arranque-en-frio.json)
-- Peso del sitio: medido el 18-oct-2026 a las 23:25 UTC sobre https://quantia-utb.onrender.com, con `Accept-Encoding: br, gzip`, descargando cada archivo de una primera visita: 1 177 567 bytes en total, de ellos 810 217 de `main.dart.js`. La medición anterior, del 27-sep-2026, contaba solo el `main.dart.js` del sitio de entonces (724 523 bytes)
+- Manual del servidor del laboratorio (la VM, la cuota y las reglas): https://github.com/ISCOUTB/iscoutb.dev, README, sección 5, y `docs/politicas-uso.md`
+- Oracle Cloud, API pública del estimador de costos, consultada el 29-oct-2026 (lista actualizada el 8-oct-2026):
+  - CPU E5, US$0,03 por OCPU-hora: https://apexapps.oracle.com/pls/apex/cetools/api/v1/products/?currencyCode=USD&partNumber=B97384
+  - Memoria E5, US$0,002 por GB-hora: https://apexapps.oracle.com/pls/apex/cetools/api/v1/products/?currencyCode=USD&partNumber=B97385
+  - Disco, US$0,0255 por GB al mes: https://apexapps.oracle.com/pls/apex/cetools/api/v1/products/?currencyCode=USD&partNumber=B91961
+  - Rendimiento del disco, US$0,0017 por VPU y GB al mes: https://apexapps.oracle.com/pls/apex/cetools/api/v1/products/?currencyCode=USD&partNumber=B91962
+  - Salida, gratis hasta 10 240 GB al mes y US$0,0085 por GB después: https://apexapps.oracle.com/pls/apex/cetools/api/v1/products/?currencyCode=USD&partNumber=B88327
+- Oracle Cloud, niveles de rendimiento de los volúmenes (*Balanced*, 10 VPU por GB, por omisión): https://docs.oracle.com/en-us/iaas/Content/Block/Concepts/blockvolumeperformance.htm
+- Peso del sitio, latencia de `/health` y límites de memoria medidos: [`despliegue-iscoutb.md`](../evidencia/despliegue-iscoutb.md)
