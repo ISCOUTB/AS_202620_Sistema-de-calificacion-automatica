@@ -24,6 +24,24 @@ En el servidor del laboratorio del curso, desde `deploy/compose.lab.yaml`. El pa
 `despliegue`, que el CI publica solo si las pruebas pasan ([ADR-0021](docs/adr/0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md)).
 Detalle en [Entorno desplegado, en detalle](#entorno-desplegado-en-detalle).
 
+## Evidencia S13: modelado de amenazas
+
+- **Amenazas:** 15, con STRIDE sobre el Nivel 2 del C4, cada una con probabilidad, impacto,
+  mitigación, dueño y estado (`docs/evidencia/modelo-de-amenazas.md`). La primera, AM-01, la carga
+  pública que llenaba el disco compartido, se cerró: 250 hojas por lote, 256 MB por día y 100 MB por
+  petición (ADR-0022).
+- **Dependencias:** OSV-Scanner en el CI, antes de publicar el despliegue. `certifi` vulnerable,
+  corregido; 0 en el frontend.
+- **Privacidad:** la hoja, el nombre del archivo y la IP del docente, con base en la Ley 1581 y la
+  autorización que recoge la UTB (arc42 §8.7). Aceptadas, con su motivo: arc42 §11.1.
+
+| Qué | Dónde |
+|---|---|
+| Tabla de amenazas, plan, componente generativo, dependencias y privacidad | [`modelo-de-amenazas.md`](docs/evidencia/modelo-de-amenazas.md) |
+| La mitigación estructural | [ADR-0022](docs/adr/0022-poner-un-presupuesto-de-carga-delante-del-almacen.md) · [`test_presupuesto_de_carga.py`](backend/tests/test_presupuesto_de_carga.py) |
+| Análisis de dependencias en el pipeline | job `dependencias` de [`ci.yml`](.github/workflows/ci.yml) · [run](https://github.com/ISCOUTB/AS_202620_Sistema-de-calificacion-automatica/actions/runs/41328819502) |
+| Arquitectura de seguridad, privacidad y amenazas aceptadas | [arc42 §8.6](docs/arc42/arc42-template-ES.md#86-seguridad), [§8.7](docs/arc42/arc42-template-ES.md#87-privacidad-y-datos-personales) y [§11.1](docs/arc42/arc42-template-ES.md#111-amenazas-aceptadas-s13) |
+
 ## Evidencia: consistencia de los datos y caché
 
 Lo que se entrega: la tabla operación → garantía de consistencia, el diseño de una caché con su
@@ -180,6 +198,7 @@ qué archivo y en qué sección está.
 | Consistencia y caché | Tabla operación → consistencia, caché con su invalidación y ADR de la decisión de datos más costosa de revertir | [Evidencia: consistencia de los datos y caché](#evidencia-consistencia-de-los-datos-y-caché) |
 | Taller de mensajería | Contrato del mensaje, entrega al menos una vez, duplicados, reintentos, seguimiento y ADR frente a la alternativa síncrona | [`docs/evidencia/taller-mensajeria.md`](docs/evidencia/taller-mensajeria.md) · [ADR-0020](docs/adr/0020-entregar-los-trabajos-al-menos-una-vez-con-reintentos-y-lista-de-fallidos.md) |
 | Despliegue en iscoutb.dev | Revisión desplegada, comprobación desde fuera de la universidad, recorrido de una hoja de la API al worker y límites de memoria medidos | [`docs/evidencia/despliegue-iscoutb.md`](docs/evidencia/despliegue-iscoutb.md) · [ADR-0021](docs/adr/0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md) |
+| S13 | Amenazas priorizadas con su mitigación, análisis de dependencias y privacidad | [Evidencia S13](#evidencia-s13-modelado-de-amenazas) |
 | Todas | Pipeline de integración continua | [Runs de GitHub Actions](https://github.com/ISCOUTB/AS_202620_Sistema-de-calificacion-automatica/actions) |
 | Todas | Análisis estático y su *Quality Gate* | [SonarQube Cloud](https://sonarcloud.io/summary/new_code?id=ISCOUTB_AS_202620_Sistema-de-calificacion-automatica) |
 | Todas | Respuesta a la retroalimentación automática | [`correcciones.md`](correcciones.md) |
@@ -374,7 +393,7 @@ Backend (dentro de `backend/`, con Redis disponible vía `docker compose up -d r
 pytest
 ```
 
-Son 175. Verifican: que la aplicación FastAPI arranca y su endpoint de salud responde
+Son 213. Verifican: que la aplicación FastAPI arranca y su endpoint de salud responde
 200; que los siete módulos del dominio se importan sin error ni ciclos; que ningún módulo
 importa por fuera de lo declarado en el docstring de su `__init__.py` (la prueba de fronteras
 entre módulos); que un trabajo encolado en Redis se recupera igual al desencolarlo; y, para el
@@ -436,6 +455,15 @@ invalidación de ADR-0019: el cambio de modelo o de instrucciones, las 24 horas 
 la capacidad, «Pedir otras propuestas», que no se guardan fallas ni respuestas vacías y que la regla
 corre en cada lectura. Se validaron provocando la falla con diez mutaciones, que los dos docstrings
 enumeran.
+
+Diecisiete llegaron con la S13 (ADR-0022), en
+[`backend/tests/test_presupuesto_de_carga.py`](backend/tests/test_presupuesto_de_carga.py).
+Verifican que un lote con más hojas que el tope, o que no cabe en el cupo de bytes de las últimas
+24 horas, no entra entero y no deja nada en el almacén, la bitácora ni la cola; que el 429 dice
+cuándo cabrá contando solo los lotes que hace falta que salgan; que la ventana libera el cupo al
+cumplir un día; que `GET /metricas` publica lo cargado y lo cortado; y que ningún cuerpo de más
+del tope llega a la ruta, lo declare o no. Se validaron provocando la falla con seis mutaciones,
+que el docstring enumera; una no pone ninguna en rojo, y el docstring dice por qué.
 
 Seis son la **prueba de contrato** ([`backend/tests/test_contrato.py`](backend/tests/test_contrato.py)),
 y verifican que el documento de `docs/contrato/openapi.json` y la API que corre no se puedan
@@ -516,12 +544,13 @@ El resultado, el procedimiento y sus límites están en
 ## El contrato de la API
 
 Lo que la API promete devolver está escrito en un documento OpenAPI versionado en el
-repositorio: [`docs/contrato/openapi.json`](docs/contrato/openapi.json), en la versión 1.4.0.
+repositorio: [`docs/contrato/openapi.json`](docs/contrato/openapi.json), en la versión 1.5.0.
 Describe las cuatro rutas con el esquema de cada respuesta campo por campo, no solo el listado de
 endpoints. La 1.2.0 agregó `GET /metricas` y el 429 de `/distractores` (segundo corte, ADR-0015).
 La 1.3.0 agregó el `hoja_id` de cada hoja aceptada (ADR-0018), y la 1.4.0, la caché de propuestas:
 `otras` en la solicitud de distractores, `desde_la_cache` en su respuesta y su estado en
-`/metricas` (ADR-0019). Las dos solo agregan.
+`/metricas` (ADR-0019). La 1.5.0 agregó el presupuesto de carga: el 413 y el 429 de la ruta de
+carga y su estado en `/metricas` (ADR-0022). Las tres solo agregan.
 
 Está versionado y no se consulta en caliente por dos razones. `/openapi.json` solo existe
 mientras la API está levantada y describe la versión que esté corriendo en ese momento, así que
@@ -593,6 +622,7 @@ El desarrollo sigue Aspect Driven Development (ADD): cada funcionalidad se decla
 | [0019](docs/adr/0019-guardar-en-cache-las-propuestas-de-distractores.md) | Guardar en caché las propuestas de distractores | aceptado |
 | [0020](docs/adr/0020-entregar-los-trabajos-al-menos-una-vez-con-reintentos-y-lista-de-fallidos.md) | Entregar los trabajos al menos una vez, con reintentos y lista de fallidos | aceptado |
 | [0021](docs/adr/0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md) | Desplegar en el servidor del laboratorio, con el sitio compilado en el CI | aceptado |
+| [0022](docs/adr/0022-poner-un-presupuesto-de-carga-delante-del-almacen.md) | Poner un presupuesto de carga delante del almacén | aceptado |
 
 Las decisiones de un ADR aceptado no se editan ni se borran: si una decisión cambia, se escribe uno nuevo y el anterior pasa a estado *reemplazado por*. Los ajustes menores que no son de arquitectura, como un enlace roto, se permiten dejando constancia ([ADR-0014](docs/adr/0014-dejar-constancia-del-ajuste-de-enlaces-en-adr-0007.md)).
 
@@ -606,7 +636,7 @@ Las decisiones de un ADR aceptado no se editan ni se borran: si una decisión ca
 - [x] arc42: Deployment View (sección 7)
 - [x] Escenarios de calidad: 5 priorizados y 4 complementarios; EC-07, EC-08 y EC-09 medidos
 - [x] C4 Niveles 1, 2 y 3
-- [x] ADR 0001 a 0021
+- [x] ADR 0001 a 0022
 - [x] Elección de stack: FastAPI en el backend, Flutter en el frontend
 - [x] Esqueleto ejecutable
 - [x] Corte vertical de A-01: `ingesta`, almacén, bitácora, encolado y pantalla de carga
@@ -626,6 +656,10 @@ Las decisiones de un ADR aceptado no se editan ni se borran: si una decisión ca
 - [x] Consistencia y caché: tabla operación → consistencia, `hoja_id` propio con la bitácora como
   fuente de verdad (ADR-0018) y caché de propuestas con su invalidación (ADR-0019)
 - [ ] Consulta del estado vigente de una hoja (R-26, con A-02)
+- [x] S13: modelo de amenazas con STRIDE sobre el C4, análisis de dependencias en el pipeline,
+  presupuesto de carga (ADR-0022) y privacidad
+- [ ] Autenticación (A-05), antes de la primera hoja real (AM-02); análisis de las imágenes base
+  (R-34)
 - [ ] Aspectos A-02 a A-05
 
 ## Documentación
@@ -634,13 +668,13 @@ Las decisiones de un ADR aceptado no se editan ni se borran: si una decisión ca
 docs/
 ├── arc42/
 │   └── arc42-template-ES.md                            # documento de arquitectura (arc42)
-├── adr/                                                # 0001 a 0021; el 0001, reemplazado por el 0002, y del 0009 al 0012, por el 0021
+├── adr/                                                # 0001 a 0022; el 0001, reemplazado por el 0002, y del 0009 al 0012, por el 0021
 ├── c4/
 │   └── doc-c4.md                                       # modelo C4 (Niveles 1, 2 y 3)
 ├── contrato/
 │   └── openapi.json                                    # contrato HTTP (OpenAPI 3.1), generado
 ├── despliegue/                                        # estimación de costo y taller de despliegue
-├── evidencia/                                          # EC-07, arranque en frío, prueba de contrato, SonarQube; de la S9: EC-08, prueba del defecto y auditoría; del corte 2: experimento de EC-09; de la S11: modos de fallo; de consistencia y caché: la tabla de garantías y el diseño de la caché; del taller de mensajería: su ejecución; del despliegue en iscoutb.dev: la verificación
+├── evidencia/                                          # EC-07, arranque en frío, prueba de contrato, SonarQube; de la S9: EC-08, prueba del defecto y auditoría; del corte 2: experimento de EC-09; de la S11: modos de fallo; de consistencia y caché: la tabla de garantías y el diseño de la caché; del taller de mensajería: su ejecución; del despliegue en iscoutb.dev: la verificación; de la S13: el modelo de amenazas
 ├── ficha-problema.md                                   # el problema, usuarios y alcance
 ├── aspectos.md                                         # aspectos y tabla de trazabilidad
 └── ia.md                                               # registro de uso de IA
