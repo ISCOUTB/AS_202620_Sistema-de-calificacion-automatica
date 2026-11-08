@@ -7,6 +7,7 @@ import functools
 import logging
 import time
 from collections.abc import Iterator
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, HTTPException, Response, UploadFile
@@ -21,7 +22,10 @@ from api.esquemas import (
     EstadoDeLaCacheEnRespuesta,
     EstadoDelPresupuestoDeCargaEnRespuesta,
     EstadoDelPresupuestoEnRespuesta,
+    ExamenEnRespuesta,
+    ExamenesEnRespuesta,
     HojaAceptadaEnRespuesta,
+    HojaEnRevisionEnRespuesta,
     LoteFueraDePresupuestoEnRespuesta,
     PresupuestoAgotadoEnRespuesta,
     ProveedorNoDisponibleEnRespuesta,
@@ -29,7 +33,11 @@ from api.esquemas import (
     RespuestaDeDistractores,
     RespuestaDeMetricas,
     RespuestaDeSalud,
+    ResultadoDeHojaEnRespuesta,
+    ResultadosDelExamenEnRespuesta,
+    RevisionDelExamenEnRespuesta,
     SolicitudDeDistractores,
+    SolicitudDeRevision,
 )
 from api.limite_del_cuerpo import LimiteDelCuerpo
 from api.settings import (
@@ -45,6 +53,9 @@ from api.settings import (
     REDIS_URL,
     RUTA_ALMACEN,
     RUTA_BITACORA,
+    RUTA_CLAVES,
+    RUTA_RESULTADOS,
+    RUTA_REVISIONES,
 )
 from autoria import (
     HUELLA_DE_LAS_INSTRUCCIONES,
@@ -57,13 +68,19 @@ from autoria import (
     PresupuestoAgotado,
     PresupuestoDeSolicitudes,
     ProveedorNoDisponible,
+    examenes_con_clave,
     proponer_distractores,
 )
+from calificacion import HojaSinNotaQueRevisar, resolver_preguntas
+from dashboard import referencia_del_recorte, resultados_del_examen, revision_del_examen
 from infraestructura.almacen import AlmacenDeImagenes, AlmacenEnDisco
 from infraestructura.bitacora import BitacoraDeRecepcion, BitacoraEnDisco
+from infraestructura.claves import CatalogoDeClaves, ClavesEnDisco
 from infraestructura.cola import ESPERA_AL_PUBLICAR_SEGUNDOS, cliente_redis
 from infraestructura.modelo import PENDIENTE_DE_ENCOLAR, ArchivoCargado
 from infraestructura.registro import configurar_registro
+from infraestructura.resultados import LectorDeResultados, ResultadosEnDisco
+from infraestructura.revisiones import RevisionesDelProfesor, RevisionesEnDisco
 from ingesta import (
     TAMANO_MAXIMO_DE_UNA_HOJA_BYTES,
     CargaDiariaAgotada,
@@ -117,6 +134,24 @@ def obtener_bitacora() -> BitacoraDeRecepcion:
     """Dependencia de la bitácora de recepción (ADR-0006). Por petición y sustituible, por las
     mismas dos razones que el almacén."""
     return BitacoraEnDisco(Path(RUTA_BITACORA))
+
+
+def obtener_lector_de_resultados() -> LectorDeResultados:
+    """Dependencia del registro de resultados que escribe el worker (ADR-0023). Por petición y
+    sustituible, como el almacén y la bitácora."""
+    return ResultadosEnDisco(Path(RUTA_RESULTADOS))
+
+
+def obtener_revisiones() -> RevisionesDelProfesor:
+    """Dependencia del registro de lo que resuelve el profesor (RF-08). Solo la API lo escribe.
+    Por petición y sustituible, como los otros registros."""
+    return RevisionesEnDisco(Path(RUTA_REVISIONES))
+
+
+def obtener_catalogo_de_claves() -> CatalogoDeClaves:
+    """Dependencia del catálogo de claves, el mismo directorio que lee el worker. Por petición y
+    sustituible, como el almacén y la bitácora."""
+    return ClavesEnDisco(Path(RUTA_CLAVES))
 
 
 @functools.lru_cache(maxsize=4)
@@ -496,6 +531,172 @@ def proponer_distractores_para_una_pregunta(
             for descartado in resultado.descartados
         ],
         desde_la_cache=con_cache.desde_la_cache,
+    )
+
+
+@app.get(
+    "/examenes",
+    summary="Exámenes con clave registrada",
+    response_description="Cada examen con clave, sin sus respuestas, ordenados por identificador.",
+)
+def examenes(
+    catalogo: CatalogoDeClaves = Depends(obtener_catalogo_de_claves),
+) -> ExamenesEnRespuesta:
+    """Los exámenes que tienen una clave registrada, para que la pantalla de carga los ofrezca en
+    una lista y el docente no tenga que escribir el identificador de memoria: una letra mal
+    escrita mandaba las hojas a un examen sin clave, y nadie lo notaba hasta ver «Sin nota».
+
+    **No devuelve las respuestas de la clave**: la ruta es pública hasta A-05 (AM-02). Una clave
+    mal escrita no aparece, y una sin habilitar sí, marcada, porque sus hojas se leen sin nota."""
+    return ExamenesEnRespuesta(
+        examenes=[
+            ExamenEnRespuesta.model_validate(examen) for examen in examenes_con_clave(catalogo)
+        ]
+    )
+
+
+@app.get(
+    "/examenes/{examen_id}/resultados",
+    summary="Cómo quedó cada hoja leída de un examen",
+    response_description="El último resultado de cada hoja leída, sin el código del estudiante.",
+)
+def resultados(
+    examen_id: str,
+    lector: LectorDeResultados = Depends(obtener_lector_de_resultados),
+    revisiones: RevisionesDelProfesor = Depends(obtener_revisiones),
+) -> ResultadosDelExamenEnRespuesta:
+    """Las hojas del examen que el worker ya leyó, con su estado, su nota y las preguntas que
+    esperan al profesor (A-02 y A-03). La pantalla de carga la consulta después de subir un lote y
+    une cada resultado con su archivo por el `hoja_id`.
+
+    Una hoja recibida que todavía no aparece sigue en la cola o leyéndose. **No devuelve el código
+    del estudiante**: la ruta es pública hasta A-05, y el riesgo se aceptó solo mientras no entren
+    hojas reales (AM-02). Lee el registro en disco en un hilo aparte, para no frenar a las demás
+    peticiones mientras recorre el archivo."""
+    proyeccion = resultados_del_examen(examen_id, lector, revisiones)
+    return ResultadosDelExamenEnRespuesta(
+        examen_id=proyeccion.examen_id,
+        hojas=[ResultadoDeHojaEnRespuesta.model_validate(hoja) for hoja in proyeccion.hojas],
+    )
+
+
+@app.get(
+    "/examenes/{examen_id}/revision",
+    summary="Las preguntas que esperan al profesor en un examen",
+    response_description="Cada hoja con preguntas en revisión, sin la clave ni el código.",
+)
+def revision(
+    examen_id: str,
+    lector: LectorDeResultados = Depends(obtener_lector_de_resultados),
+    revisiones: RevisionesDelProfesor = Depends(obtener_revisiones),
+) -> RevisionDelExamenEnRespuesta:
+    """Las hojas con preguntas que la lectura no pudo decidir, y en cada pregunta lo que se midió
+    en sus burbujas y lo que el profesor ya resolvió (RF-08). Una hoja sigue apareciendo después de
+    resuelta, para poder cambiar una decisión.
+
+    **No lleva la respuesta correcta ni el código del estudiante**: la ruta es pública hasta A-05
+    (AM-02). El profesor dice qué marcó el estudiante y el sistema decide si es correcto."""
+    proyeccion = revision_del_examen(examen_id, lector, revisiones)
+    return RevisionDelExamenEnRespuesta(
+        examen_id=proyeccion.examen_id,
+        hojas=[HojaEnRevisionEnRespuesta.model_validate(hoja) for hoja in proyeccion.hojas],
+    )
+
+
+@app.post(
+    "/examenes/{examen_id}/hojas/{hoja_id}/revision",
+    summary="Guardar lo que el profesor resolvió en una hoja",
+    response_description="El resultado de la hoja con la nota recalculada.",
+    responses={
+        404: {"description": "La hoja no está en el examen o no tiene una nota que revisar."},
+        422: {"description": "Una pregunta no estaba en revisión, viene dos veces o falta el nombre."},
+    },
+)
+def resolver_revision(
+    examen_id: str,
+    hoja_id: str,
+    solicitud: SolicitudDeRevision,
+    lector: LectorDeResultados = Depends(obtener_lector_de_resultados),
+    revisiones: RevisionesDelProfesor = Depends(obtener_revisiones),
+) -> ResultadoDeHojaEnRespuesta:
+    """Registra lo que el profesor vio marcado en cada pregunta, con su nombre y la hora (RF-08,
+    RF-10), y devuelve la hoja con la nota recalculada. La nota automática no se borra: queda en
+    el registro de resultados, y esta solo se agrega encima (ADR-0018).
+
+    El nombre es el que escribe el profesor, **sin verificar** hasta A-05. Si algo no cuadra (una
+    pregunta que no estaba en revisión, por ejemplo), no se guarda nada."""
+    opciones: dict[int, str | None] = {}
+    for resolucion in solicitud.resoluciones:
+        if resolucion.numero in opciones:
+            raise HTTPException(
+                status_code=422, detail=f"La pregunta {resolucion.numero} viene dos veces."
+            )
+        opciones[resolucion.numero] = resolucion.opcion
+    try:
+        resolver_preguntas(
+            examen_id,
+            hoja_id,
+            opciones,
+            solicitud.por,
+            datetime.now(timezone.utc),
+            lector,
+            revisiones,
+        )
+    except HojaSinNotaQueRevisar as falta:
+        raise HTTPException(status_code=404, detail=str(falta)) from falta
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+
+    hoja = next(
+        hoja
+        for hoja in resultados_del_examen(examen_id, lector, revisiones).hojas
+        if hoja.hoja_id == hoja_id
+    )
+    # Sin el nombre de quien resolvió: queda en el registro de revisiones, no en el log.
+    logger.info(
+        "Revisión guardada",
+        extra={
+            "evento": "revision_guardada",
+            "examen": examen_id,
+            "hoja": hoja_id,
+            "preguntas": len(opciones),
+            "nota_en_decimas": hoja.nota_en_decimas,
+            "provisional": hoja.provisional,
+        },
+    )
+    return ResultadoDeHojaEnRespuesta.model_validate(hoja)
+
+
+@app.get(
+    "/examenes/{examen_id}/hojas/{hoja_id}/preguntas/{numero}/recorte",
+    summary="El recorte de una pregunta en revisión",
+    response_class=Response,
+    responses={
+        200: {"content": {"image/png": {}}, "description": "La fila de burbujas, en PNG."},
+        404: {"description": "La pregunta no tiene recorte."},
+    },
+)
+def recorte(
+    examen_id: str,
+    hoja_id: str,
+    numero: int,
+    lector: LectorDeResultados = Depends(obtener_lector_de_resultados),
+    almacen: AlmacenDeImagenes = Depends(obtener_almacen),
+) -> Response:
+    """La fila de burbujas de una pregunta en revisión, recortada de la hoja al leerla. Muestra la
+    fila y su número, no el código del estudiante. La ubicación sale del registro de resultados,
+    nunca de la petición."""
+    referencia = referencia_del_recorte(examen_id, hoja_id, numero, lector)
+    if referencia is None:
+        raise HTTPException(status_code=404, detail="La pregunta no tiene recorte.")
+    try:
+        contenido = almacen.leer(referencia)
+    except (OSError, ValueError) as error:
+        raise HTTPException(status_code=404, detail="La pregunta no tiene recorte.") from error
+    return Response(
+        content=contenido,
+        media_type="image/png",
+        headers={"Cache-Control": "private, max-age=300"},
     )
 
 

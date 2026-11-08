@@ -39,6 +39,40 @@
         "title": "Body_cargar_hojas_examenes__examen_id__hojas_post",
         "type": "object"
       },
+      "BurbujaEnRespuesta": {
+        "description": "Lo que se midio en una burbuja de una pregunta en revision.",
+        "properties": {
+          "confianza": {
+            "description": "Que tan probable es que la marca sea intencional.",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Confianza",
+            "type": "integer"
+          },
+          "opcion": {
+            "enum": [
+              "A",
+              "B",
+              "C",
+              "D"
+            ],
+            "title": "Opcion",
+            "type": "string"
+          },
+          "tipo": {
+            "description": "vacia, tenue, borron o completa.",
+            "title": "Tipo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "opcion",
+          "tipo",
+          "confianza"
+        ],
+        "title": "BurbujaEnRespuesta",
+        "type": "object"
+      },
       "DescartadoEnRespuesta": {
         "description": "Una propuesta del modelo que no llego al profesor, con el motivo.",
         "properties": {
@@ -236,6 +270,43 @@
         "title": "EstadoDelPresupuestoEnRespuesta",
         "type": "object"
       },
+      "ExamenEnRespuesta": {
+        "description": "Un examen con clave registrada. **No lleva las respuestas**: la ruta es publica hasta A-05,\ny para elegir el examen basta con su identificador.",
+        "properties": {
+          "examen_id": {
+            "title": "Examen Id",
+            "type": "string"
+          },
+          "habilitada": {
+            "description": "Si la clave ya esta habilitada. Sin habilitar, las hojas se leen sin nota.",
+            "title": "Habilitada",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "examen_id",
+          "habilitada"
+        ],
+        "title": "ExamenEnRespuesta",
+        "type": "object"
+      },
+      "ExamenesEnRespuesta": {
+        "description": "Los examenes con clave registrada, ordenados por identificador.",
+        "properties": {
+          "examenes": {
+            "items": {
+              "$ref": "#/components/schemas/ExamenEnRespuesta"
+            },
+            "title": "Examenes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "examenes"
+        ],
+        "title": "ExamenesEnRespuesta",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -299,6 +370,45 @@
         "title": "HojaAceptadaEnRespuesta",
         "type": "object"
       },
+      "HojaEnRevisionEnRespuesta": {
+        "description": "Una hoja con preguntas en revision, con su nota vigente. Sin el codigo del estudiante.",
+        "properties": {
+          "codigo_completo": {
+            "title": "Codigo Completo",
+            "type": "boolean"
+          },
+          "hoja_id": {
+            "title": "Hoja Id",
+            "type": "string"
+          },
+          "nota_en_decimas": {
+            "maximum": 50.0,
+            "minimum": 0.0,
+            "title": "Nota En Decimas",
+            "type": "integer"
+          },
+          "preguntas": {
+            "items": {
+              "$ref": "#/components/schemas/PreguntaEnRevisionEnRespuesta"
+            },
+            "title": "Preguntas",
+            "type": "array"
+          },
+          "provisional": {
+            "title": "Provisional",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "hoja_id",
+          "nota_en_decimas",
+          "provisional",
+          "codigo_completo",
+          "preguntas"
+        ],
+        "title": "HojaEnRevisionEnRespuesta",
+        "type": "object"
+      },
       "LoteFueraDePresupuestoEnRespuesta": {
         "description": "Cuerpo del 413 y del 429 de la ruta de carga: el lote no cabe en el presupuesto de carga y\nno entro ninguna de sus hojas (ADR-0022).\n\nEl 429 lleva ademas la cabecera `Retry-After` con los segundos que faltan para que el lote\nquepa. Usa `detail`, como los demas errores, para que un cliente los lea igual.",
         "properties": {
@@ -312,6 +422,84 @@
           "detail"
         ],
         "title": "LoteFueraDePresupuestoEnRespuesta",
+        "type": "object"
+      },
+      "PreguntaEnRevisionEnRespuesta": {
+        "description": "Una pregunta que la lectura no pudo decidir. **No lleva la respuesta correcta**: el profesor\ndice que marco el estudiante y el sistema decide si es correcto.",
+        "properties": {
+          "burbujas": {
+            "items": {
+              "$ref": "#/components/schemas/BurbujaEnRespuesta"
+            },
+            "title": "Burbujas",
+            "type": "array"
+          },
+          "con_recorte": {
+            "description": "Si hay un recorte de la fila para mostrar en `.../preguntas/{numero}/recorte`.",
+            "title": "Con Recorte",
+            "type": "boolean"
+          },
+          "numero": {
+            "title": "Numero",
+            "type": "integer"
+          },
+          "opcion_resuelta": {
+            "anyOf": [
+              {
+                "enum": [
+                  "A",
+                  "B",
+                  "C",
+                  "D"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "La opcion que el profesor vio marcada, o nula si dijo que ninguna vale.",
+            "title": "Opcion Resuelta"
+          },
+          "resuelta": {
+            "title": "Resuelta",
+            "type": "boolean"
+          },
+          "resuelta_en": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resuelta En"
+          },
+          "resuelta_por": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "El nombre que escribio quien la resolvio. Sin verificar hasta A-05.",
+            "title": "Resuelta Por"
+          }
+        },
+        "required": [
+          "numero",
+          "burbujas",
+          "con_recorte",
+          "resuelta",
+          "opcion_resuelta",
+          "resuelta_por",
+          "resuelta_en"
+        ],
+        "title": "PreguntaEnRevisionEnRespuesta",
         "type": "object"
       },
       "PresupuestoAgotadoEnRespuesta": {
@@ -342,6 +530,39 @@
           "detail"
         ],
         "title": "ProveedorNoDisponibleEnRespuesta",
+        "type": "object"
+      },
+      "ResolucionEnSolicitud": {
+        "description": "Lo que el profesor vio marcado en una pregunta: una opcion, o nula si ninguna vale (en\nblanco o con dos marcas).",
+        "properties": {
+          "numero": {
+            "minimum": 1.0,
+            "title": "Numero",
+            "type": "integer"
+          },
+          "opcion": {
+            "anyOf": [
+              {
+                "enum": [
+                  "A",
+                  "B",
+                  "C",
+                  "D"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opcion"
+          }
+        },
+        "required": [
+          "numero",
+          "opcion"
+        ],
+        "title": "ResolucionEnSolicitud",
         "type": "object"
       },
       "RespuestaDeCarga": {
@@ -449,6 +670,146 @@
         "title": "RespuestaDeSalud",
         "type": "object"
       },
+      "ResultadoDeHojaEnRespuesta": {
+        "description": "Como quedo una hoja despues de leerla y calificarla.\n\n**No lleva el codigo del estudiante.** La API no tiene inicio de sesion hasta A-05, y esta\nruta es tan publica como las demas; el codigo queda en el registro del servidor (AM-02).",
+        "properties": {
+          "codigo_completo": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Si el codigo del estudiante se leyo en sus ocho columnas. Nulo si la hoja es ilegible. El codigo mismo no viaja.",
+            "title": "Codigo Completo"
+          },
+          "estado": {
+            "description": "calificada: tiene nota y nada espera al profesor. en_revision: tiene nota provisional, con preguntas por revisar. sin_clave_habilitada: se leyo, pero el examen no tiene una clave habilitada. ilegible: no se pudo leer, y hay que volver a tomar la foto.",
+            "enum": [
+              "calificada",
+              "en_revision",
+              "sin_clave_habilitada",
+              "ilegible"
+            ],
+            "title": "Estado",
+            "type": "string"
+          },
+          "hoja_id": {
+            "description": "La identidad que devolvio la carga al recibir la hoja (ADR-0018).",
+            "title": "Hoja Id",
+            "type": "string"
+          },
+          "momento": {
+            "description": "Cuando quedo este resultado.",
+            "format": "date-time",
+            "title": "Momento",
+            "type": "string"
+          },
+          "motivo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Por que no tiene nota (sin_clave, clave_sin_habilitar, clave_mal_escrita) o por que no se pudo leer (por ejemplo imagen_ilegible o marcas_de_registro_no_encontradas).",
+            "title": "Motivo"
+          },
+          "nota_en_decimas": {
+            "anyOf": [
+              {
+                "maximum": 50.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "La nota de 0 a 50 (42 es 4,2). Nula sin clave o si la hoja es ilegible.",
+            "title": "Nota En Decimas"
+          },
+          "preguntas_por_revisar": {
+            "description": "Los numeros de las preguntas que esperan al profesor.",
+            "items": {
+              "type": "integer"
+            },
+            "title": "Preguntas Por Revisar",
+            "type": "array"
+          },
+          "provisional": {
+            "description": "Verdadero mientras haya preguntas por revisar.",
+            "title": "Provisional",
+            "type": "boolean"
+          },
+          "revisada": {
+            "description": "Si la nota incluye lo que resolvio el profesor en las preguntas en revision (RF-08). Distingue una nota corregida a mano de una automatica (RNF-15).",
+            "title": "Revisada",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "hoja_id",
+          "estado",
+          "motivo",
+          "nota_en_decimas",
+          "provisional",
+          "preguntas_por_revisar",
+          "codigo_completo",
+          "momento",
+          "revisada"
+        ],
+        "title": "ResultadoDeHojaEnRespuesta",
+        "type": "object"
+      },
+      "ResultadosDelExamenEnRespuesta": {
+        "description": "Las hojas leidas de un examen, cada una con su ultimo resultado. Una hoja recibida que\ntodavia no aparece esta en la cola o leyendose.",
+        "properties": {
+          "examen_id": {
+            "title": "Examen Id",
+            "type": "string"
+          },
+          "hojas": {
+            "items": {
+              "$ref": "#/components/schemas/ResultadoDeHojaEnRespuesta"
+            },
+            "title": "Hojas",
+            "type": "array"
+          }
+        },
+        "required": [
+          "examen_id",
+          "hojas"
+        ],
+        "title": "ResultadosDelExamenEnRespuesta",
+        "type": "object"
+      },
+      "RevisionDelExamenEnRespuesta": {
+        "description": "Las hojas de un examen que tienen o tuvieron preguntas en revision.",
+        "properties": {
+          "examen_id": {
+            "title": "Examen Id",
+            "type": "string"
+          },
+          "hojas": {
+            "items": {
+              "$ref": "#/components/schemas/HojaEnRevisionEnRespuesta"
+            },
+            "title": "Hojas",
+            "type": "array"
+          }
+        },
+        "required": [
+          "examen_id",
+          "hojas"
+        ],
+        "title": "RevisionDelExamenEnRespuesta",
+        "type": "object"
+      },
       "SolicitudDeDistractores": {
         "description": "Lo que el profesor envia para pedir distractores diagnosticos (RF-11).\n\nSon los mismos tres campos de `PreguntaParaDistractores` y ninguno mas: es lo unico que puede\nllegar al proveedor de LLM, y por eso RNF-13 se cumple desde la puerta. Los limites de largo\nacotan lo que cuesta cada solicitud en tokens.",
         "properties": {
@@ -486,6 +847,32 @@
           "respuesta_correcta"
         ],
         "title": "SolicitudDeDistractores",
+        "type": "object"
+      },
+      "SolicitudDeRevision": {
+        "description": "Lo que el profesor resolvio en una hoja, todo junto. `por` queda registrado con cada\nresolucion (RF-10); es un nombre escrito a mano hasta A-05.",
+        "properties": {
+          "por": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Por",
+            "type": "string"
+          },
+          "resoluciones": {
+            "items": {
+              "$ref": "#/components/schemas/ResolucionEnSolicitud"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Resoluciones",
+            "type": "array"
+          }
+        },
+        "required": [
+          "por",
+          "resoluciones"
+        ],
+        "title": "SolicitudDeRevision",
         "type": "object"
       },
       "ValidationError": {
@@ -533,7 +920,7 @@
   "info": {
     "description": "Interfaz HTTP de QuantIA, sistema de calificación de exámenes de opción múltiple. Hoy cubre el aspecto A-01 (carga de hojas escaneadas para calificación) y el A-06 (propuesta opcional de distractores diagnósticos), con el presupuesto que protege la cuota del proveedor de LLM y su métrica en `GET /metricas` (EC-09). Desde la S13, un presupuesto de carga limita las hojas por lote y los bytes por día (ADR-0022).",
     "title": "QuantIA",
-    "version": "1.5.0"
+    "version": "1.8.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -594,6 +981,25 @@
           }
         },
         "summary": "Proponer distractores diagnósticos para una pregunta"
+      }
+    },
+    "/examenes": {
+      "get": {
+        "description": "Los exámenes que tienen una clave registrada, para que la pantalla de carga los ofrezca en\nuna lista y el docente no tenga que escribir el identificador de memoria: una letra mal\nescrita mandaba las hojas a un examen sin clave, y nadie lo notaba hasta ver «Sin nota».\n\n**No devuelve las respuestas de la clave**: la ruta es pública hasta A-05 (AM-02). Una clave\nmal escrita no aparece, y una sin habilitar sí, marcada, porque sus hojas se leen sin nota.",
+        "operationId": "examenes_examenes_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExamenesEnRespuesta"
+                }
+              }
+            },
+            "description": "Cada examen con clave, sin sus respuestas, ordenados por identificador."
+          }
+        },
+        "summary": "Exámenes con clave registrada"
       }
     },
     "/examenes/{examen_id}/hojas": {
@@ -664,6 +1070,198 @@
           }
         },
         "summary": "Cargar hojas escaneadas de un examen"
+      }
+    },
+    "/examenes/{examen_id}/hojas/{hoja_id}/preguntas/{numero}/recorte": {
+      "get": {
+        "description": "La fila de burbujas de una pregunta en revisión, recortada de la hoja al leerla. Muestra la\nfila y su número, no el código del estudiante. La ubicación sale del registro de resultados,\nnunca de la petición.",
+        "operationId": "recorte_examenes__examen_id__hojas__hoja_id__preguntas__numero__recorte_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "examen_id",
+            "required": true,
+            "schema": {
+              "title": "Examen Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "hoja_id",
+            "required": true,
+            "schema": {
+              "title": "Hoja Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "numero",
+            "required": true,
+            "schema": {
+              "title": "Numero",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/png": {}
+            },
+            "description": "La fila de burbujas, en PNG."
+          },
+          "404": {
+            "description": "La pregunta no tiene recorte."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "El recorte de una pregunta en revisión"
+      }
+    },
+    "/examenes/{examen_id}/hojas/{hoja_id}/revision": {
+      "post": {
+        "description": "Registra lo que el profesor vio marcado en cada pregunta, con su nombre y la hora (RF-08,\nRF-10), y devuelve la hoja con la nota recalculada. La nota automática no se borra: queda en\nel registro de resultados, y esta solo se agrega encima (ADR-0018).\n\nEl nombre es el que escribe el profesor, **sin verificar** hasta A-05. Si algo no cuadra (una\npregunta que no estaba en revisión, por ejemplo), no se guarda nada.",
+        "operationId": "resolver_revision_examenes__examen_id__hojas__hoja_id__revision_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "examen_id",
+            "required": true,
+            "schema": {
+              "title": "Examen Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "hoja_id",
+            "required": true,
+            "schema": {
+              "title": "Hoja Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SolicitudDeRevision"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultadoDeHojaEnRespuesta"
+                }
+              }
+            },
+            "description": "El resultado de la hoja con la nota recalculada."
+          },
+          "404": {
+            "description": "La hoja no está en el examen o no tiene una nota que revisar."
+          },
+          "422": {
+            "description": "Una pregunta no estaba en revisión, viene dos veces o falta el nombre."
+          }
+        },
+        "summary": "Guardar lo que el profesor resolvió en una hoja"
+      }
+    },
+    "/examenes/{examen_id}/resultados": {
+      "get": {
+        "description": "Las hojas del examen que el worker ya leyó, con su estado, su nota y las preguntas que\nesperan al profesor (A-02 y A-03). La pantalla de carga la consulta después de subir un lote y\nune cada resultado con su archivo por el `hoja_id`.\n\nUna hoja recibida que todavía no aparece sigue en la cola o leyéndose. **No devuelve el código\ndel estudiante**: la ruta es pública hasta A-05, y el riesgo se aceptó solo mientras no entren\nhojas reales (AM-02). Lee el registro en disco en un hilo aparte, para no frenar a las demás\npeticiones mientras recorre el archivo.",
+        "operationId": "resultados_examenes__examen_id__resultados_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "examen_id",
+            "required": true,
+            "schema": {
+              "title": "Examen Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultadosDelExamenEnRespuesta"
+                }
+              }
+            },
+            "description": "El último resultado de cada hoja leída, sin el código del estudiante."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cómo quedó cada hoja leída de un examen"
+      }
+    },
+    "/examenes/{examen_id}/revision": {
+      "get": {
+        "description": "Las hojas con preguntas que la lectura no pudo decidir, y en cada pregunta lo que se midió\nen sus burbujas y lo que el profesor ya resolvió (RF-08). Una hoja sigue apareciendo después de\nresuelta, para poder cambiar una decisión.\n\n**No lleva la respuesta correcta ni el código del estudiante**: la ruta es pública hasta A-05\n(AM-02). El profesor dice qué marcó el estudiante y el sistema decide si es correcto.",
+        "operationId": "revision_examenes__examen_id__revision_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "examen_id",
+            "required": true,
+            "schema": {
+              "title": "Examen Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevisionDelExamenEnRespuesta"
+                }
+              }
+            },
+            "description": "Cada hoja con preguntas en revisión, sin la clave ni el código."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Las preguntas que esperan al profesor en un examen"
       }
     },
     "/health": {

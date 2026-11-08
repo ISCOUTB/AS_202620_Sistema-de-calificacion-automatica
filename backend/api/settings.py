@@ -2,7 +2,10 @@ import os
 
 from autoria import SOLICITUDES_POR_DIA, SOLICITUDES_POR_MINUTO
 from infraestructura.almacen import RUTA_ALMACEN_POR_OMISION
+from infraestructura.claves import RUTA_CLAVES_POR_OMISION
 from infraestructura.cola import REDIS_URL_POR_OMISION
+from infraestructura.resultados import RUTA_RESULTADOS_POR_OMISION
+from infraestructura.revisiones import RUTA_REVISIONES_POR_OMISION
 from ingesta import HOJAS_POR_LOTE, MB_POR_DIA
 
 # El valor por omisión viene de `infraestructura/cola.py`, el mismo que usa el worker.
@@ -24,6 +27,18 @@ NOMBRE_COLA = os.environ.get("NOMBRE_COLA", "procesamiento")
 RUTA_BITACORA = os.environ.get(
     "RUTA_BITACORA", os.path.join(RUTA_ALMACEN, "bitacora-de-recepcion.jsonl")
 )
+
+# Registro de resultados (ADR-0023): lo escribe el worker y la API lo lee para mostrar cómo quedó
+# cada hoja. La misma variable y el mismo valor por omisión que en `worker/main.py`, o cada uno
+# miraría un archivo distinto.
+RUTA_RESULTADOS = os.environ.get("RUTA_RESULTADOS", RUTA_RESULTADOS_POR_OMISION)
+
+# Claves de respuestas: el worker las lee para calificar, y la API, para ofrecer en la pantalla de
+# carga los exámenes que tienen una. Misma variable y mismo valor por omisión que en el worker.
+RUTA_CLAVES = os.environ.get("RUTA_CLAVES", RUTA_CLAVES_POR_OMISION)
+
+# Lo que resuelve el profesor en las preguntas en revisión (RF-08). Solo la API lo escribe y lo lee.
+RUTA_REVISIONES = os.environ.get("RUTA_REVISIONES", RUTA_REVISIONES_POR_OMISION)
 
 # Proveedor de LLM que propone distractores diagnósticos (RF-11, ADR-0013). Habla el protocolo de
 # chat de OpenAI, así que cambiar de proveedor es cambiar estas tres variables y no el código. Sin

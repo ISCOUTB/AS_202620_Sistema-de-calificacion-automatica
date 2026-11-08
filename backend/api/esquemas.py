@@ -17,7 +17,15 @@ from typing import Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from infraestructura.modelo import ENCOLADA, PENDIENTE_DE_ENCOLAR
+from infraestructura.modelo import (
+    CALIFICADA,
+    EN_REVISION,
+    ENCOLADA,
+    ILEGIBLE,
+    OPCIONES_DE_RESPUESTA,
+    PENDIENTE_DE_ENCOLAR,
+    SIN_CLAVE_HABILITADA,
+)
 
 # Version del contrato, no del proyecto. Se declara aqui, junto a los esquemas que versiona,
 # para que cambiar uno sin tocar la otra sea visible en el mismo diff.
@@ -43,7 +51,17 @@ from infraestructura.modelo import ENCOLADA, PENDIENTE_DE_ENCOLAR
 # 1.5.0 agrega el presupuesto de carga (S13, ADR-0022): el 413 y el 429 de la ruta de carga y su
 # estado en `GET /metricas`. Vuelve a subir la menor: un lote que cabe recibe la misma respuesta
 # que antes, y los dos codigos nuevos solo aparecen donde antes el lote habria entrado sin tope.
-VERSION_DEL_CONTRATO = "1.5.0"
+#
+# 1.6.0 agrega `GET /examenes/{examen_id}/resultados`, como quedo cada hoja leida (A-02 y A-03,
+# ADR-0023). Solo agrega una ruta: las demas siguen identicas.
+#
+# 1.7.0 agrega `GET /examenes`, los examenes con clave registrada, para que la pantalla de carga
+# los ofrezca en una lista. Solo agrega una ruta, sin las respuestas de la clave.
+#
+# 1.8.0 agrega la revision manual (RF-08): las preguntas que esperan al profesor, su recorte y la
+# ruta que guarda lo que resolvio, mas el campo `revisada` en el resultado de cada hoja. Todo
+# agrega; un cliente que no conoce `revisada` recibe lo mismo de antes.
+VERSION_DEL_CONTRATO = "1.8.0"
 
 EstadoDeHoja = Literal["encolada", "pendiente_de_encolar"]
 
@@ -55,6 +73,24 @@ if set(get_args(EstadoDeHoja)) != {ENCOLADA, PENDIENTE_DE_ENCOLAR}:
     raise RuntimeError(
         "Los estados declarados en el contrato HTTP no coinciden con los de "
         "infraestructura/modelo.py. Actualiza EstadoDeHoja y la version del contrato."
+    )
+
+
+EstadoDeLectura = Literal["calificada", "en_revision", "sin_clave_habilitada", "ilegible"]
+
+if set(get_args(EstadoDeLectura)) != {CALIFICADA, EN_REVISION, SIN_CLAVE_HABILITADA, ILEGIBLE}:
+    raise RuntimeError(
+        "Los estados de lectura declarados en el contrato HTTP no coinciden con los de "
+        "infraestructura/modelo.py. Actualiza EstadoDeLectura y la version del contrato."
+    )
+
+
+OpcionDeRespuesta = Literal["A", "B", "C", "D"]
+
+if get_args(OpcionDeRespuesta) != OPCIONES_DE_RESPUESTA:
+    raise RuntimeError(
+        "Las opciones declaradas en el contrato HTTP no coinciden con las que imprime la hoja "
+        "(infraestructura/modelo.py). Actualiza OpcionDeRespuesta y la version del contrato."
     )
 
 
@@ -130,6 +166,149 @@ class RespuestaDeCarga(BaseModel):
     )
     aceptadas: list[HojaAceptadaEnRespuesta]
     rechazados: list[ArchivoRechazadoEnRespuesta]
+
+
+class ResultadoDeHojaEnRespuesta(BaseModel):
+    """Como quedo una hoja despues de leerla y calificarla.
+
+    **No lleva el codigo del estudiante.** La API no tiene inicio de sesion hasta A-05, y esta
+    ruta es tan publica como las demas; el codigo queda en el registro del servidor (AM-02)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    hoja_id: str = Field(
+        description="La identidad que devolvio la carga al recibir la hoja (ADR-0018)."
+    )
+    estado: EstadoDeLectura = Field(
+        description=(
+            "calificada: tiene nota y nada espera al profesor. en_revision: tiene nota "
+            "provisional, con preguntas por revisar. sin_clave_habilitada: se leyo, pero el "
+            "examen no tiene una clave habilitada. ilegible: no se pudo leer, y hay que volver "
+            "a tomar la foto."
+        )
+    )
+    motivo: str | None = Field(
+        description=(
+            "Por que no tiene nota (sin_clave, clave_sin_habilitar, clave_mal_escrita) o por que "
+            "no se pudo leer (por ejemplo imagen_ilegible o marcas_de_registro_no_encontradas)."
+        )
+    )
+    nota_en_decimas: int | None = Field(
+        description="La nota de 0 a 50 (42 es 4,2). Nula sin clave o si la hoja es ilegible.",
+        ge=0,
+        le=50,
+    )
+    provisional: bool = Field(description="Verdadero mientras haya preguntas por revisar.")
+    preguntas_por_revisar: list[int] = Field(
+        description="Los numeros de las preguntas que esperan al profesor."
+    )
+    codigo_completo: bool | None = Field(
+        description=(
+            "Si el codigo del estudiante se leyo en sus ocho columnas. Nulo si la hoja es "
+            "ilegible. El codigo mismo no viaja."
+        )
+    )
+    momento: datetime = Field(description="Cuando quedo este resultado.")
+    revisada: bool = Field(
+        description=(
+            "Si la nota incluye lo que resolvio el profesor en las preguntas en revision (RF-08). "
+            "Distingue una nota corregida a mano de una automatica (RNF-15)."
+        )
+    )
+
+
+class ResultadosDelExamenEnRespuesta(BaseModel):
+    """Las hojas leidas de un examen, cada una con su ultimo resultado. Una hoja recibida que
+    todavia no aparece esta en la cola o leyendose."""
+
+    examen_id: str
+    hojas: list[ResultadoDeHojaEnRespuesta]
+
+
+class BurbujaEnRespuesta(BaseModel):
+    """Lo que se midio en una burbuja de una pregunta en revision."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    opcion: OpcionDeRespuesta
+    tipo: str = Field(description="vacia, tenue, borron o completa.")
+    confianza: int = Field(
+        ge=0, le=100, description="Que tan probable es que la marca sea intencional."
+    )
+
+
+class PreguntaEnRevisionEnRespuesta(BaseModel):
+    """Una pregunta que la lectura no pudo decidir. **No lleva la respuesta correcta**: el profesor
+    dice que marco el estudiante y el sistema decide si es correcto."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    numero: int
+    burbujas: list[BurbujaEnRespuesta]
+    con_recorte: bool = Field(
+        description="Si hay un recorte de la fila para mostrar en `.../preguntas/{numero}/recorte`."
+    )
+    resuelta: bool
+    opcion_resuelta: OpcionDeRespuesta | None = Field(
+        description="La opcion que el profesor vio marcada, o nula si dijo que ninguna vale."
+    )
+    resuelta_por: str | None = Field(
+        description="El nombre que escribio quien la resolvio. Sin verificar hasta A-05."
+    )
+    resuelta_en: datetime | None
+
+
+class HojaEnRevisionEnRespuesta(BaseModel):
+    """Una hoja con preguntas en revision, con su nota vigente. Sin el codigo del estudiante."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    hoja_id: str
+    nota_en_decimas: int = Field(ge=0, le=50)
+    provisional: bool
+    codigo_completo: bool
+    preguntas: list[PreguntaEnRevisionEnRespuesta]
+
+
+class RevisionDelExamenEnRespuesta(BaseModel):
+    """Las hojas de un examen que tienen o tuvieron preguntas en revision."""
+
+    examen_id: str
+    hojas: list[HojaEnRevisionEnRespuesta]
+
+
+class ResolucionEnSolicitud(BaseModel):
+    """Lo que el profesor vio marcado en una pregunta: una opcion, o nula si ninguna vale (en
+    blanco o con dos marcas)."""
+
+    numero: int = Field(ge=1)
+    opcion: OpcionDeRespuesta | None
+
+
+class SolicitudDeRevision(BaseModel):
+    """Lo que el profesor resolvio en una hoja, todo junto. `por` queda registrado con cada
+    resolucion (RF-10); es un nombre escrito a mano hasta A-05."""
+
+    por: str = Field(min_length=1, max_length=80)
+    resoluciones: list[ResolucionEnSolicitud] = Field(min_length=1, max_length=100)
+
+
+class ExamenEnRespuesta(BaseModel):
+    """Un examen con clave registrada. **No lleva las respuestas**: la ruta es publica hasta A-05,
+    y para elegir el examen basta con su identificador."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    examen_id: str
+    habilitada: bool = Field(
+        description="Si la clave ya esta habilitada. Sin habilitar, las hojas se leen sin nota."
+    )
+
+
+class ExamenesEnRespuesta(BaseModel):
+    """Los examenes con clave registrada, ordenados por identificador."""
+
+    examenes: list[ExamenEnRespuesta]
 
 
 class SolicitudDeDistractores(BaseModel):

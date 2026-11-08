@@ -50,6 +50,11 @@ from tests.test_recepcion import JPG, ColaFalsa
 RUTA_CARGA = "/examenes/{examen_id}/hojas"
 RUTA_DISTRACTORES = "/distractores"
 RUTA_METRICAS = "/metricas"
+RUTA_RESULTADOS = "/examenes/{examen_id}/resultados"
+RUTA_EXAMENES = "/examenes"
+RUTA_REVISION = "/examenes/{examen_id}/revision"
+RUTA_RESOLVER = "/examenes/{examen_id}/hojas/{hoja_id}/revision"
+RUTA_RECORTE = "/examenes/{examen_id}/hojas/{hoja_id}/preguntas/{numero}/recorte"
 
 
 @pytest.fixture(scope="module")
@@ -151,7 +156,7 @@ def test_la_version_del_contrato_es_la_declarada_en_el_codigo(contrato_publicado
     assert contrato_publicado["info"]["version"] == VERSION_DEL_CONTRATO
 
 
-def test_el_contrato_declara_las_cuatro_rutas_que_la_api_expone(contrato_publicado):
+def test_el_contrato_declara_las_nueve_rutas_que_la_api_expone(contrato_publicado):
     """Las rutas son lo primero que un consumidor busca; que desaparezca una es el cambio
     incompatible mas obvio que existe.
 
@@ -161,7 +166,15 @@ def test_el_contrato_declara_las_cuatro_rutas_que_la_api_expone(contrato_publica
     presupuesto de ADR-0015, y la ruta `GET /metricas` que lo publica."""
     rutas = contrato_publicado["paths"]
 
-    assert set(rutas) == {"/health", RUTA_CARGA, RUTA_DISTRACTORES, RUTA_METRICAS}
+    assert set(rutas) == {
+        "/health", RUTA_CARGA, RUTA_DISTRACTORES, RUTA_METRICAS, RUTA_RESULTADOS, RUTA_EXAMENES,
+        RUTA_REVISION, RUTA_RESOLVER, RUTA_RECORTE,
+    }
+    assert "get" in rutas[RUTA_REVISION]
+    assert "post" in rutas[RUTA_RESOLVER]
+    assert "image/png" in rutas[RUTA_RECORTE]["get"]["responses"]["200"]["content"]
+    assert "get" in rutas[RUTA_RESULTADOS]
+    assert "get" in rutas[RUTA_EXAMENES]
     assert "get" in rutas["/health"]
     assert "post" in rutas[RUTA_CARGA]
     assert "get" in rutas[RUTA_METRICAS]
@@ -226,3 +239,41 @@ def test_una_respuesta_real_trae_exactamente_los_campos_del_contrato(
     assert cuerpo["rechazados"], "el lote traia un archivo invalido y no se reporto el rechazo"
     for rechazado in cuerpo["rechazados"]:
         assert set(rechazado) == set(esquemas["ArchivoRechazadoEnRespuesta"]["properties"])
+
+
+def test_los_resultados_no_publican_el_codigo_del_estudiante(contrato_publicado):
+    """La ruta de resultados es tan publica como las demas hasta A-05, y el riesgo se acepto
+    solo mientras no entren hojas reales (AM-02). Su esquema dice si el codigo se leyo completo,
+    y nada mas: ningun campo lleva el codigo."""
+    esquema = contrato_publicado["components"]["schemas"]["ResultadoDeHojaEnRespuesta"]
+
+    campos = set(esquema["properties"])
+    assert {"hoja_id", "estado", "nota_en_decimas", "preguntas_por_revisar"} <= campos
+    assert [c for c in campos if "codigo" in c] == ["codigo_completo"]
+
+
+def test_la_lista_de_examenes_no_publica_las_respuestas_de_la_clave(contrato_publicado):
+    """`GET /examenes` es publica hasta A-05. Para elegir el examen basta con su identificador y
+    con saber si la clave esta habilitada: cualquier campo mas podria filtrar la clave."""
+    esquema = contrato_publicado["components"]["schemas"]["ExamenEnRespuesta"]
+
+    assert set(esquema["properties"]) == {"examen_id", "habilitada"}
+
+
+def test_la_revision_no_publica_la_clave_ni_el_codigo(contrato_publicado):
+    """`GET /examenes/{examen_id}/revision` es publica hasta A-05. El profesor dice que marco el
+    estudiante y el sistema decide si es correcto, asi que ningun esquema de la revision lleva la
+    respuesta correcta, y la hoja no lleva el codigo del estudiante."""
+    esquemas = contrato_publicado["components"]["schemas"]
+    pregunta = set(esquemas["PreguntaEnRevisionEnRespuesta"]["properties"])
+    hoja = set(esquemas["HojaEnRevisionEnRespuesta"]["properties"])
+
+    assert not [campo for campo in pregunta | hoja if "correcta" in campo]
+    assert [campo for campo in hoja if "codigo" in campo] == ["codigo_completo"]
+
+
+def test_el_resultado_dice_si_la_nota_la_corrigio_el_profesor(contrato_publicado):
+    """RNF-15: una nota corregida a mano tiene que distinguirse de una automatica."""
+    esquema = contrato_publicado["components"]["schemas"]["ResultadoDeHojaEnRespuesta"]
+
+    assert "revisada" in esquema["required"]
