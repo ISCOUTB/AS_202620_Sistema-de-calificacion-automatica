@@ -26,6 +26,12 @@ leer el mismo texto da el mismo error. La espera no se hace con un `sleep` en el
 bloquearía y se perdería si muere: el trabajo se guarda en el conjunto de reintentos, en Redis, y
 `mover_reintentos_vencidos` lo devuelve a la cola cuando llega su hora.
 
+**La muerte del worker también cuenta como un intento** (R-36, ADR-0023). Un trabajo que vuelve
+de la lista en curso vuelve con `intento` + 1, y si ya había gastado los `MAXIMO_DE_INTENTOS` va a
+fallidos. Antes volvía igual: una hoja que mataba al worker (un PNG de 120 KB que pedía más de
+100 MB al decodificarse) lo volvía a matar en cada reinicio, y como vuelve a la cabeza de la cola,
+ninguna otra hoja se leía.
+
 **Supone un solo consumidor.** `recuperar_en_curso` devuelve a la cola todo lo que está en curso,
 lo que es correcto porque hay un solo worker (ADR-0011): lo que está en curso cuando arranca es lo
 que dejó a medias. Con dos workers, uno le quitaría al otro lo que está procesando (R-29).
@@ -40,7 +46,7 @@ import time
 from collections.abc import Callable
 from dataclasses import replace
 from datetime import datetime, timezone
-from typing import cast
+from typing import NamedTuple, cast
 
 import redis
 
@@ -50,6 +56,7 @@ from infraestructura.cola import (
     leer_trabajo,
     serializar_trabajo,
     texto,
+    ya_procesado,
 )
 
 __all__ = [
@@ -66,6 +73,8 @@ __all__ = [
     "mover_reintentos_vencidos",
     "enviar_a_fallidos",
     "recuperar_en_curso",
+    "Recuperacion",
+    "MOTIVO_EL_WORKER_MURIO",
     "reencolar_fallidos",
     "estado_de_la_cola",
 ]
@@ -171,14 +180,50 @@ def enviar_a_fallidos(
         tuberia.execute()
 
 
-def recuperar_en_curso(cliente: redis.Redis, cola: str) -> int:
-    """Devuelve a la cabeza de la cola todo lo que quedó en curso: lo que el worker tomó y no
-    alcanzó a confirmar antes de morir. Supone un solo consumidor (ver el docstring del módulo).
-    Devuelve cuántos devolvió."""
-    devueltos = 0
-    while cliente.lmove(clave_en_curso(cola), cola, "RIGHT", "LEFT") is not None:
-        devueltos += 1
-    return devueltos
+class Recuperacion(NamedTuple):
+    """Lo que hizo `recuperar_en_curso`: cuántos trabajos volvieron a la cola y cuántos fueron a
+    fallidos por haber gastado sus intentos."""
+
+    a_la_cola: int
+    a_fallidos: int
+
+
+# El motivo con que queda en fallidos un trabajo cuyo worker murió con él en la mano las veces
+# que permite `MAXIMO_DE_INTENTOS`.
+MOTIVO_EL_WORKER_MURIO = "el worker murió procesándolo en cada intento"
+
+
+def recuperar_en_curso(cliente: redis.Redis, cola: str) -> Recuperacion:
+    """Devuelve a la cabeza de la cola, en su orden, lo que quedó en curso: lo que el worker tomó y
+    no alcanzó a confirmar antes de morir. Cada uno vuelve con `intento` + 1, porque esa vuelta
+    cuenta: el que ya había gastado `MAXIMO_DE_INTENTOS` va a fallidos con su motivo (R-36). Un
+    texto que no cumple el contrato vuelve tal cual, y `atender_una_vez` lo manda a fallidos al
+    tomarlo. Cada movimiento es una transacción. Supone un solo consumidor (ver el docstring del
+    módulo): mientras recupera, nadie más toma de la lista en curso."""
+    a_la_cola = a_fallidos = 0
+    # Del último al primero, poniéndolos a la cabeza: así quedan en el mismo orden en que se
+    # tomaron, como hacía `LMOVE RIGHT LEFT`.
+    for crudo in reversed([texto(c) for c in cliente.lrange(clave_en_curso(cola), 0, -1)]):
+        try:
+            trabajo = leer_trabajo(crudo)
+        except MensajeInvalido:
+            nuevo = crudo
+        else:
+            # Si ya se procesó y murió antes del acuse, vuelve y `atender_una_vez` solo lo
+            # confirma: no es un intento fallido.
+            if trabajo.intento >= MAXIMO_DE_INTENTOS and not ya_procesado(cliente, trabajo.id):
+                enviar_a_fallidos(
+                    cliente, cola, crudo, MOTIVO_EL_WORKER_MURIO, intentos=trabajo.intento
+                )
+                a_fallidos += 1
+                continue
+            nuevo = serializar_trabajo(replace(trabajo, intento=trabajo.intento + 1))
+        with cliente.pipeline(transaction=True) as tuberia:
+            tuberia.lrem(clave_en_curso(cola), 1, crudo)
+            tuberia.lpush(cola, nuevo)
+            tuberia.execute()
+        a_la_cola += 1
+    return Recuperacion(a_la_cola, a_fallidos)
 
 
 def reencolar_fallidos(cliente: redis.Redis, cola: str) -> int:
