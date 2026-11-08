@@ -1,0 +1,20 @@
+{
+  "examen": "MEDICION-EC04",
+  "hojas_publicadas": 200,
+  "hojas_procesadas": 200,
+  "estados": {
+    "en_revision": 195,
+    "calificada": 5
+  },
+  "por_hoja_ms": {
+    "p50": 109777.5,
+    "p95": 203278.2,
+    "maximo": 214453.0
+  },
+  "lectura_en_el_worker_ms": {
+    "p50": 1013.0,
+    "p95": 1407.3
+  },
+  "lote_ms": 214450.0,
+  "ec04_cumple": true
+}
