@@ -25,6 +25,8 @@ verificar y evidenciar.
 
 ## Tabla de trazabilidad
 
+**La lectura de las hojas ([A-02](#a-02)) y su calificación ([A-03](#a-03)) están construidas**, con la revisión manual de las preguntas dudosas desde la aplicación (RF-08) ([ADR-0023](adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md)). Sobre 300 hojas sintéticas: EC-01, 9 406 de 9 406 marcas claras bien leídas (100 %; pide ≥98 %); EC-02, 1 026 de 1 026 marcas ambiguas a revisión (100 %; pide ≥99 %); ninguna respuesta leída mal sin aviso, tampoco en las tres fotos del prototipo (R-05). Con el sistema completo y los límites del servidor: EC-03, p95 de 1,7 s por hoja (pide ≤5 s); EC-04, 200 hojas en 3,6 min (pide ≤10 min) ([medición](evidencia/medicion-lectura-omr.md)). Falta el conjunto escaneado de R-01, calibrar el umbral con él (R-04) y saber quién resuelve cada revisión (A-05).
+
 **La porción de la S9 es [A-06](#a-06)** (RF-11, escenario [EC-08](arc42/arc42-template-ES.md#ec-08), [ADR-0013](adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)). Medida: M1, 0 de 120 propuestas repiten la respuesta correcta; M2, p95 de 2,91 s contra 15 s; M3, 503 en 20,25 s contra 21 s ([evaluación](evidencia/evaluacion-distractores.md)). La prueba falla ante el defecto en el [PR #1](https://github.com/ISCOUTB/AS_202620_Sistema-de-calificacion-automatica/pull/1) ([procedimiento](evidencia/prueba-distractores-falla.md)), y la [auditoría](evidencia/auditoria-s9.md) recorre contextos, propiedad, dependencias y credenciales.
 
 **El escenario operativo del segundo corte es de límite de costo, sobre la misma fila [A-06](#a-06)**
@@ -54,8 +56,8 @@ alcanzables desde la fila del aspecto que los realiza.
 | ID | Aspecto | Estado | Requisito | Escenario de calidad | Contexto C4 (Nivel 1) | C4 | ADR | Código | Pruebas | Evidencia |
 |---|---|---|---|---|---|---|---|---|---|---|
 | **[A-01](#a-01)** | Carga de examen para calificación | **Construido** | RF-01 | [EC-07](arc42/arc42-template-ES.md#ec-07) | [Rel. 1](c4/doc-c4.md#relaciones): Profesor/TA → Sistema | C1: [QuantIA](c4/doc-c4.md#nivel-1--diagrama-de-contexto-del-sistema) · C2: [Aplicación web](c4/doc-c4.md#nivel-2--diagrama-de-contenedores), [Almacén de imágenes](c4/doc-c4.md#nivel-2--diagrama-de-contenedores), [Cola de trabajos](c4/doc-c4.md#nivel-2--diagrama-de-contenedores) | [0002](adr/0002-procesar-calificacion-de-forma-asincrona.md) · [0006](adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md) · [0016](adr/0016-acotar-la-espera-de-la-cola-y-hacer-idempotente-al-worker.md) · [0018](adr/0018-dar-a-la-hoja-una-identidad-propia-y-derivar-su-estado-de-la-bitacora.md) · [0020](adr/0020-entregar-los-trabajos-al-menos-una-vez-con-reintentos-y-lista-de-fallidos.md) | [`ingesta/recepcion.py`](../backend/ingesta/recepcion.py) · [`infraestructura/almacen.py`](../backend/infraestructura/almacen.py) · [`infraestructura/bitacora.py`](../backend/infraestructura/bitacora.py) · [`infraestructura/modelo.py`](../backend/infraestructura/modelo.py) · [`api/main.py`](../backend/api/main.py) · [`frontend/lib/features/carga/views/pantalla_carga.dart`](../frontend/lib/features/carga/views/pantalla_carga.dart) · [`infraestructura/cola.py`](../backend/infraestructura/cola.py) · [`worker/main.py`](../backend/worker/main.py) · [`infraestructura/consumo.py`](../backend/infraestructura/consumo.py) · contrato del mensaje: [`trabajo-v1.schema.json`](contrato/trabajo-v1.schema.json) | [`test_recepcion.py`](../backend/tests/test_recepcion.py) · [`test_durabilidad_recepcion.py`](../backend/tests/test_durabilidad_recepcion.py) · [`test_carga_hojas.py`](../backend/tests/test_carga_hojas.py) · [`carga_test.dart`](../frontend/test/features/carga_test.dart) · [`servicio_carga_test.dart`](../frontend/test/features/servicio_carga_test.dart) · [`test_modos_de_fallo.py`](../backend/tests/test_modos_de_fallo.py) · [`test_identidad_de_la_hoja.py`](../backend/tests/test_identidad_de_la_hoja.py) · [`test_mensajeria.py`](../backend/tests/test_mensajeria.py) | [Medición de EC-07](evidencia/medicion-ec07.md): 1,744 s contra ≤10 s · 0 % de pérdida silenciosa · [captura](#a-01-evidencia) · [Modos de fallo](evidencia/modos-de-fallo.md) (S11): con la cola lenta, el lote de 200 confirma en 2,017 s (antes 10,017 s) · [Consistencia](evidencia/consistencia-y-cache.md): filas C-01 a C-05 · [Taller de mensajería](evidencia/taller-mensajeria.md): ejecución con un duplicado, un fallo recuperable y uno que termina en fallidos |
-| **[A-02](#a-02)** | Detección de marcas y nivel de confianza | Declarado | RF-02, RF-03 | [EC-01](arc42/arc42-template-ES.md#ec-01) · [EC-02](arc42/arc42-template-ES.md#ec-02) | **Sin contexto propio** — proceso interno, no cruza la frontera del sistema (ver nota abajo) | Pendiente | ADR de umbral previsto (R-04) | Pendiente | Pendiente | Pendiente |
-| **[A-03](#a-03)** | Calificación contra la clave y publicación | Declarado | RF-04, RF-05, RF-08 | [EC-03](arc42/arc42-template-ES.md#ec-03) · [EC-04](arc42/arc42-template-ES.md#ec-04) | [Rel. 2](c4/doc-c4.md#relaciones): Sistema → Profesor/TA | Pendiente | [0002](adr/0002-procesar-calificacion-de-forma-asincrona.md) | Pendiente | Pendiente | Pendiente |
+| **[A-02](#a-02)** | Detección de marcas y nivel de confianza | **Construido** | RF-02, RF-03 | [EC-01](arc42/arc42-template-ES.md#ec-01) · [EC-02](arc42/arc42-template-ES.md#ec-02) | **Sin contexto propio** — proceso interno, no cruza la frontera del sistema (ver nota abajo) | C2: [Worker → Almacén de imágenes](c4/doc-c4.md#relaciones-1) (relación 7) · C3: [`omr`](c4/doc-c4.md#nivel-3--diagrama-de-componentes) | [0023](adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md) · [0020](adr/0020-entregar-los-trabajos-al-menos-una-vez-con-reintentos-y-lista-de-fallidos.md) | [`omr/formato.py`](../backend/omr/formato.py) · [`omr/plantilla.py`](../backend/omr/plantilla.py) · [`omr/vision.py`](../backend/omr/vision.py) · [`omr/decision.py`](../backend/omr/decision.py) · [`omr/lectura.py`](../backend/omr/lectura.py) · [`omr/errores.py`](../backend/omr/errores.py) · [`worker/main.py`](../backend/worker/main.py) (`leer_y_calificar`) · en el sitio, [`preparacion_de_hojas.dart`](../frontend/lib/features/carga/data/preparacion_de_hojas.dart) | [`test_plantilla.py`](../backend/tests/test_plantilla.py) · [`test_vision.py`](../backend/tests/test_vision.py) · [`test_decision.py`](../backend/tests/test_decision.py) · [`test_lectura.py`](../backend/tests/test_lectura.py) · [`test_lectura_fotos_r05.py`](../backend/tests/test_lectura_fotos_r05.py) · [`test_medir_lectura.py`](../backend/tests/test_medir_lectura.py) · [`preparacion_de_hojas_test.dart`](../frontend/test/features/preparacion_de_hojas_test.dart) | [Medición de la lectura](evidencia/medicion-lectura-omr.md): EC-01, 100 % contra ≥98 % · EC-02, 100 % contra ≥99 % · 0 respuestas mal leídas sin aviso, en 300 hojas sintéticas y en las 3 fotos del prototipo (R-05) · un PNG que mataba al worker por memoria, ahora ilegible |
+| **[A-03](#a-03)** | Calificación contra la clave y publicación | **Construido**, salvo las estadísticas del Panel (RF-05) | RF-04, RF-05, RF-08 | [EC-03](arc42/arc42-template-ES.md#ec-03) · [EC-04](arc42/arc42-template-ES.md#ec-04) | [Rel. 2](c4/doc-c4.md#relaciones): Sistema → Profesor/TA | C2: [Worker y Aplicación web → Almacén de imágenes](c4/doc-c4.md#relaciones-1) (relaciones 7 y 3) · C3: [`calificacion` y `dashboard`](c4/doc-c4.md#nivel-3--diagrama-de-componentes) | [0002](adr/0002-procesar-calificacion-de-forma-asincrona.md) · [0018](adr/0018-dar-a-la-hoja-una-identidad-propia-y-derivar-su-estado-de-la-bitacora.md) · [0023](adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md) | [`calificacion/nota.py`](../backend/calificacion/nota.py) · [`calificacion/revision.py`](../backend/calificacion/revision.py) · [`infraestructura/claves.py`](../backend/infraestructura/claves.py) · [`infraestructura/resultados.py`](../backend/infraestructura/resultados.py) · [`infraestructura/revisiones.py`](../backend/infraestructura/revisiones.py) · [`autoria/examenes.py`](../backend/autoria/examenes.py) · [`dashboard/resultados.py`](../backend/dashboard/resultados.py) · [`dashboard/revision.py`](../backend/dashboard/revision.py) · [`api/main.py`](../backend/api/main.py) (cinco rutas, contrato 1.8.0) · pantallas: [`reporte_recepcion.dart`](../frontend/lib/features/carga/views/widgets/reporte_recepcion.dart) y [`pantalla_revision.dart`](../frontend/lib/features/revision/views/pantalla_revision.dart) | [`test_calificacion.py`](../backend/tests/test_calificacion.py) · [`test_claves.py`](../backend/tests/test_claves.py) · [`test_resultados.py`](../backend/tests/test_resultados.py) · [`test_leer_y_calificar.py`](../backend/tests/test_leer_y_calificar.py) · [`test_ruta_resultados.py`](../backend/tests/test_ruta_resultados.py) · [`test_ruta_examenes.py`](../backend/tests/test_ruta_examenes.py) · [`test_revisiones.py`](../backend/tests/test_revisiones.py) · [`test_ruta_revision.py`](../backend/tests/test_ruta_revision.py) · [`test_medir_procesamiento.py`](../backend/tests/test_medir_procesamiento.py) · [`revision_test.dart`](../frontend/test/features/revision_test.dart) · [`servicio_revision_test.dart`](../frontend/test/features/servicio_revision_test.dart) · [`servicio_resultados_test.dart`](../frontend/test/features/servicio_resultados_test.dart) · [`servicio_examenes_test.dart`](../frontend/test/features/servicio_examenes_test.dart) | [Medición de la lectura](evidencia/medicion-lectura-omr.md#3-ec-03-y-ec-04-el-sistema-completo): EC-03, p95 de 1,7 s contra ≤5 s · EC-04, 200 de 200 hojas en 3,6 min contra ≤10 min · [RF-08 con las fotos del prototipo](evidencia/medicion-lectura-omr.md#4-la-revisión-manual-con-las-fotos-del-prototipo-rf-08): de 3,9 a 4,0, sin que la respuesta correcta salga de la API |
 | **[A-04](#a-04)** | Registro del banco y habilitación del examen | Declarado | RF-06, RF-07 | [EC-05](arc42/arc42-template-ES.md#ec-05) | [Rel. 1](c4/doc-c4.md#relaciones): Profesor/TA → Sistema | Pendiente | [0003](adr/0003-usar-fastapi-y-flutter.md) · [0004](adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md) · [0005](adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md) | Pendiente | Pendiente | Pendiente |
 | **[A-05](#a-05)** | Identidad y aislamiento por curso | Declarado | RF-09, RF-10 | [EC-06](arc42/arc42-template-ES.md#ec-06) | [Rel. 1 y 2](c4/doc-c4.md#relaciones): transversal a ambas — condición de «docente autenticado» bajo la que operan | Pendiente | ADR de auditoría previsto (RF-10) | Pendiente | Pendiente | Pendiente |
 | **[A-06](#a-06)** | Propuesta de distractores diagnósticos | **Construido** | RF-11 *(opcional)* | [EC-08](arc42/arc42-template-ES.md#ec-08) · [EC-09](arc42/arc42-template-ES.md#ec-09) | [Rel. 3](c4/doc-c4.md#relaciones): Sistema → Proveedor de LLM (opcional) | C1: [Proveedor de LLM](c4/doc-c4.md#nivel-1--diagrama-de-contexto-del-sistema) · C2: [Aplicación web → Proveedor de LLM](c4/doc-c4.md#relaciones-1) (relación 8) · C3: [`autoria`](c4/doc-c4.md#nivel-3--diagrama-de-componentes) | [0005](adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md) · [0013](adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md) · [0015](adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md) · [0017](adr/0017-no-extraer-ningun-modulo-del-monolito-todavia.md) · [0019](adr/0019-guardar-en-cache-las-propuestas-de-distractores.md) | [`autoria/distractores.py`](../backend/autoria/distractores.py) · [`autoria/proveedor_llm.py`](../backend/autoria/proveedor_llm.py) · [`autoria/presupuesto.py`](../backend/autoria/presupuesto.py) · [`autoria/cache.py`](../backend/autoria/cache.py) · [`api/main.py`](../backend/api/main.py) (`POST /distractores` y `GET /metricas`) · pantalla: [`pantalla_pauta.dart`](../frontend/lib/features/pauta/views/pantalla_pauta.dart) y [`servicio_distractores.dart`](../frontend/lib/features/pauta/data/servicio_distractores.dart) | [`test_distractores.py`](../backend/tests/test_distractores.py) · [`test_proveedor_llm.py`](../backend/tests/test_proveedor_llm.py) · [`test_ruta_distractores.py`](../backend/tests/test_ruta_distractores.py) · [`test_presupuesto.py`](../backend/tests/test_presupuesto.py) · [`pauta_test.dart`](../frontend/test/features/pauta_test.dart) · [`servicio_distractores_test.dart`](../frontend/test/features/servicio_distractores_test.dart) · [`test_modos_de_fallo.py`](../backend/tests/test_modos_de_fallo.py) · [`test_cache_de_propuestas.py`](../backend/tests/test_cache_de_propuestas.py) | [Evaluación de EC-08](evidencia/evaluacion-distractores.md): M1: 0 de 120 propuestas repiten la respuesta correcta · M2: p95 de 2,91 s contra 15 s · M3: 503 en 20,25 s contra 21 s · [la prueba falla ante el defecto](evidencia/prueba-distractores-falla.md) · [auditoría](evidencia/auditoria-s9.md) · [Experimento de EC-09](evidencia/experimento-presupuesto.md) (segundo corte): de 20 solicitudes en el proveedor y 11 cortes por cuota a 6 y 0 · [Modos de fallo MF-07 a MF-10](evidencia/modos-de-fallo.md) (S11) · [Caché de propuestas](evidencia/consistencia-y-cache.md): filas C-07 y C-08, y su política de invalidación |
@@ -80,7 +82,7 @@ sistema que devuelve notas y alertas (relación 2), y el sistema que pide distra
 (relación 3). La detección de marcas de A-02 ocurre enteramente **dentro** de la caja negra —
 entre el almacén de imágenes y la cola de trabajos, disparada por el worker, no por un actor
 externo— así que no hay ninguna flecha del Nivel 1 que la represente: se hace visible en el
-[Nivel 3 del C4](c4/doc-c4.md#nivel-3--diagrama-de-componentes), donde `omr` es un componente previsto del worker. A-05, en cambio, sí se ancla a las relaciones
+[Nivel 3 del C4](c4/doc-c4.md#nivel-3--diagrama-de-componentes), donde `omr` es un componente del worker. A-05, en cambio, sí se ancla a las relaciones
 existentes aunque no dibuje una propia: es la condición de autenticación y aislamiento por curso
 bajo la que ya operan las relaciones 1 y 2 con el Profesor/TA, no una comunicación adicional que
 falte por trazar. **En el mapa de contextos de §8.1, en cambio, A-02 sí tiene
@@ -88,9 +90,10 @@ contexto y es OMR**: la palabra «contexto» significa cosas distintas en el Niv
 mapa de contextos, y esta es la fila donde más se nota. Ver también la [sección 8.3 del arc42](arc42/arc42-template-ES.md#83-propiedad-de-datos)
 para la misma trazabilidad vista desde qué módulo y qué dato realiza cada aspecto.
 
-A-01 y A-06 son los aspectos construidos. Los demás están declarados para fijar el orden de trabajo y
-para que cada escenario de calidad tenga un aspecto responsable; cada uno se especifica cuando se
-levanta lo que lo bloquea, que está escrito en su sección («Por qué no se trabaja todavía»).
+A-01, A-02, A-03 y A-06 son los aspectos construidos. A-04 y A-05 están declarados para fijar el
+orden de trabajo y para que cada escenario de calidad tenga un aspecto responsable; cada uno se
+especifica cuando se levanta lo que lo bloquea, que está escrito en su sección («Por qué no se
+trabaja todavía»).
 
 **Por qué A-01 está en «Construido».** Los pasos 5 a 7 (construir, verificar y evidenciar) están
 hechos y son comprobables: el código y las pruebas están en la fila de la tabla, y las dos cifras
@@ -105,11 +108,27 @@ se midieron con una herramienta versionada: M1, ninguna de las 120 propuestas en
 frontend nuevo, RF-11 también se usa desde el sitio, en la pantalla Pauta y distractores, que
 explica al docente el 503 del proveedor y el 429 del presupuesto.
 
-**Las pantallas de A-02 a A-04 son maquetas.** El sitio tiene cuatro pantallas, pero solo Carga
-(A-01) y el generador de Pauta (A-06) llaman a la API. Panel, Revisión y la clave y el banco de
-Pauta muestran datos de ejemplo bajo un aviso visible, porque la detección (A-02), la calificación
-(A-03) y el registro del banco (A-04) siguen en «Declarado». Muestran cómo se van a ver, no lo que
-el sistema hace hoy.
+**Por qué A-02 y A-03 están en «Construido», y con qué salvedades.** Los pasos 5 a 7 están hechos:
+el código y las pruebas están en sus filas, y los cuatro escenarios se midieron con herramientas
+versionadas ([`evidencia/medicion-lectura-omr.md`](evidencia/medicion-lectura-omr.md)). Las
+salvedades, que la evidencia dice con cifras:
+
+- **EC-01 se midió sobre hojas sintéticas**, no sobre las 300 hojas escaneadas y etiquetadas a mano
+  que pide el escenario (R-01). Las sintéticas miden la lógica dentro de las condiciones que se
+  generaron; las tres fotos del prototipo dicen cómo se porta con una hoja real, y el umbral de 70
+  no se ha calibrado con hojas reales (R-04).
+- **EC-03 y EC-04 se midieron en local**, con los límites del servidor del laboratorio. EC-04 pide
+  además la CPU del servidor por debajo del 85 %, y eso se mide allá.
+- **De RF-05 falta el Panel**: las notas se ven por hoja en la pantalla de carga y en la de
+  revisión, pero las estadísticas por pregunta y por curso siguen con datos de ejemplo.
+- **RF-08 se construyó antes de A-05.** Cada resolución queda con el nombre que escribe el docente
+  y la hora, pero el nombre no se verifica y las rutas son públicas. Vale solo con hojas
+  sintéticas, que es la condición de la amenaza AM-02.
+
+**Lo que todavía es maqueta.** Carga (A-01, A-02 y A-03), Revisión (RF-08) y el generador de Pauta
+(A-06) llaman a la API. El Panel y la clave y el banco de Pauta muestran datos de ejemplo bajo un
+aviso visible, porque las estadísticas de RF-05 y el registro de la clave (A-04) no están
+construidos. Muestran cómo se van a ver, no lo que el sistema hace hoy.
 
 ---
 
@@ -221,9 +240,9 @@ Tres decisiones de construcción que conviene poder defender:
 El hueco entre el guardado y el encolado lo cerró
 [ADR-0006](adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md): una hoja almacenada
 cuyo trabajo no llegó a la cola queda registrada en la bitácora como pendiente, y se puede
-reintentar sin pedirle el archivo al docente. Siguen abiertos el reintento automático, que es
-trabajo de A-02, y el caso de una hoja que llegó a la cola pero el worker no terminó de procesar:
-la cola no tiene acuse de recibo.
+reintentar sin pedirle el archivo al docente. Siguen abiertos el reintento automático, que no
+llegó con A-02 (R-32), y el caso de una hoja que llegó a la cola pero el worker no terminó de
+procesar: la cola no tenía acuse de recibo, y lo cerró ADR-0020.
 
 El `examen_id` tampoco se verifica contra nada, porque el módulo `autoria` (aspecto A-04) es el
 que registrará los exámenes y aún no existe. La ruta ya tiene su forma definitiva para que
@@ -421,19 +440,109 @@ worker por la cola. Es desacoplamiento temporal real, así que no hubo prototipo
 
 ## Aspecto A-02: Detección de marcas y nivel de confianza
 
-**Declarado.**
+**Construido** entre el 2 y el 6 de noviembre, con apoyo de IA (registro en [`ia.md`](ia.md),
+entrada 21). La decisión es [ADR-0023](adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md),
+aceptado por el equipo el 6-nov.
+
+### 1. Declarar
 
 - **Para quién es:** el profesor, que necesita que la lectura sea fiel a lo que el estudiante
   marcó; y el estudiante, que soporta las consecuencias de un error.
-- **Qué problema resuelve:** convierte una imagen escaneada en respuestas legibles por el
-  sistema, acompañadas de un nivel de confianza que hace explícita la incertidumbre.
-- **Requisitos:** RF-02, RF-03.
-- **Escenarios:** [EC-01](arc42/arc42-template-ES.md#ec-01) (exactitud ≥98%) ·
-  [EC-02](arc42/arc42-template-ES.md#ec-02) (marcas ambiguas ≥99%).
-- **Tensión que lo condiciona:** [T-1](#t-1).
-- **Por qué no se trabaja todavía:** su escenario principal se mide contra un dataset de 300
-  hojas etiquetadas que aún no existe (riesgo R-01), y el umbral de confianza no puede fijarse
-  sin esa evidencia (R-04). Es además el aspecto de mayor riesgo técnico del proyecto (R-05).
+- **Qué problema resuelve:** convierte una foto o un escaneo de la hoja en respuestas legibles por
+  el sistema, acompañadas de un nivel de confianza que hace explícita la incertidumbre.
+
+### 2. Especificar
+
+- **Requisitos:** RF-02 (la marca de cada pregunta, con su confianza) y RF-03 (lo que no llega al
+  umbral va a revisión, nunca a una respuesta elegida por el sistema).
+- **Escenarios:** [EC-01](arc42/arc42-template-ES.md#ec-01) (≥98 % de marcas bien leídas sobre
+  300 hojas etiquetadas) y [EC-02](arc42/arc42-template-ES.md#ec-02) (≥99 % de las marcas
+  ambiguas a revisión).
+- **Restricciones que lo obligan:** RNF-01 (la calificación es OMR, sin LLM), RNF-02 (hoja de
+  formato fijo con marcas de registro) y RNF-12 (el código del estudiante no va al log).
+- **Tensión que lo condiciona:** [T-1](#t-1), exactitud frente a trabajo de revisión.
+- **Alcance de este semestre:** solo la hoja v1 (carta, 40 preguntas de A a D). Un examen puede tener menos de 40 preguntas; otro papel, más preguntas o una quinta opción quedan fuera, por las razones del punto 1 de ADR-0023.
+
+### 3. Ubicar
+
+- **Contexto:** OMR ([arc42 §8.1](arc42/arc42-template-ES.md#81-mapa-de-contextos)). Ninguna
+  relación del Nivel 1 del C4: ocurre dentro del sistema (ver la nota de arriba).
+- **C4:** relación 7 del Nivel 2 (el worker lee la hoja del almacén) y `omr` dentro del worker en
+  el Nivel 3 ([`c4/doc-c4.md`](c4/doc-c4.md#nivel-3--diagrama-de-componentes)).
+- **Módulo:** `omr`, dueño de `LecturaDeBurbuja`, `LecturaDePregunta`, `LecturaDelCodigo` y
+  `LecturaDeHoja` ([§8.3](arc42/arc42-template-ES.md#83-propiedad-de-datos)). Lo invoca el worker,
+  en `leer_y_calificar`.
+
+### 4. Decidir
+
+[ADR-0023](adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md),
+con sus alternativas: las burbujas se leen en las posiciones que fija el formato, después de
+enderezar la hoja con sus cuatro marcas; cada una se mide contra el papel que la rodea; una
+pregunta tiene respuesta solo si la confianza de marcarla y la de descartar las demás llegan al
+umbral (70, configurable de 51 a 100); y lo que no se ve bien (el brillo del grafito, un contorno
+tapado) va a revisión. Una hoja que no se puede leer queda `ILEGIBLE` con su motivo, sin reintento.
+
+Lo decidió el prototipo que pedía R-05: una hoja impresa, marcada a mano y fotografiada tres veces.
+Lo que mostraron las fotos, y lo que cambió en el diseño, está en la
+[sección 1 de la medición](evidencia/medicion-lectura-omr.md#1-la-hoja-del-prototipo-r-05).
+
+### 5. Construir
+
+| Pieza | Dónde |
+|---|---|
+| Formato v1 (carta, 40 preguntas A a D, código `T` + 8 dígitos, cuatro marcas) | [`backend/omr/formato.py`](../backend/omr/formato.py) |
+| Plantilla imprimible, dibujada con la misma definición con que se lee | [`backend/omr/plantilla.py`](../backend/omr/plantilla.py) (`plantilla_pdf`) |
+| Tamaño por encabezado, marcas, orientación, enderezado, ajuste, medida y recortes | [`backend/omr/vision.py`](../backend/omr/vision.py) |
+| Confianza de cada burbuja y regla de cada pregunta y del código | [`backend/omr/decision.py`](../backend/omr/decision.py) |
+| La lectura completa, una función pura: bytes dentro, lectura fuera | [`backend/omr/lectura.py`](../backend/omr/lectura.py) |
+| Los motivos de una hoja ilegible | [`backend/omr/errores.py`](../backend/omr/errores.py) |
+| El paso del worker: leer, calificar, guardar el resultado y los recortes | [`backend/worker/main.py`](../backend/worker/main.py) (`leer_y_calificar`) |
+| En el sitio, las fotos pasadas a gris y a 3 200 px antes de subirlas | [`preparacion_de_hojas.dart`](../frontend/lib/features/carga/data/preparacion_de_hojas.dart) y `reducir_foto*.dart` |
+
+Tres decisiones de construcción que conviene poder defender:
+
+1. **Una burbuja que se ve vacía no se da por vacía si su interior está desparejo.** Una marca de
+   lápiz con el reflejo del foco rellenó 0,06, como el papel. Una vacía cuenta como incorrecta sin
+   pasar por el profesor, así que leerla vacía sería un error silencioso.
+2. **La orientación sale del parecido de la hoja entera con la plantilla**, no de las burbujas:
+   girada 180°, casi todas las burbujas de respuesta caen sobre otras burbujas.
+3. **El tamaño de la imagen se lee del encabezado antes de decodificarla.** Un PNG de 120 KB y
+   10 000 × 10 000 px mataba al worker por memoria y lo dejaba tomando la misma hoja en cada
+   reinicio. Además, desde entonces la muerte del worker cuenta como un intento, para cualquier otra
+   causa ([sección 5 de la medición](evidencia/medicion-lectura-omr.md#5-imágenes-que-piden-más-memoria-de-la-que-tiene-el-worker)).
+
+### 6. Verificar
+
+- [`test_plantilla.py`](../backend/tests/test_plantilla.py): el formato y la plantilla, incluido
+  que no haya tinta en el cuarto de pulgada del borde que la impresora no imprime.
+- [`test_vision.py`](../backend/tests/test_vision.py), [`test_decision.py`](../backend/tests/test_decision.py)
+  y [`test_lectura.py`](../backend/tests/test_lectura.py): cada paso con números escritos a mano y
+  la hoja completa con hojas sintéticas (giradas, con sombra, desenfocadas, con brillo), con los
+  recortes y con las imágenes que no se pueden leer.
+- [`test_lectura_fotos_r05.py`](../backend/tests/test_lectura_fotos_r05.py): las tres fotos del
+  prototipo. Las fotos no están en el repositorio; la prueba corre si `OMR_FOTOS_R05` apunta a
+  ellas.
+- [`preparacion_de_hojas_test.dart`](../frontend/test/features/preparacion_de_hojas_test.dart): las
+  tandas de la pantalla de carga.
+- [`test_mensajeria.py`](../backend/tests/test_mensajeria.py), contra Redis: una hoja que mata al
+  worker vuelve con un intento más cada vez y, después de cuatro, termina en fallidos mientras las
+  demás se leen (R-36).
+- **Validadas provocando la falla:** cada salvaguarda de la lectura se rompió a propósito y alguna
+  prueba se puso en rojo; sin el tope por encabezado, por ejemplo, fallan las dos pruebas de las
+  imágenes enormes.
+
+### 7. Evidenciar
+
+[Medición de la lectura](evidencia/medicion-lectura-omr.md), con su procedimiento y sus informes
+JSON:
+
+- EC-01: 9 406 de 9 406 marcas claras bien leídas (100 %, contra ≥98 %);
+- EC-02: 1 026 de 1 026 marcas ambiguas a revisión (100 %, contra ≥99 %);
+- ninguna respuesta leída mal sin aviso, en las 300 hojas y en las tres fotos del prototipo;
+- 0,46 preguntas por hoja a revisión sin necesitarlo, todas por el brillo.
+
+**Lo que no prueba:** las 300 hojas son sintéticas, y el umbral de 70 no se ha calibrado con hojas
+reales (R-01 y R-04).
 
 ---
 
@@ -441,20 +550,102 @@ worker por la cola. Es desacoplamiento temporal real, así que no hubo prototipo
 
 ## Aspecto A-03: Calificación contra la clave y publicación de resultados
 
-**Declarado.**
+**Construido** junto con A-02, salvo las estadísticas del Panel (RF-05), con la revisión manual
+(RF-08) antes de A-05. Registro de IA en [`ia.md`](ia.md), entrada 21.
+
+### 1. Declarar
 
 - **Para quién es:** el profesor y el TA, que necesitan la nota y las estadísticas por
   pregunta.
 - **Qué problema resuelve:** compara las respuestas detectadas contra la clave habilitada,
-  calcula la nota y la publica en el dashboard, permitiendo resolver manualmente lo ambiguo y
-  recalcular.
-- **Requisitos:** RF-04, RF-05, RF-08.
-- **Escenarios:** [EC-03](arc42/arc42-template-ES.md#ec-03) (≤5 s por hoja) ·
+  calcula la nota y la publica, y deja resolver a mano lo ambiguo y recalcular.
+
+### 2. Especificar
+
+- **Requisitos:** RF-04 (comparar y calificar), RF-05 (presentar los resultados) y RF-08 (resolver
+  a mano y recalcular). Toca también RF-07 (sin una clave habilitada no hay nota) y RF-10 (quién
+  modificó una nota y cuándo).
+- **Escenarios:** [EC-03](arc42/arc42-template-ES.md#ec-03) (≤5 s por hoja, p95) y
   [EC-04](arc42/arc42-template-ES.md#ec-04) (200 hojas en ≤10 min).
-- **Decisión que ya lo condiciona:**
-  [ADR-0002](adr/0002-procesar-calificacion-de-forma-asincrona.md) — la nota de una hoja con
-  preguntas ambiguas queda *provisional* hasta que el docente la resuelva.
-- **Por qué no se trabaja todavía:** depende de A-02, que produce su entrada.
+- **Restricciones que lo obligan:** RNF-15 (una nota corregida a mano se distingue de la
+  automática) y RNF-12 (el código del estudiante no sale por una ruta pública).
+
+### 3. Ubicar
+
+- **Contextos:** Calificación y Dashboard ([§8.3](arc42/arc42-template-ES.md#83-propiedad-de-datos),
+  «Por qué A-03 abarca dos contextos»). Relación 2 del Nivel 1 del C4.
+- **C4:** relaciones 7 (el worker lee la clave y guarda el resultado) y 3 (la aplicación web lee
+  los resultados y guarda las revisiones) del Nivel 2; `calificacion` en los dos contenedores y
+  `dashboard` en la aplicación web, en el Nivel 3.
+- **Módulos:** `calificacion` decide la nota (`ResultadoDePregunta`, `CalificacionDeHoja`,
+  `ResolucionDelProfesor`); `dashboard` la presenta (`ResultadoDeHoja`, `ResultadosDelExamen` y
+  las cuatro de la revisión); `autoria` es la dueña de la clave y de la lista de exámenes.
+
+### 4. Decidir
+
+- [ADR-0002](adr/0002-procesar-calificacion-de-forma-asincrona.md): la nota de una hoja con
+  preguntas ambiguas queda *provisional* hasta que el docente las resuelva.
+- [ADR-0018](adr/0018-dar-a-la-hoja-una-identidad-propia-y-derivar-su-estado-de-la-bitacora.md):
+  todo se refiere por `hoja_id` y se guarda como hechos de solo agregado.
+- [ADR-0023](adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md),
+  puntos 7 a 9 y sus consecuencias: la nota en décimas, la clave por un puerto, el registro de
+  resultados aparte de la bitácora, las notas sin el código del estudiante y RF-08 antes de A-05.
+
+### 5. Construir
+
+| Pieza | Dónde |
+|---|---|
+| La nota, el veredicto de cada resolución y la nota vigente | [`backend/calificacion/nota.py`](../backend/calificacion/nota.py) |
+| Resolver las preguntas de una hoja (RF-08) | [`backend/calificacion/revision.py`](../backend/calificacion/revision.py) |
+| La clave por un puerto, y la lista de exámenes que tienen una | [`infraestructura/claves.py`](../backend/infraestructura/claves.py) · [`autoria/examenes.py`](../backend/autoria/examenes.py) |
+| El registro de resultados (lo escribe el worker) y el de revisiones (la API) | [`infraestructura/resultados.py`](../backend/infraestructura/resultados.py) · [`infraestructura/revisiones.py`](../backend/infraestructura/revisiones.py) |
+| Lo que ve el profesor: las notas por hoja y las preguntas en revisión | [`dashboard/resultados.py`](../backend/dashboard/resultados.py) · [`dashboard/revision.py`](../backend/dashboard/revision.py) |
+| `GET /examenes`, `GET /examenes/{id}/resultados`, `GET /examenes/{id}/revision`, `POST /examenes/{id}/hojas/{hoja}/revision` y el recorte de cada pregunta | [`api/main.py`](../backend/api/main.py), contrato 1.8.0 ([`openapi.json`](contrato/openapi.json)) |
+| En el sitio: la lista de exámenes, las notas junto a cada archivo y la pantalla de revisión | [`servicio_examenes.dart`](../frontend/lib/features/carga/data/servicio_examenes.dart) · [`servicio_resultados.dart`](../frontend/lib/features/carga/data/servicio_resultados.dart) · [`reporte_recepcion.dart`](../frontend/lib/features/carga/views/widgets/reporte_recepcion.dart) · [`pantalla_revision.dart`](../frontend/lib/features/revision/views/pantalla_revision.dart) · [`servicio_revision.dart`](../frontend/lib/features/revision/data/servicio_revision.dart) |
+
+Tres decisiones de construcción que conviene poder defender:
+
+1. **El profesor dice qué marcó el estudiante, no si está bien.** Elige A a D o «Ninguna» mirando
+   el recorte de la fila, y `calificacion` decide el veredicto con la clave. La respuesta correcta
+   nunca sale de la API: ni en la revisión ni en la lista de exámenes.
+2. **La nota automática no se reescribe.** Cada resolución es un hecho nuevo, la última de cada
+   pregunta manda, y la nota vigente se recalcula; la automática queda como historia y la corregida
+   sale marcada `revisada` (RNF-15).
+3. **Las notas se publican sin el código del estudiante**, porque las rutas son públicas hasta
+   A-05: la pantalla dice si el código se leyó completo y nada más.
+
+### 6. Verificar
+
+- [`test_calificacion.py`](../backend/tests/test_calificacion.py): las reglas de la nota (décimas,
+  redondeo a la mitad hacia arriba, una anulada no cambia el total) y las de la resolución.
+- [`test_claves.py`](../backend/tests/test_claves.py), [`test_resultados.py`](../backend/tests/test_resultados.py)
+  y [`test_revisiones.py`](../backend/tests/test_revisiones.py): los tres registros, incluida una
+  línea truncada.
+- [`test_leer_y_calificar.py`](../backend/tests/test_leer_y_calificar.py): el paso del worker, y
+  que el código del estudiante no llega al log (una fuga inyectada pone la prueba en rojo).
+- [`test_ruta_resultados.py`](../backend/tests/test_ruta_resultados.py),
+  [`test_ruta_examenes.py`](../backend/tests/test_ruta_examenes.py) y
+  [`test_ruta_revision.py`](../backend/tests/test_ruta_revision.py): las rutas, y que ninguna
+  respuesta trae el código del estudiante ni la respuesta correcta.
+- [`test_contrato.py`](../backend/tests/test_contrato.py): las nueve rutas del contrato 1.8.0.
+- En el sitio, [`revision_test.dart`](../frontend/test/features/revision_test.dart),
+  [`servicio_revision_test.dart`](../frontend/test/features/servicio_revision_test.dart),
+  [`servicio_resultados_test.dart`](../frontend/test/features/servicio_resultados_test.dart),
+  [`servicio_examenes_test.dart`](../frontend/test/features/servicio_examenes_test.dart) y las de
+  la pantalla de carga.
+
+### 7. Evidenciar
+
+- **EC-03:** de la carga al resultado, p95 de 1,7 s por hoja suelta (contra ≤5 s).
+- **EC-04:** un lote de 200 hojas procesado entero en 3,6 min (contra ≤10 min), con el worker al
+  81 % de su memoria y al 100 % de su cuarto de CPU.
+- **RF-08:** con las fotos del prototipo, la hoja de arriba pasó de 3,9 a 4,0 al resolver sus
+  cuatro preguntas, sin que la respuesta correcta saliera de la API
+  ([captura y detalle](evidencia/medicion-lectura-omr.md#4-la-revisión-manual-con-las-fotos-del-prototipo-rf-08)).
+
+**Lo que falta:** las estadísticas por pregunta y por curso del Panel (RF-05); saber quién resuelve
+cada revisión (A-05, AM-02); que una hoja subida dos veces no se califique dos veces (R-24); y que
+la clave se registre desde la aplicación, que hoy se copia a mano al volumen (A-04).
 
 ---
 
@@ -483,6 +674,11 @@ worker por la cola. Es desacoplamiento temporal real, así que no hubo prototipo
 - **Por qué no se trabaja todavía:** no le falta nada técnico. El registro del banco, la clave y
   la habilitación funcionan sin LLM; la parte que sí lo necesita, los distractores, ya se
   construyó en [A-06](#a-06). Es una cuestión de orden de trabajo.
+- **Lo que ya dejó A-03:** la clave existe como dato, `ClaveDeRespuestas` con su `Habilitacion`
+  (quién y cuándo), de la que `autoria` es dueña, y se lee por un puerto
+  (`infraestructura/claves.py`). Hoy se escribe a mano en un JSON por examen y se copia al volumen;
+  sin habilitación, la hoja queda sin nota (RF-07). A-04 es lo que la registra y la habilita desde
+  la aplicación.
 
 ---
 
@@ -664,8 +860,11 @@ sistema (un cupo del presupuesto y unos 2 s por solicitud) y lo que se lee no en
 - **Escenario:** [EC-06](arc42/arc42-template-ES.md#ec-06).
 - **Restricciones que lo obligan:** RNF-05, RNF-12 (protección de datos personales) y RNF-15
   (trazabilidad para el derecho de revisión del estudiante).
-- **Por qué no se trabaja todavía:** es transversal a los demás aspectos y conviene
-  especificarlo cuando existan al menos dos flujos reales sobre los que aplicarlo.
+- **Por qué no se trabaja todavía:** es transversal a los demás aspectos y convenía
+  especificarlo cuando existieran al menos dos flujos reales sobre los que aplicarlo. **Ya
+  existen**: la carga, las notas y la revisión manual. Y es la condición para la primera hoja real
+  (AM-02): hoy cualquiera con la URL ve las notas de un examen, sin el código del estudiante, y
+  puede resolver una revisión con cualquier nombre.
 
 ---
 
@@ -694,6 +893,15 @@ La tensión, entonces, no es entre precisión y velocidad de cómputo, sino entr
 carga de trabajo humana residual**. Fijar el umbral es una decisión que necesita evidencia —el
 dataset de 300 hojas del riesgo R-01— y debe registrarse en un ADR con la curva medida, no
 elegirse por intuición.
+
+**Lo que dijo la primera medición** ([ADR-0023](adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md)).
+Con el umbral de 70, en las 300 hojas sintéticas fueron a revisión sin necesitarlo 0,46 preguntas
+por hoja, todas por el brillo, y ninguna respuesta se leyó mal sin aviso. En las fotos del
+prototipo el brillo pesó más: en la inclinada, las 12 marcas de lápiz de la 1 a la 12 fueron a
+revisión, y en la de arriba, el código entero. Es el lado seguro de la tensión, y por eso la
+pantalla de carga pide tomar la foto sin luz directa. El ADR deja escrito qué dato lo haría
+revisar: más de tres preguntas por hoja a revisión en un examen real. La curva contra hojas reales
+sigue pendiente (R-01, R-04).
 
 <a id="t-2"></a>
 
