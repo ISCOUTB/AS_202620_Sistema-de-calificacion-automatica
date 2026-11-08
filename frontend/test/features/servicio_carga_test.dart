@@ -30,6 +30,8 @@ Future<ExcepcionDeCarga> _falla(MockClient cliente, {String examen = 'CALC-2026-
 }
 
 void main() {
+  _tandas();
+
   test('Un 5xx no afirma que no entró nada: algunas hojas pudieron entrar', () async {
     // El proxy de Render puede devolver 502 o 504 mientras la API sigue trabajando. Antes, el
     // mensaje decía «No se recibió ninguna hoja» e invitaba a duplicarlas.
@@ -72,5 +74,70 @@ void main() {
     expect(pedida.pathSegments, ['examenes', 'P2#1 ¿B?', 'hojas']);
     expect(pedida.hasFragment, isFalse);
     expect(pedida.hasQuery, isFalse);
+  });
+}
+
+/// Un cliente que acepta cada archivo que recibe, con su nombre, salvo en las peticiones que
+/// [falla] marque: ahí responde con 429, como el presupuesto de carga.
+MockClient _aceptaTodo({bool Function(int peticion)? falla}) {
+  var peticiones = 0;
+  return MockClient((peticion) async {
+    peticiones++;
+    if (falla?.call(peticiones) ?? false) {
+      return http.Response('{"detail": "x"}', 429, headers: {'content-type': 'application/json'});
+    }
+    final nombres = RegExp(r'filename="([^"]+)"')
+        .allMatches(latin1.decode(peticion.bodyBytes))
+        .map((m) => m.group(1)!)
+        .toList();
+    return http.Response(
+      jsonEncode({
+        'total_procesados': nombres.length,
+        'aceptadas': [
+          for (final n in nombres) {'nombre_archivo': n, 'trabajo_id': 't-$n'},
+        ],
+        'rechazados': [],
+      }),
+      200,
+      headers: {'content-type': 'application/json'},
+    );
+  });
+}
+
+List<ArchivoSeleccionado> _hojas(int cantidad) => [
+      for (var i = 0; i < cantidad; i++)
+        ArchivoSeleccionado(nombre: 'h$i.jpg', contenido: Uint8List(3)),
+    ];
+
+void _tandas() {
+  test('Un examen que no cabe en una petición sale en tandas y llega un solo reporte', () async {
+    // 251 hojas: una más de las que la API admite por lote.
+    final lote = _hojas(251);
+
+    final resultado = await subirHojas('CALC-2026-01', lote, cliente: _aceptaTodo());
+
+    expect(resultado.totalProcesados, 251);
+    expect(resultado.aceptadas.map((h) => h.nombreArchivo), [for (final a in lote) a.nombre]);
+  });
+
+  test('Si la segunda tanda falla, se dice cuántas hojas entraron y que pueden duplicarse',
+      () async {
+    final error = await () async {
+      try {
+        await subirHojas('CALC-2026-01', _hojas(251), cliente: _aceptaTodo(falla: (n) => n == 2));
+      } on ExcepcionDeCarga catch (e) {
+        return e;
+      }
+      fail('El servicio no lanzó ExcepcionDeCarga.');
+    }();
+
+    expect(error.pudieronEntrar, isTrue);
+    expect(error.mensaje, contains('Entraron 250 de 251 hojas'));
+  });
+
+  test('Si la primera tanda falla, no entró nada y se puede reintentar', () async {
+    final error = await _falla(_aceptaTodo(falla: (n) => n == 1));
+
+    expect(error.pudieronEntrar, isFalse);
   });
 }

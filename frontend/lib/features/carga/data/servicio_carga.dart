@@ -4,16 +4,22 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
 import '../../../common/api/servicio_salud.dart' show backendUrl;
+import 'preparacion_de_hojas.dart' show repartirEnTandas;
 
 /// Un archivo elegido por el docente, ya leído a memoria.
 ///
 /// Flutter web no puede pasarle una ruta al backend (el navegador no expone rutas del sistema
 /// de archivos), así que el contenido viaja en bytes.
 class ArchivoSeleccionado {
-  const ArchivoSeleccionado({required this.nombre, required this.contenido});
+  const ArchivoSeleccionado({required this.nombre, required this.contenido, this.ladoMayorPx});
 
   final String nombre;
   final Uint8List contenido;
+
+  /// El lado mayor de la imagen, en píxeles, tal como se va a subir. Nulo si el navegador no la
+  /// pudo abrir. Sirve para avisar antes de subir que una foto no alcanza la resolución mínima
+  /// (`tienePocaResolucion`).
+  final int? ladoMayorPx;
 }
 
 /// Estado de una hoja aceptada, tal como lo publica el contrato (`HojaAceptadaEnRespuesta`).
@@ -36,16 +42,22 @@ class HojaAceptada {
     required this.nombreArchivo,
     required this.trabajoId,
     this.estado = EstadoHoja.encolada,
+    this.hojaId,
   });
 
   final String nombreArchivo;
   final String trabajoId;
   final EstadoHoja estado;
 
+  /// La identidad de la hoja (ADR-0018). Con ella se une el resultado de la lectura con el
+  /// archivo que eligió el docente. Nula solo en respuestas anteriores al contrato 1.3.0.
+  final String? hojaId;
+
   factory HojaAceptada.desdeJson(Map<String, dynamic> json) => HojaAceptada(
         nombreArchivo: json['nombre_archivo'] as String,
         trabajoId: json['trabajo_id'] as String,
         estado: EstadoHoja.desdeTexto(json['estado'] as String?),
+        hojaId: json['hoja_id'] as String?,
       );
 }
 
@@ -106,10 +118,44 @@ class ExcepcionDeCarga implements Exception {
 
 /// Sube las hojas de un examen y devuelve el reporte de recepción (RF-01).
 ///
-/// El nombre del campo del formulario, `archivos`, tiene que coincidir con el del parámetro
-/// del endpoint en `api/main.py`: es el contrato entre los dos lados. [cliente] existe para las
-/// pruebas; en la aplicación se usa el de `package:http`.
+/// Las manda en tandas de hasta 90 MB y 250 hojas (`repartirEnTandas`), una petición por tanda, y
+/// junta los reportes en uno: un examen de 200 fotos ya preparadas pesa unos 130 MB, y la API corta
+/// cada petición en 100 MB. Si una tanda falla después de que otra entró, la excepción lo dice:
+/// volver a subir todo duplicaría las hojas que ya entraron (R-24).
+///
+/// [cliente] existe para las pruebas; en la aplicación se usa el de `package:http`.
 Future<ResultadoCarga> subirHojas(
+  String examenId,
+  List<ArchivoSeleccionado> archivos, {
+  http.Client? cliente,
+}) async {
+  final aceptadas = <HojaAceptada>[];
+  final rechazados = <ArchivoRechazado>[];
+  var procesados = 0;
+  for (final tanda in repartirEnTandas(archivos)) {
+    final ResultadoCarga parcial;
+    try {
+      parcial = await _subirTanda(examenId, tanda, cliente: cliente);
+    } on ExcepcionDeCarga catch (error) {
+      if (procesados == 0) rethrow;
+      throw ExcepcionDeCarga(
+        'Entraron ${aceptadas.length} de ${archivos.length} hojas en las primeras tandas, y la '
+        'siguiente no se completó. ${error.mensaje}',
+        pudieronEntrar: true,
+      );
+    }
+    procesados += parcial.totalProcesados;
+    aceptadas.addAll(parcial.aceptadas);
+    rechazados.addAll(parcial.rechazados);
+  }
+  return ResultadoCarga(totalProcesados: procesados, aceptadas: aceptadas, rechazados: rechazados);
+}
+
+/// Una petición con una tanda de hojas.
+///
+/// El nombre del campo del formulario, `archivos`, tiene que coincidir con el del parámetro
+/// del endpoint en `api/main.py`: es el contrato entre los dos lados.
+Future<ResultadoCarga> _subirTanda(
   String examenId,
   List<ArchivoSeleccionado> archivos, {
   http.Client? cliente,
@@ -131,7 +177,7 @@ Future<ResultadoCarga> subirHojas(
     flujo = await (cliente?.send(peticion) ?? peticion.send());
   } catch (error) {
     throw const ExcepcionDeCarga(
-      'No se pudo contactar con la API. Revise su conexión y vuelva a intentarlo.',
+      'No se pudo contactar con el servidor. Revise su conexión y vuelva a intentarlo.',
     );
   }
 
@@ -150,11 +196,11 @@ Future<ResultadoCarga> subirHojas(
   // sigue trabajando, y antes este mensaje decía «No se recibió ninguna hoja» en los dos casos.
   final codigo = respuesta.statusCode;
   if (codigo >= 400 && codigo < 500) {
-    throw ExcepcionDeCarga('La API rechazó la petición ($codigo). No entró ninguna hoja.');
+    throw ExcepcionDeCarga('El servidor rechazó la petición ($codigo). No entró ninguna hoja.');
   }
   if (codigo != 200) {
     throw ExcepcionDeCarga(
-      'La API respondió $codigo. Algunas hojas pudieron entrar: revise antes de volver a subir '
+      'El servidor respondió $codigo. Algunas hojas pudieron entrar: revise antes de volver a subir '
       'el lote.',
       pudieronEntrar: true,
     );
@@ -169,7 +215,7 @@ Future<ResultadoCarga> subirHojas(
     );
   } catch (_) {
     throw const ExcepcionDeCarga(
-      'La API recibió el lote, pero su reporte no se pudo leer. Algunas hojas pudieron entrar: '
+      'El servidor recibió el lote, pero su reporte no se pudo leer. Algunas hojas pudieron entrar: '
       'revise antes de volver a subir el lote.',
       pudieronEntrar: true,
     );
