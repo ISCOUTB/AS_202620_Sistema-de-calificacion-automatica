@@ -24,6 +24,24 @@ En el servidor del laboratorio del curso, desde `deploy/compose.lab.yaml`. El pa
 `despliegue`, que el CI publica solo si las pruebas pasan ([ADR-0021](docs/adr/0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md)).
 Detalle en [Entorno desplegado, en detalle](#entorno-desplegado-en-detalle).
 
+## Lectura y calificación de las hojas (A-02, A-03)
+
+- **Construidas**, con la revisión manual de las preguntas dudosas (RF-08), en
+  `docs/adr/0023-…`. Sobre 300 hojas sintéticas: EC-01, 100 % de marcas claras bien
+  leídas (pide ≥98 %); EC-02, 100 % de las ambiguas a revisión (pide ≥99 %); 0 errores silenciosos.
+  EC-03, p95 de 1,7 s por hoja (pide ≤5 s); EC-04, 200 hojas en 3,6 min (pide ≤10 min).
+- **Salvedades:** hojas sintéticas, no las escaneadas de R-01; umbral sin calibrar con hojas reales
+  (R-04); rutas públicas hasta A-05, solo con hojas sintéticas (AM-02).
+
+| Qué | Dónde |
+|---|---|
+| Decisión, con sus alternativas | [ADR-0023](docs/adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md) |
+| Medición de EC-01 a EC-04, el prototipo, RF-08 con las fotos y la memoria del worker | [`medicion-lectura-omr.md`](docs/evidencia/medicion-lectura-omr.md) |
+| Los siete pasos de A-02 y A-03 | [`docs/aspectos.md`](docs/aspectos.md#a-02) |
+| Los recorridos | [arc42 §6.8 y §6.9](docs/arc42/arc42-template-ES.md#68-lectura-y-calificación-de-una-hoja-rf-02-a-rf-05--a-02-y-a-03--adr-0023) |
+| Código | `backend/omr/`, `backend/calificacion/`, `backend/dashboard/`, `backend/worker/main.py` |
+| Cómo probarlo en un computador | [Cómo se recorre la lectura](#cómo-se-recorre-la-lectura) |
+
 ## Evidencia S13: modelado de amenazas
 
 - **Amenazas:** 15, con STRIDE sobre el Nivel 2 del C4, cada una con probabilidad, impacto,
@@ -199,6 +217,7 @@ qué archivo y en qué sección está.
 | Taller de mensajería | Contrato del mensaje, entrega al menos una vez, duplicados, reintentos, seguimiento y ADR frente a la alternativa síncrona | [`docs/evidencia/taller-mensajeria.md`](docs/evidencia/taller-mensajeria.md) · [ADR-0020](docs/adr/0020-entregar-los-trabajos-al-menos-una-vez-con-reintentos-y-lista-de-fallidos.md) |
 | Despliegue en iscoutb.dev | Revisión desplegada, comprobación desde fuera de la universidad, recorrido de una hoja de la API al worker y límites de memoria medidos | [`docs/evidencia/despliegue-iscoutb.md`](docs/evidencia/despliegue-iscoutb.md) · [ADR-0021](docs/adr/0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md) |
 | S13 | Amenazas priorizadas con su mitigación, análisis de dependencias y privacidad | [Evidencia S13](#evidencia-s13-modelado-de-amenazas) |
+| Lectura OMR | A-02 y A-03 con RF-08: el prototipo, EC-01 a EC-04 medidos y ADR-0023 | [Lectura y calificación](#lectura-y-calificación-de-las-hojas-a-02-a-03) · [`medicion-lectura-omr.md`](docs/evidencia/medicion-lectura-omr.md) |
 | Todas | Pipeline de integración continua | [Runs de GitHub Actions](https://github.com/ISCOUTB/AS_202620_Sistema-de-calificacion-automatica/actions) |
 | Todas | Análisis estático y su *Quality Gate* | [SonarQube Cloud](https://sonarcloud.io/summary/new_code?id=ISCOUTB_AS_202620_Sistema-de-calificacion-automatica) |
 | Todas | Respuesta a la retroalimentación automática | [`correcciones.md`](correcciones.md) |
@@ -271,6 +290,34 @@ está colgado. Para reconstruir tras cambiar código: `docker compose up --build
 - API: http://localhost:8000 (documentación interactiva en `/docs`, salud en `/health`).
 - Frontend: http://localhost:8080.
 
+### Cómo se recorre la lectura
+
+Para que una hoja salga con nota, su examen necesita una clave habilitada, y hasta A-04 se escribe
+a mano: un JSON con `examen_id`, las preguntas (`numero`, `correcta` de A a D y `peso`) y la
+`habilitacion` (`por` y `en`). Con el sistema arriba, desde la raíz del repositorio, se copia al
+volumen con el nombre del examen (uno como `CALC-2026-01`, sin espacios ni tildes):
+
+```
+docker compose exec api mkdir -p /app/almacen_imagenes/claves-de-respuestas
+docker compose cp CALC-2026-01.json api:/app/almacen_imagenes/claves-de-respuestas/CALC-2026-01.json
+```
+
+En Git Bash, estos comandos llevan `MSYS_NO_PATHCONV=1` delante, porque Git Bash cambia las rutas
+que empiezan con `/` antes de pasárselas a Docker. En PowerShell, cmd, Linux o macOS van tal cual.
+
+La hoja para imprimir sale de la misma definición con que se lee. Este semestre es la única: la
+v1, en carta y al 100 %, con hasta 40 preguntas de A a D (ADR-0023, punto 1):
+
+```
+docker compose exec api python -c "from omr.plantilla import plantilla_pdf; open('/tmp/plantilla-v1.pdf','wb').write(plantilla_pdf())"
+docker compose cp api:/tmp/plantilla-v1.pdf plantilla-v1.pdf
+```
+
+Después: se marca, se le toma una foto con la hoja ocupando casi toda la imagen y sin luz directa, y
+en http://localhost:8080 se elige el examen de la lista y se sube la foto. La nota aparece junto al
+archivo en unos segundos; si quedó «En revisión», el botón «Revisar» lleva a la pantalla de
+revisión. Lo que hace cada paso está en el [arc42 §6.8 y §6.9](docs/arc42/arc42-template-ES.md#68-lectura-y-calificación-de-una-hoja-rf-02-a-rf-05--a-02-y-a-03--adr-0023).
+
 Alternativas para desarrollo, que no reemplazan el comando oficial de arriba:
 - Backend sin Docker: `docker compose up -d redis postgres` y luego, dentro de `backend/` con un
   entorno virtual, `pip install -r requirements.txt` y `uvicorn api.main:app --reload`.
@@ -304,8 +351,9 @@ en el encabezado de [`deploy/compose.local-override.yaml`](deploy/compose.local-
 
 ## Corte vertical: carga de examen (aspecto A-01)
 
-Del sistema hay **dos aspectos construidos de punta a punta**, y los demás solo declarados. El
-otro es A-06, la porción de la [Evidencia S9](#evidencia-s9). Este es
+Del sistema hay **cuatro aspectos construidos de punta a punta**, y los demás solo declarados. Los
+otros son A-06, la porción de la [Evidencia S9](#evidencia-s9), y A-02 y A-03, la
+[lectura y la calificación](#lectura-y-calificación-de-las-hojas-a-02-a-03). Este es
 [A-01, la carga de examen para calificación](docs/aspectos.md#a-01), que realiza RF-01: el
 docente sube las hojas escaneadas de un examen y el sistema le confirma cuáles recibió y cuáles
 no, con el motivo de cada rechazo.
@@ -372,9 +420,9 @@ imágenes y a la cola de Redis, y de ahí a un proceso distinto en otro contened
 
 ### Qué falta de este aspecto
 
-El worker registra la hoja y ahí termina, porque el paso siguiente es el aspecto A-02 (detección
-de marcas), que todavía no existe. La política de retención de imágenes que exige RNF-14 tampoco
-está implementada: hoy nada borra lo que se guarda.
+Desde A-02, el worker no termina al registrar la hoja: la lee y la califica, y la nota aparece en
+la misma pantalla de carga ([cómo se recorre](#cómo-se-recorre-la-lectura)). La política de
+retención de imágenes que exige RNF-14 no está implementada: hoy nada borra lo que se guarda.
 
 El almacenamiento y la bitácora de recepción están **detrás de sendos puertos** en
 `infraestructura`, con adaptadores en disco declarados provisionales. Es deliberado: el corte
@@ -383,7 +431,7 @@ como riesgo R-06 del arc42. Cuando se escriba ese ADR, lo que cambia son los ada
 `ingesta`, el modelo de datos y las pruebas del aspecto no se tocan.
 
 El reintento de las hojas que quedaron `pendiente_de_encolar` **no está automatizado**:
-`bitacora.pendientes()` deja el dato listo y consumirlo es trabajo del aspecto A-02.
+`bitacora.pendientes()` deja el dato listo, y A-02 no lo consumió (R-32).
 
 ## Cómo se prueba
 
@@ -393,7 +441,7 @@ Backend (dentro de `backend/`, con Redis disponible vía `docker compose up -d r
 pytest
 ```
 
-Son 213. Verifican: que la aplicación FastAPI arranca y su endpoint de salud responde
+Son 424. Verifican: que la aplicación FastAPI arranca y su endpoint de salud responde
 200; que los siete módulos del dominio se importan sin error ni ciclos; que ningún módulo
 importa por fuera de lo declarado en el docstring de su `__init__.py` (la prueba de fronteras
 entre módulos); que un trabajo encolado en Redis se recupera igual al desencolarlo; y, para el
@@ -465,12 +513,26 @@ cumplir un día; que `GET /metricas` publica lo cargado y lo cortado; y que ning
 del tope llega a la ruta, lo declare o no. Se validaron provocando la falla con seis mutaciones,
 que el docstring enumera; una no pone ninguna en rojo, y el docstring dice por qué.
 
-Seis son la **prueba de contrato** ([`backend/tests/test_contrato.py`](backend/tests/test_contrato.py)),
+Doscientas once llegaron con la lectura y la calificación (A-02, A-03 y RF-08,
+[ADR-0023](docs/adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md)).
+Verifican que la plantilla y la lectura salen de la misma definición; que cada burbuja se mide
+contra su papel y una sombra no inventa marcas; que una marca con brillo o una burbuja tapada no se
+leen como vacías; que la hoja se lee igual girada o en perspectiva; que una dudosa o una doble marca
+van a revisión y nunca a una respuesta elegida; que una imagen enorme en píxeles queda ilegible sin
+decodificarse, y que una hoja que mata al worker termina en fallidos después de cuatro intentos
+en vez de detener la cola; las reglas de la nota y de cada resolución del docente; que sin una clave habilitada
+no hay nota; los registros de resultados y de revisiones; y que ninguna ruta publica el código del
+estudiante ni la respuesta correcta, y el log tampoco. Casi todas usan hojas sintéticas generadas
+en la prueba; la de las tres fotos del prototipo corre si `OMR_FOTOS_R05` apunta a ellas, y si no,
+se omite.
+
+Diez son la **prueba de contrato** ([`backend/tests/test_contrato.py`](backend/tests/test_contrato.py)),
 y verifican que el documento de `docs/contrato/openapi.json` y la API que corre no se puedan
 separar: que el archivo versionado sea exactamente el que genera la aplicación de hoy, que su
-número de versión sea el declarado en el código, que sigan estando las cuatro rutas (y que la de
+número de versión sea el declarado en el código, que sigan estando las nueve rutas (y que la de
 distractores publique su 503 y su 429), que la
 respuesta de carga exija sus cuatro campos, que los estados publicados sean los dos del dominio,
+que la revisión no publique la respuesta correcta,
 y que una respuesta real traiga exactamente los campos que el contrato anuncia, ni uno más ni
 uno menos.
 
@@ -495,7 +557,7 @@ de fallar con un error de conexión confuso. Las demás corren igual.
 
 La prueba de contrato lee `docs/contrato/openapi.json` desde la raíz del repositorio, así que se
 corre fuera de la imagen, como la corre el pipeline. Dentro de un contenedor construido desde
-`backend/` (por ejemplo, con `docker compose run api pytest`) ese archivo no existe y sus seis
+`backend/` (por ejemplo, con `docker compose run api pytest`) ese archivo no existe y sus diez
 pruebas terminan en error.
 
 Frontend (dentro de `frontend/`):
@@ -504,7 +566,9 @@ Frontend (dentro de `frontend/`):
 flutter test
 ```
 
-Son 73, una carpeta por pantalla en `test/features/` más `test/app_test.dart`:
+Son 105, una carpeta por pantalla en `test/features/` más `test/app_test.dart`. Las cifras por
+pantalla de esta lista son de antes de A-02 y A-03, que sumaron 32: la preparación de las fotos,
+la lista de exámenes, las notas junto a cada archivo y la pantalla de revisión con datos reales.
 
 - **Marco de la aplicación (6):** la barra superior refleja el estado de conexión con el backend
   y ofrece volver a comprobar; la navegación es un riel en escritorio y una barra en teléfono; y
@@ -519,9 +583,13 @@ Son 73, una carpeta por pantalla en `test/features/` más `test/app_test.dart`:
   la API; con el límite por minuto hay cuenta regresiva, y con el diario no se ofrece repetir y el
   botón de pedir vuelve cuando pasa la espera. Diez de ellas prueban el servicio contra un
   `MockClient`, código por código, y una, que «Pedir otras propuestas» manda `otras: true`.
-- **Panel (11) y Revisión (11):** avisan que usan datos de ejemplo (en Revisión, también que un
-  veredicto no se guarda) y no se desbordan a 390 px; el Panel tampoco ofrece acciones de IA
-  fuera del alcance, y su porcentaje de aprobación no divide por cero.
+- **Panel (11):** avisa que usa datos de ejemplo y no se desborda a 390 px; no ofrece acciones de
+  IA fuera del alcance, y su porcentaje de aprobación no divide por cero.
+- **Revisión:** tenía 11 pruebas con datos de ejemplo. Desde RF-08 usa datos reales, y sus
+  pruebas verifican que abre primero la hoja con preguntas por revisar, que guarda lo que elige el
+  docente con su nombre y recalcula, que una pregunta ya resuelta se puede cambiar, que avisa si el
+  examen no tiene dudas o si la revisión no llega, y que no se desborda a 390 px; las del servicio,
+  que cada respuesta de la API se traduce a lo que ve el docente.
 
 Ninguna toca la red ni el diálogo de archivos del navegador: las pantallas reciben esas
 operaciones inyectadas y las pruebas les pasan sustitutos.
@@ -544,13 +612,19 @@ El resultado, el procedimiento y sus límites están en
 ## El contrato de la API
 
 Lo que la API promete devolver está escrito en un documento OpenAPI versionado en el
-repositorio: [`docs/contrato/openapi.json`](docs/contrato/openapi.json), en la versión 1.5.0.
-Describe las cuatro rutas con el esquema de cada respuesta campo por campo, no solo el listado de
+repositorio: [`docs/contrato/openapi.json`](docs/contrato/openapi.json), en la versión 1.8.0.
+Describe las nueve rutas con el esquema de cada respuesta campo por campo, no solo el listado de
 endpoints. La 1.2.0 agregó `GET /metricas` y el 429 de `/distractores` (segundo corte, ADR-0015).
 La 1.3.0 agregó el `hoja_id` de cada hoja aceptada (ADR-0018), y la 1.4.0, la caché de propuestas:
 `otras` en la solicitud de distractores, `desde_la_cache` en su respuesta y su estado en
 `/metricas` (ADR-0019). La 1.5.0 agregó el presupuesto de carga: el 413 y el 429 de la ruta de
-carga y su estado en `/metricas` (ADR-0022). Las tres solo agregan.
+carga y su estado en `/metricas` (ADR-0022). Con A-02 y A-03
+([ADR-0023](docs/adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md)),
+la 1.6.0 agregó `GET /examenes/{examen_id}/resultados`, la nota de cada hoja sin el código del
+estudiante; la 1.7.0, `GET /examenes`, los exámenes que tienen clave, sin las respuestas; y la
+1.8.0, la revisión manual (RF-08): `GET /examenes/{examen_id}/revision`, el recorte de cada
+pregunta y `POST /examenes/{examen_id}/hojas/{hoja_id}/revision`, más `revisada` en los
+resultados. Todas solo agregan.
 
 Está versionado y no se consulta en caliente por dos razones. `/openapi.json` solo existe
 mientras la API está levantada y describe la versión que esté corriendo en ese momento, así que
@@ -623,20 +697,23 @@ El desarrollo sigue Aspect Driven Development (ADD): cada funcionalidad se decla
 | [0020](docs/adr/0020-entregar-los-trabajos-al-menos-una-vez-con-reintentos-y-lista-de-fallidos.md) | Entregar los trabajos al menos una vez, con reintentos y lista de fallidos | aceptado |
 | [0021](docs/adr/0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md) | Desplegar en el servidor del laboratorio, con el sitio compilado en el CI | aceptado |
 | [0022](docs/adr/0022-poner-un-presupuesto-de-carga-delante-del-almacen.md) | Poner un presupuesto de carga delante del almacén | aceptado |
+| [0023](docs/adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md) | Leer las hojas en posiciones fijas y mandar a revisión lo que no se ve bien | aceptado |
 
 Las decisiones de un ADR aceptado no se editan ni se borran: si una decisión cambia, se escribe uno nuevo y el anterior pasa a estado *reemplazado por*. Los ajustes menores que no son de arquitectura, como un enlace roto, se permiten dejando constancia ([ADR-0014](docs/adr/0014-dejar-constancia-del-ajuste-de-enlaces-en-adr-0007.md)).
 
 ## Estado actual
 
-- [x] Aspectos A-01 (carga de examen) y A-06 (distractores diagnósticos) construidos de punta a punta;
-  A-02 a A-05 declarados
+- [x] Aspectos A-01 (carga de examen), A-02 (lectura de las hojas), A-03 (calificación, salvo las
+  estadísticas del Panel) y A-06 (distractores diagnósticos) construidos de punta a punta; A-04 y
+  A-05 declarados
 - [x] arc42: objetivos de calidad, restricciones clasificadas y contexto
 - [x] arc42: estrategia de solución, decisiones de arquitectura y riesgos
 - [x] arc42: Building Block View, Runtime View y Cross-cutting Concepts (secciones 5, 6 y 8)
 - [x] arc42: Deployment View (sección 7)
-- [x] Escenarios de calidad: 5 priorizados y 4 complementarios; EC-07, EC-08 y EC-09 medidos
+- [x] Escenarios de calidad: 5 priorizados y 4 complementarios; EC-01 a EC-04 (sobre hojas
+  sintéticas, en local) y EC-07 a EC-09 medidos
 - [x] C4 Niveles 1, 2 y 3
-- [x] ADR 0001 a 0022
+- [x] ADR 0001 a 0023
 - [x] Elección de stack: FastAPI en el backend, Flutter en el frontend
 - [x] Esqueleto ejecutable
 - [x] Corte vertical de A-01: `ingesta`, almacén, bitácora, encolado y pantalla de carga
@@ -645,22 +722,28 @@ Las decisiones de un ADR aceptado no se editan ni se borran: si una decisión ca
   el servidor del laboratorio (iscoutb.dev) desde el 29-oct, con la cola y las hojas persistentes
   (ADR-0021)
 - [ ] ADR de persistencia y almacenamiento (riesgo R-06); el adaptador actual es provisional
-- [ ] Modelo de datos compartido más allá de lo que A-01 necesitó
+- [x] Modelo de datos compartido más allá de lo que A-01 necesitó: la clave, la lectura y la nota
+  (A-02, A-03), cada una con su dueño en la línea `Posee:` de su módulo
 - [x] Proveedor de LLM: Groq, detrás de un puerto de `autoria` (ADR-0013)
 - [x] Segundo corte: presupuesto del proveedor de LLM, `GET /metricas` y experimento de EC-09 (ADR-0015)
 - [x] S11: modos de fallo de las tres integraciones, esperas acotadas de la cola y worker idempotente (ADR-0016); decisión de no extraer (ADR-0017)
 - [x] Arreglos del 19-oct: el lote ya no se cae por un error del disco,
   tiene un plazo para la cola, no congela la API (R-21 cerrado) y se lee de a una hoja con tope
 - [x] Acuse de recibo, reintentos y lista de fallidos en la cola (ADR-0020, R-22 cerrado)
-- [ ] Detección de hojas subidas dos veces (R-24, con A-02)
+- [ ] Detección de hojas subidas dos veces (R-24): con A-02, una hoja repetida se califica dos veces
 - [x] Consistencia y caché: tabla operación → consistencia, `hoja_id` propio con la bitácora como
   fuente de verdad (ADR-0018) y caché de propuestas con su invalidación (ADR-0019)
-- [ ] Consulta del estado vigente de una hoja (R-26, con A-02)
+- [x] Consulta del estado vigente de una hoja: `GET /examenes/{examen_id}/resultados` (A-03); que
+  no relea los registros enteros sigue en R-26
 - [x] S13: modelo de amenazas con STRIDE sobre el C4, análisis de dependencias en el pipeline,
   presupuesto de carga (ADR-0022) y privacidad
+- [x] Lectura OMR y calificación (A-02, A-03): prototipo de R-05, EC-01 a EC-04 medidos, revisión
+  manual desde la aplicación (RF-08), y una imagen que mataba al worker en cada reinicio, cerrada
+  (AM-16, R-36)
 - [ ] Autenticación (A-05), antes de la primera hoja real (AM-02); análisis de las imágenes base
   (R-34)
-- [ ] Aspectos A-02 a A-05
+- [ ] Registro de la clave desde la aplicación (A-04); hoy se copia a mano (R-35)
+- [ ] Calibrar el umbral con hojas reales escaneadas (R-01, R-04); estadísticas del Panel (RF-05)
 
 ## Documentación
 
@@ -668,13 +751,13 @@ Las decisiones de un ADR aceptado no se editan ni se borran: si una decisión ca
 docs/
 ├── arc42/
 │   └── arc42-template-ES.md                            # documento de arquitectura (arc42)
-├── adr/                                                # 0001 a 0022; el 0001, reemplazado por el 0002, y del 0009 al 0012, por el 0021
+├── adr/                                                # 0001 a 0023; el 0001, reemplazado por el 0002, y del 0009 al 0012, por el 0021
 ├── c4/
 │   └── doc-c4.md                                       # modelo C4 (Niveles 1, 2 y 3)
 ├── contrato/
 │   └── openapi.json                                    # contrato HTTP (OpenAPI 3.1), generado
 ├── despliegue/                                        # estimación de costo y taller de despliegue
-├── evidencia/                                          # EC-07, arranque en frío, prueba de contrato, SonarQube; de la S9: EC-08, prueba del defecto y auditoría; del corte 2: experimento de EC-09; de la S11: modos de fallo; de consistencia y caché: la tabla de garantías y el diseño de la caché; del taller de mensajería: su ejecución; del despliegue en iscoutb.dev: la verificación; de la S13: el modelo de amenazas
+├── evidencia/                                          # EC-07, arranque en frío, prueba de contrato, SonarQube; de la S9: EC-08, prueba del defecto y auditoría; del corte 2: experimento de EC-09; de la S11: modos de fallo; de consistencia y caché: la tabla de garantías y el diseño de la caché; del taller de mensajería: su ejecución; del despliegue en iscoutb.dev: la verificación; de la S13: el modelo de amenazas; de la lectura OMR: la medición de EC-01 a EC-04 y la revisión manual
 ├── ficha-problema.md                                   # el problema, usuarios y alcance
 ├── aspectos.md                                         # aspectos y tabla de trazabilidad
 └── ia.md                                               # registro de uso de IA
