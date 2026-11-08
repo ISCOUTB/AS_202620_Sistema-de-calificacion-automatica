@@ -112,8 +112,8 @@ class _EstadoConexion extends StatelessWidget {
   Widget build(BuildContext context) {
     final (texto, icono, color) = switch (estado) {
       EstadoApi.verificando => ('Comprobando conexión', Icons.sync, QColores.textoSobreNavySuave),
-      EstadoApi.conectada => ('API conectada', Icons.cloud_done_outlined, const Color(0xFF6EE7B7)),
-      EstadoApi.sinConexion => ('Sin conexión con la API', Icons.cloud_off_outlined, const Color(0xFFFDBA74)),
+      EstadoApi.conectada => ('Conectado', Icons.cloud_done_outlined, const Color(0xFF6EE7B7)),
+      EstadoApi.sinConexion => ('Sin conexión', Icons.cloud_off_outlined, const Color(0xFFFDBA74)),
     };
     final estilo = Theme.of(context).textTheme.labelMedium?.copyWith(color: color);
 

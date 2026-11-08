@@ -140,15 +140,15 @@ void main() {
     estado.value = EstadoApi.sinConexion;
     await tester.pump();
     expect(_accionProponer(tester), isNull, reason: 'la API no responde');
-    expect(find.text('Sin conexión con la API'), findsOneWidget);
+    expect(find.text('Sin conexión con el servidor'), findsOneWidget);
 
     estado.value = EstadoApi.conectada;
     await tester.pump();
     expect(_accionProponer(tester), isNotNull, reason: 'volvió la conexión');
-    expect(find.text('Sin conexión con la API'), findsNothing);
+    expect(find.text('Sin conexión con el servidor'), findsNothing);
   });
 
-  testWidgets('Mientras espera muestra la forma de las tarjetas y el límite de 20 s',
+  testWidgets('Mientras espera muestra la forma de las tarjetas y que tarda unos segundos',
       (tester) async {
     final respuesta = Completer<ResultadoDistractores>();
     await _montar(tester, proponer: (_) => respuesta.future);
@@ -157,7 +157,7 @@ void main() {
     await _tocar(tester, _botonProponer);
 
     expect(find.byKey(const Key('esqueleto-propuestas')), findsOneWidget);
-    expect(find.textContaining('20 s'), findsOneWidget);
+    expect(find.textContaining('Suele tardar unos segundos'), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsNothing);
     expect(_accionProponer(tester), isNull, reason: 'no se pide dos veces a la vez');
 
@@ -382,7 +382,7 @@ void main() {
 
     estado.value = EstadoApi.sinConexion;
     await tester.pumpAndSettle();
-    expect(find.text('Sin conexión con la API'), findsOneWidget);
+    expect(find.text('Sin conexión con el servidor'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

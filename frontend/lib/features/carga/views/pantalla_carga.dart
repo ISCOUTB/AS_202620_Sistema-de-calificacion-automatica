@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../../../common/api/servicio_salud.dart';
 import '../../../common/tema/tokens.dart';
@@ -8,8 +11,12 @@ import '../../../common/widgets/q_encabezado_pantalla.dart';
 import '../../../common/widgets/q_estado_vacio.dart';
 import '../../../common/widgets/q_pagina.dart';
 import '../../../common/widgets/q_tarjeta.dart';
+import '../data/preparacion_de_hojas.dart';
 import '../data/servicio_carga.dart';
+import '../data/servicio_examenes.dart';
+import '../data/servicio_resultados.dart';
 import 'widgets/aviso_carga.dart';
+import 'widgets/como_tomar_las_fotos.dart';
 import 'widgets/formato_carga.dart';
 import 'widgets/reporte_recepcion.dart';
 import 'widgets/tarjeta_examen.dart';
@@ -27,11 +34,38 @@ class PantallaCarga extends StatefulWidget {
     required this.seleccionarArchivos,
     required this.subirHojas,
     required this.estadoApi,
+    this.consultarResultados,
+    this.listarExamenes,
+    this.alRecibirHojas,
+    this.alRevisar,
+    this.revisionesGuardadas,
+    this.intervaloDeConsulta = const Duration(seconds: 3),
   });
 
-  final Future<List<ArchivoSeleccionado>> Function() seleccionarArchivos;
+  final Future<List<ArchivoSeleccionado>> Function({
+    void Function(int hechas, int total)? alAvanzar,
+  }) seleccionarArchivos;
   final Future<ResultadoCarga> Function(String, List<ArchivoSeleccionado>) subirHojas;
   final ValueListenable<EstadoApi> estadoApi;
+
+  /// Cómo quedó cada hoja leída (A-02 y A-03). Sin él, el reporte se queda en la recepción.
+  final Future<ResultadosDelExamen> Function(String examenId)? consultarResultados;
+
+  /// Los exámenes con clave, para elegir el de la carga en una lista. Sin él, se escribe.
+  final Future<List<ExamenConClave>> Function()? listarExamenes;
+
+  /// Recibe el nombre de archivo de cada hoja aceptada, por `hoja_id`: la revisión los muestra.
+  final void Function(Map<String, String> nombres)? alRecibirHojas;
+
+  /// Lleva a la revisión del examen del reporte.
+  final void Function(String examenId)? alRevisar;
+
+  /// Cambia cada vez que el docente guarda una revisión: el reporte vuelve a pedir las notas.
+  final ValueListenable<int>? revisionesGuardadas;
+
+  /// Cada cuánto se pregunta, después de subir, si ya se leyeron las hojas. Una hoja tarda unos
+  /// dos segundos en el servidor (EC-03).
+  final Duration intervaloDeConsulta;
 
   @override
   State<PantallaCarga> createState() => _PantallaCargaState();
@@ -60,6 +94,10 @@ class _PantallaCargaState extends State<PantallaCarga> {
 
   List<ArchivoSeleccionado> _seleccionados = const [];
   bool _subiendo = false;
+
+  /// Cuántas fotos van preparadas y cuántas son, mientras el navegador las pasa a gris y las
+  /// reduce. Con 200 fotos tarda, y sin avance parecería colgado.
+  (int, int)? _preparando;
   _Falla? _falla;
 
   ResultadoCarga? _resultado;
@@ -70,16 +108,137 @@ class _PantallaCargaState extends State<PantallaCarga> {
   /// animación, aunque el anterior tuviera el mismo contenido.
   int _reportes = 0;
 
+  /// Lo que ya se leyó de las hojas del último reporte, por `hoja_id`. Se pregunta cada
+  /// [PantallaCarga.intervaloDeConsulta] hasta que estén todas, o hasta [_esperaMaxima].
+  Map<String, ResultadoDeHoja> _lecturas = const {};
+  Timer? _consulta;
+  bool _consultando = false;
+  DateTime? _consultarHasta;
+
+  /// Doscientas hojas tardan unos cuatro minutos en el servidor (EC-04). Después de este tiempo
+  /// se deja de preguntar, y el docente puede volver a consultar con un botón.
+  static const _esperaMaxima = Duration(minutes: 15);
+
+  /// Los exámenes con clave. Nula mientras no haya lista: sin el servicio, mientras se pide o si
+  /// no se pudo cargar.
+  List<ExamenConClave>? _examenes;
+  bool _cargandoExamenes = false;
+  bool _fallaExamenes = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _examen.addListener(_alCambiarElExamen);
+    widget.estadoApi.addListener(_alCambiarLaConexion);
+    widget.revisionesGuardadas?.addListener(_consultarUnaVez);
+    if (widget.listarExamenes != null) {
+      _cargandoExamenes = true;
+      _pedirExamenes();
+    }
+  }
+
   @override
   void dispose() {
+    _consulta?.cancel();
+    widget.estadoApi.removeListener(_alCambiarLaConexion);
+    widget.revisionesGuardadas?.removeListener(_consultarUnaVez);
     _examen.dispose();
     super.dispose();
   }
 
-  String get _examenId => _examen.text.trim();
+  /// El desplegable cambia el texto al elegir y al filtrar, sin avisar por otra vía. Si el cambio
+  /// llega mientras se construye la pantalla, se redibuja en el cuadro siguiente.
+  void _alCambiarElExamen() {
+    if (!mounted) return;
+    if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.persistentCallbacks) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() {});
+      });
+    } else {
+      setState(() {});
+    }
+  }
+
+  Future<void> _pedirExamenes() async {
+    try {
+      final examenes = await widget.listarExamenes!();
+      if (!mounted) return;
+      setState(() {
+        _examenes = examenes;
+        _fallaExamenes = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _fallaExamenes = true);
+    } finally {
+      if (mounted) setState(() => _cargandoExamenes = false);
+    }
+  }
+
+  void _volverAPedirExamenes() {
+    if (widget.listarExamenes == null || _cargandoExamenes) return;
+    setState(() => _cargandoExamenes = true);
+    _pedirExamenes();
+  }
+
+  /// Si la lista falló porque la API todavía no respondía, se vuelve a pedir cuando conecta.
+  void _alCambiarLaConexion() {
+    if (_fallaExamenes && widget.estadoApi.value == EstadoApi.conectada) _volverAPedirExamenes();
+  }
+
+  /// Las hojas que se van a leer: las que llegaron a la cola. Una en espera no entra a la lectura,
+  /// y esperarla dejaría la pantalla preguntando quince minutos por nada.
+  Set<String> get _hojasEsperadas => {
+        for (final hoja in _resultado?.aceptadas ?? const <HojaAceptada>[])
+          if (hoja.hojaId != null && hoja.estado == EstadoHoja.encolada) hoja.hojaId!,
+      };
+
+  bool get _faltanLecturas => _hojasEsperadas.any((id) => !_lecturas.containsKey(id));
+
+  /// Empieza a preguntar por los resultados del último reporte.
+  void _consultarResultados() {
+    _consulta?.cancel();
+    if (widget.consultarResultados == null || _hojasEsperadas.isEmpty) return;
+    _consultarHasta = DateTime.now().add(_esperaMaxima);
+    _consultarUnaVez();
+    _consulta = Timer.periodic(widget.intervaloDeConsulta, (_) => _consultarUnaVez());
+    setState(() {});
+  }
+
+  Future<void> _consultarUnaVez() async {
+    final consultar = widget.consultarResultados;
+    if (consultar == null || _consultando) return;
+    _consultando = true;
+    final examen = _examenDelReporte;
+    final esperadas = _hojasEsperadas;
+    try {
+      final resultados = await consultar(examen);
+      if (!mounted || examen != _examenDelReporte) return;
+      setState(() => _lecturas = {
+            for (final id in esperadas)
+              if (resultados.porHoja[id] case final lectura?) id: lectura,
+          });
+    } catch (_) {
+      // Una consulta que falla se repite en la vuelta siguiente: no hay nada que hacer aquí.
+    } finally {
+      _consultando = false;
+      final vencida = _consultarHasta != null && DateTime.now().isAfter(_consultarHasta!);
+      if (mounted && (!_faltanLecturas || vencida)) {
+        _consulta?.cancel();
+        setState(() => _consulta = null);
+      }
+    }
+  }
+
+  /// El examen al que van las hojas. Con lista, solo uno de ella, con su nombre exacto.
+  String get _examenId {
+    final lista = _examenes;
+    if (lista == null) return _examen.text.trim();
+    return examenElegido(_examen.text, lista)?.examenId ?? '';
+  }
 
   bool _puedeSubir(EstadoApi api) =>
       !_subiendo &&
+      _preparando == null &&
       api != EstadoApi.sinConexion &&
       _seleccionados.isNotEmpty &&
       _examenId.isNotEmpty;
@@ -96,10 +255,16 @@ class _PantallaCargaState extends State<PantallaCarga> {
   Future<void> _elegir() async {
     final List<ArchivoSeleccionado> elegidos;
     try {
-      elegidos = await widget.seleccionarArchivos();
+      elegidos = await widget.seleccionarArchivos(
+        alAvanzar: (hechas, total) {
+          if (mounted) setState(() => _preparando = (hechas, total));
+        },
+      );
     } catch (_) {
       if (mounted) _avisar('No se pudieron leer los archivos elegidos. Vuelva a intentarlo.');
       return;
+    } finally {
+      if (mounted) setState(() => _preparando = null);
     }
     if (!mounted || elegidos.isEmpty) return;
 
@@ -136,10 +301,13 @@ class _PantallaCargaState extends State<PantallaCarga> {
   Future<void> _subir() async {
     final examen = _examenId;
     final lote = _seleccionados;
+    _consulta?.cancel();
     setState(() {
       _subiendo = true;
       _falla = null;
       _resultado = null;
+      _lecturas = const {};
+      _consulta = null;
     });
 
     try {
@@ -156,6 +324,11 @@ class _PantallaCargaState extends State<PantallaCarga> {
         _seleccionados = const [];
       });
       _llevarReporteALaVista();
+      widget.alRecibirHojas?.call({
+        for (final hoja in resultado.aceptadas)
+          if (hoja.hojaId != null) hoja.hojaId!: hoja.nombreArchivo,
+      });
+      _consultarResultados();
     } on ExcepcionDeCarga catch (error) {
       if (!mounted) return;
       // Si algunas hojas pudieron entrar, invitar a reintentar las duplicaría: el detalle es el
@@ -172,8 +345,8 @@ class _PantallaCargaState extends State<PantallaCarga> {
       // haber entrado. Por eso el aviso no invita a reintentar sin más.
       if (!mounted) return;
       setState(() => _falla = const _Falla(
-            titulo: 'Sin confirmación de la API',
-            texto: 'La respuesta de la API no se pudo leer, así que no se sabe qué hojas '
+            titulo: 'Sin confirmación del servidor',
+            texto: 'La respuesta del servidor no se pudo leer, así que no se sabe qué hojas '
                 'entraron.',
             detalle: _detalleSiPudieronEntrar,
           ));
@@ -208,9 +381,8 @@ class _PantallaCargaState extends State<PantallaCarga> {
           const QEncabezadoPantalla(
             etiqueta: 'Carga de hojas',
             iconoEtiqueta: Icons.document_scanner_outlined,
-            titulo: 'Cargar hojas escaneadas',
-            descripcion: 'Suba los escaneos de un examen en JPG, PNG o PDF. Cada archivo '
-                'recibe su confirmación o el motivo del rechazo.',
+            titulo: 'Cargar las hojas del examen',
+            descripcion: 'Suba las fotos o los escaneos de un examen en JPG o PNG.',
           ),
           const SizedBox(height: QEspacios.lg),
           LayoutBuilder(
@@ -250,16 +422,20 @@ class _PantallaCargaState extends State<PantallaCarga> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        ComoTomarLasFotos(compacta: compacta),
+        const SizedBox(height: QEspacios.md),
         TarjetaExamen(
           controlador: _examen,
           habilitada: !_subiendo,
           compacta: compacta,
-          alCambiar: (_) => setState(() {}),
+          examenes: _examenes,
+          cargando: _cargandoExamenes,
+          alReintentar: _fallaExamenes ? _volverAPedirExamenes : null,
         ),
         const SizedBox(height: QEspacios.md),
         ZonaSeleccion(
           archivos: _seleccionados,
-          habilitada: !_subiendo,
+          habilitada: !_subiendo && _preparando == null,
           compacta: compacta,
           alSeleccionar: _elegir,
           alQuitar: _quitar,
@@ -283,6 +459,7 @@ class _PantallaCargaState extends State<PantallaCarga> {
       label: Text(_subiendo ? 'Subiendo…' : 'Subir al sistema'),
     );
     final falla = _falla;
+    final conPocaResolucion = _seleccionados.where(tienePocaResolucion).length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -291,10 +468,21 @@ class _PantallaCargaState extends State<PantallaCarga> {
           const AvisoCarga(
             tono: QTono.advertencia,
             icono: Icons.cloud_off_outlined,
-            titulo: 'Sin conexión con la API',
-            texto: 'No se puede subir mientras la API no responda.',
-            detalle: 'Su selección se conserva. Cuando la barra superior indique que la API '
-                'está conectada, podrá subir el lote.',
+            titulo: 'Sin conexión con el servidor',
+            texto: 'Sus archivos siguen seleccionados. Podrá subirlos cuando vuelva la conexión.',
+          ),
+          const SizedBox(height: QEspacios.md),
+        ],
+        if (conPocaResolucion > 0 && !_subiendo) ...[
+          AvisoCarga(
+            tono: QTono.advertencia,
+            icono: Icons.photo_size_select_large_outlined,
+            titulo: conPocaResolucion == 1
+                ? 'Una foto tiene poca resolución'
+                : '$conPocaResolucion fotos tienen poca resolución',
+            texto: 'Pueden quedar ilegibles. Tómelas más cerca o use la foto original, no la '
+                'de WhatsApp.',
+            detalle: 'Puede subirlas igual.',
           ),
           const SizedBox(height: QEspacios.md),
         ],
@@ -317,6 +505,13 @@ class _PantallaCargaState extends State<PantallaCarga> {
           const SizedBox(height: QEspacios.sm + 4),
           const LinearProgressIndicator(semanticsLabel: 'Subiendo los archivos'),
         ],
+        if (_preparando case (final hechas, final total)) ...[
+          const SizedBox(height: QEspacios.sm + 4),
+          LinearProgressIndicator(
+            value: total == 0 ? null : hechas / total,
+            semanticsLabel: 'Preparando las fotos',
+          ),
+        ],
         if (falla != null) ...[
           const SizedBox(height: QEspacios.md),
           AvisoCarga(
@@ -335,17 +530,20 @@ class _PantallaCargaState extends State<PantallaCarga> {
   /// deja al docente adivinando qué hizo mal.
   String? _indicacion(EstadoApi estadoApi) {
     final archivos = contar(_seleccionados.length, 'archivo', 'archivos');
-    if (_subiendo) return 'Enviando $archivos al examen $_examenId…';
-    // Sin conexión ya lo explica el aviso de arriba.
+    if (_preparando case (final hechas, final total)) {
+      return 'Preparando las fotos: $hechas de $total…';
+    }
+    if (_subiendo) return 'Subiendo $archivos a $_examenId…';
+    // Sin conexión ya lo explica el aviso de arriba, y una lista vacía, el campo del examen.
     if (estadoApi == EstadoApi.sinConexion) return null;
+    if (_examenes?.isEmpty ?? false) return null;
+    final elegir = _examenes == null ? 'Escriba el examen' : 'Elija el examen';
     final faltaExamen = _examenId.isEmpty;
     final faltanArchivos = _seleccionados.isEmpty;
-    if (faltaExamen && faltanArchivos) {
-      return 'Escriba el identificador del examen y seleccione los archivos para subirlos.';
-    }
-    if (faltaExamen) return 'Escriba el identificador del examen para subir los archivos.';
-    if (faltanArchivos) return 'Seleccione al menos un archivo para subirlo.';
-    return 'Se enviarán $archivos al examen $_examenId.';
+    if (faltaExamen && faltanArchivos) return '$elegir y seleccione los archivos.';
+    if (faltaExamen) return '$elegir.';
+    if (faltanArchivos) return 'Seleccione al menos un archivo.';
+    return '${_seleccionados.length == 1 ? 'Se subirá' : 'Se subirán'} $archivos a $_examenId.';
   }
 
   /// El reporte, o lo que ocupa su lugar mientras no hay uno, para que la columna no quede vacía
@@ -358,15 +556,13 @@ class _PantallaCargaState extends State<PantallaCarga> {
         child: _subiendo
             ? const QEstadoVacio(
                 icono: Icons.hourglass_top_outlined,
-                titulo: 'Esperando la confirmación',
-                texto: 'La API responde con el resultado de cada archivo en cuanto termina de '
-                    'recibir el lote.',
+                titulo: 'Subiendo las hojas',
+                texto: 'En unos segundos verá aquí cada una.',
               )
             : const QEstadoVacio(
                 icono: Icons.fact_check_outlined,
-                titulo: 'Todavía no hay un reporte',
-                texto: 'Cuando suba un lote, aquí verá cuántos archivos se procesaron, cuáles '
-                    'quedaron recibidos y el motivo de cada rechazo.',
+                titulo: 'Todavía no hay resultados',
+                texto: 'Aquí verá cada hoja con su nota.',
               ),
       );
     }
@@ -389,6 +585,12 @@ class _PantallaCargaState extends State<PantallaCarga> {
         enviados: _enviadosDelReporte,
         ancho: anchoColumna,
         claveCabecera: _claveCabecera,
+        lecturas: widget.consultarResultados == null ? null : _lecturas,
+        leyendo: _consulta != null,
+        alConsultarDeNuevo: _consultarResultados,
+        alRevisar: widget.alRevisar == null
+            ? null
+            : () => widget.alRevisar!(_examenDelReporte),
       ),
     );
   }

@@ -104,9 +104,8 @@ class VistaPropuestas extends StatelessWidget {
               const SizedBox(width: QEspacios.sm),
               Expanded(
                 child: Text(
-                  'Usar y Descartar son su decisión: ninguna propuesta entra al examen hasta '
-                  'que usted la acepte y habilite la clave. Por ahora la decisión no se guarda, '
-                  'porque el banco de preguntas (A-04) todavía no existe.',
+                  'Ninguna propuesta entra al examen sin su aprobación. Por ahora, sus '
+                  'decisiones no se guardan.',
                   style: textos.bodySmall,
                 ),
               ),

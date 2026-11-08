@@ -41,6 +41,12 @@ class MarcoApp extends StatefulWidget {
 
 class _MarcoAppState extends State<MarcoApp> {
   final _estadoApi = ValueNotifier<EstadoApi>(EstadoApi.verificando);
+
+  /// Lo que comparten la carga y la revisión: el nombre de archivo de cada hoja subida, el
+  /// examen que la carga pide revisar y un aviso cada vez que se guarda una revisión.
+  final _nombresDeHojas = ValueNotifier<Map<String, String>>(const {});
+  final _examenParaRevisar = ValueNotifier<String?>(null);
+  final _revisionesGuardadas = ValueNotifier<int>(0);
   late Seccion _seccion = widget.seccionInicial;
 
   @override
@@ -52,6 +58,9 @@ class _MarcoAppState extends State<MarcoApp> {
   @override
   void dispose() {
     _estadoApi.dispose();
+    _nombresDeHojas.dispose();
+    _examenParaRevisar.dispose();
+    _revisionesGuardadas.dispose();
     super.dispose();
   }
 
@@ -64,6 +73,15 @@ class _MarcoAppState extends State<MarcoApp> {
 
   void _ir(int indice) => setState(() => _seccion = Seccion.values[indice]);
 
+  void _irARevisar(String examenId) {
+    // Se pasa por null para que pedir otra vez el mismo examen también avise.
+    _examenParaRevisar.value = null;
+    _examenParaRevisar.value = examenId;
+    setState(() => _seccion = Seccion.revision);
+  }
+
+  final _claveContenido = GlobalKey();
+
   @override
   Widget build(BuildContext context) {
     final servicios = widget.servicios;
@@ -72,9 +90,23 @@ class _MarcoAppState extends State<MarcoApp> {
       PantallaCarga(
         seleccionarArchivos: servicios.seleccionarArchivos,
         subirHojas: servicios.subirHojas,
+        consultarResultados: servicios.consultarResultados,
+        listarExamenes: servicios.listarExamenes,
+        alRecibirHojas: (nombres) =>
+            _nombresDeHojas.value = {..._nombresDeHojas.value, ...nombres},
+        alRevisar: _irARevisar,
+        revisionesGuardadas: _revisionesGuardadas,
         estadoApi: _estadoApi,
       ),
-      const PantallaRevision(),
+      PantallaRevision(
+        listarExamenes: servicios.listarExamenes,
+        consultarRevision: servicios.consultarRevision,
+        guardarRevision: servicios.guardarRevision,
+        urlDelRecorte: servicios.urlDelRecorte,
+        nombresDeHojas: _nombresDeHojas,
+        examenPedido: _examenParaRevisar,
+        alGuardar: () => _revisionesGuardadas.value++,
+      ),
       PantallaPauta(
         proponerDistractores: servicios.proponerDistractores,
         estadoApi: _estadoApi,
@@ -83,7 +115,12 @@ class _MarcoAppState extends State<MarcoApp> {
 
     // `StackFit.expand`: cada pantalla recibe el área completa, así que su desplazamiento ocupa
     // el alto entero y una pantalla corta queda arriba, no centrada en el espacio que sobra.
+    //
+    // La llave global lo mantiene vivo cuando cambia de lugar: en una ventana ancha va dentro de
+    // una fila junto al riel, y en una angosta va directo en el cuerpo. Sin ella, cruzar ese ancho
+    // creaba las pantallas de nuevo y el docente perdía el examen y las fotos que ya había elegido.
     final contenido = IndexedStack(
+      key: _claveContenido,
       index: _seccion.index,
       sizing: StackFit.expand,
       children: pantallas,

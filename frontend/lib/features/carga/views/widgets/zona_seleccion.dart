@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../common/tema/tokens.dart';
 import '../../../../common/widgets/q_chip_estado.dart';
 import '../../../../common/widgets/q_tarjeta.dart';
+import '../../data/preparacion_de_hojas.dart';
 import '../../data/servicio_carga.dart';
 import 'formato_carga.dart';
 
@@ -76,14 +77,13 @@ class ZonaSeleccion extends StatelessWidget {
                 ),
                 const SizedBox(height: QEspacios.sm + 4),
                 Text(
-                  'Seleccione las hojas escaneadas',
+                  'Seleccione las fotos o los escaneos',
                   style: textos.titleLarge,
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: QEspacios.xs),
                 Text(
-                  'JPG, PNG o PDF. Puede elegir varios archivos a la vez y volver al selector '
-                  'para sumar más.',
+                  'Puede elegir varias a la vez.',
                   style: textos.bodyMedium?.copyWith(color: QColores.textoSuave),
                   textAlign: TextAlign.center,
                 ),
@@ -202,6 +202,11 @@ class _ListaArchivos extends StatelessWidget {
                           describirTamano(archivos[i].contenido.length),
                           style: textos.bodySmall,
                         ),
+                        if (tienePocaResolucion(archivos[i]))
+                          Text(
+                            'Poca resolución: puede quedar ilegible',
+                            style: textos.bodySmall?.copyWith(color: QColores.advertenciaTexto),
+                          ),
                       ],
                     ),
                   ),

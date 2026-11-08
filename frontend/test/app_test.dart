@@ -13,7 +13,7 @@ import 'package:frontend/main.dart';
 /// Servicios sustitutos: la aplicación entera se monta sin backend y sin diálogo de archivos.
 ServiciosApp _servicios({bool apiConectada = true}) => ServiciosApp(
       verificarSalud: () async => apiConectada,
-      seleccionarArchivos: () async => [
+      seleccionarArchivos: ({alAvanzar}) async => [
         ArchivoSeleccionado(nombre: 'hoja1.png', contenido: Uint8List.fromList(const [1, 2, 3])),
       ],
       subirHojas: (examenId, archivos) async => ResultadoCarga(
@@ -34,18 +34,39 @@ Future<void> _montar(WidgetTester tester, {required Size tamano, bool apiConecta
 }
 
 void main() {
-  testWidgets('La barra superior muestra el nombre del sistema y la API conectada',
+  testWidgets('Cambiar el ancho de la ventana no borra el examen ni las fotos elegidas',
+      (tester) async {
+    // En ancho la navegación es un riel junto al contenido, y en angosto una barra abajo: antes,
+    // cruzar ese ancho creaba las pantallas de nuevo y se perdía lo elegido.
+    await _montar(tester, tamano: const Size(1280, 1400));
+    await tester.tap(find.text('Carga'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'CALC-2026-02');
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Seleccionar archivos'));
+    await tester.tap(find.text('Seleccionar archivos'));
+    await tester.pumpAndSettle();
+    expect(find.text('hoja1.png'), findsOneWidget);
+
+    tester.view.physicalSize = const Size(390, 1700);
+    await tester.pumpAndSettle();
+
+    expect(find.text('hoja1.png'), findsOneWidget);
+    expect(find.text('CALC-2026-02'), findsOneWidget);
+  });
+
+  testWidgets('La barra superior muestra el nombre del sistema y que está conectado',
       (tester) async {
     await _montar(tester, tamano: const Size(1280, 900));
 
     expect(find.text(nombreSistema), findsOneWidget);
-    expect(find.text('API conectada'), findsOneWidget);
+    expect(find.text('Conectado'), findsOneWidget);
   });
 
   testWidgets('Sin conexión, la barra lo dice y ofrece volver a comprobar', (tester) async {
     await _montar(tester, tamano: const Size(1280, 900), apiConectada: false);
 
-    expect(find.text('Sin conexión con la API'), findsOneWidget);
+    expect(find.text('Sin conexión'), findsOneWidget);
     expect(find.byTooltip('Volver a comprobar la conexión'), findsOneWidget);
   });
 

@@ -91,12 +91,12 @@ class MetricasExamen extends StatelessWidget {
           unidad: pendientes == 1 ? 'marca' : 'marcas',
           semantica: 'Revisión pendiente: $pendientes '
               '${pendientes == 1 ? 'marca' : 'marcas'} con confianza menor al $umbral.',
-          // El 70 % es un supuesto del equipo, no una cifra medida: se dice en la tarjeta para
-          // que nadie lo lea como un umbral calibrado.
+          // El 70 % es un supuesto del equipo, no una cifra medida. El aviso de datos de ejemplo,
+          // arriba de la pantalla, ya dice que nada de esto es una medición.
           pie: Text(
             pendientes > 0
-                ? 'Con confianza menor al $umbral (umbral supuesto)'
-                : 'Ninguna marca por debajo del $umbral (umbral supuesto)',
+                ? 'Con confianza menor al $umbral'
+                : 'Ninguna marca por debajo del $umbral',
             style: pieSuave,
           ),
         ),

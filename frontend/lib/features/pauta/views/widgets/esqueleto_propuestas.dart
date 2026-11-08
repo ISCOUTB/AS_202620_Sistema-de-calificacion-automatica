@@ -31,8 +31,7 @@ class EsqueletoPropuestas extends StatelessWidget {
               const SizedBox(width: QEspacios.sm),
               Expanded(
                 child: Text(
-                  'Pidiendo propuestas al modelo. Suele tardar unos segundos; si el proveedor '
-                  'no responde en 20 s, la solicitud se cancela.',
+                  'Pidiendo propuestas. Suele tardar unos segundos.',
                   style: textos.bodyMedium?.copyWith(color: QColores.textoSuave),
                 ),
               ),

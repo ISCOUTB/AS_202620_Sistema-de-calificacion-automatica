@@ -50,8 +50,7 @@ class _PantallaPanelState extends State<PantallaPanel> {
     return QPagina(
       children: [
         const QAvisoDatosEjemplo(
-          detalle: 'Las notas y la estadística por pregunta llegan cuando estén construidas '
-              'la detección de marcas (A-02) y la calificación (A-03).',
+          detalle: 'Todavía no muestra sus exámenes.',
         ),
         const SizedBox(height: QEspacios.lg),
         QEncabezadoPantalla(

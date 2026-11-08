@@ -114,9 +114,7 @@ class FormularioDistractores extends StatelessWidget {
               ),
               const SizedBox(height: QEspacios.xs + 2),
               Text(
-                'Por omisión, 3. El examen tiene ${examen.opciones.length} opciones '
-                '(${examen.rangoOpciones}): caben ${examen.distractoresPorPregunta} '
-                'distractores por pregunta.',
+                'Caben ${examen.distractoresPorPregunta} por pregunta.',
                 style: textos.bodySmall,
               ),
               if (sinConexion) ...[
@@ -125,10 +123,8 @@ class FormularioDistractores extends StatelessWidget {
                   key: Key('aviso-sin-conexion'),
                   tono: QTono.advertencia,
                   icono: Icons.cloud_off_outlined,
-                  titulo: 'Sin conexión con la API',
-                  mensaje: 'Por ahora no es posible pedir propuestas. Puede escribir los '
-                      'distractores a mano o volver a comprobar la conexión desde la barra '
-                      'superior.',
+                  titulo: 'Sin conexión con el servidor',
+                  mensaje: 'Mientras tanto, puede escribir los distractores a mano.',
                   anunciar: true,
                 ),
               ],
