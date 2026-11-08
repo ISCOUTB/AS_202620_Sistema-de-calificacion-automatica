@@ -163,8 +163,6 @@ class EntradaDeBitacora:
     referencia: str
     nombre_archivo: str
     hoja_id: str
-<<<<<<< HEAD
-=======
 
 
 # ---------------------------------------------------------------------------------------------
@@ -343,4 +341,3 @@ class ResolucionDelProfesor:
     opcion: str | None
     por: str
     en: datetime
->>>>>>> 32a2567 (feat(omr): leer la hoja en posiciones fijas y medir cada burbuja contra su papel (A-02))
