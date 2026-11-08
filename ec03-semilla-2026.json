@@ -1,0 +1,18 @@
+{
+  "examen": "S14-EC03-S2026",
+  "hojas_publicadas": 20,
+  "hojas_procesadas": 20,
+  "estados": {
+    "en_revision": 20
+  },
+  "por_hoja_ms": {
+    "p50": 1044.5,
+    "p95": 1206.2,
+    "maximo": 1211.0
+  },
+  "lectura_en_el_worker_ms": {
+    "p50": 1014.2,
+    "p95": 1133.4
+  },
+  "ec03_cumple": true
+}
