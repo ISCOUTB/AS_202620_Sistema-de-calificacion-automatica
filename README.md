@@ -24,6 +24,38 @@ En el servidor del laboratorio del curso, desde `deploy/compose.lab.yaml`. El pa
 `despliegue`, que el CI publica solo si las pruebas pasan ([ADR-0021](docs/adr/0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md)).
 Detalle en [Entorno desplegado, en detalle](#entorno-desplegado-en-detalle).
 
+## Evidencia S14: medición de atributos de calidad
+
+- **Qué se midió:** los cuatro escenarios de la lectura y la calificación, EC-01 a EC-04, contra el
+  umbral que declara la sección 10 del arc42 desde la S2, con **tres repeticiones** de cada uno.
+- **Resultado:**
+  - **EC-01**, 100 % de marcas claras bien leídas, contra ≥98 %. Cumple, con hojas sintéticas (R-01).
+  - **EC-02**, 100 % de las ambiguas a revisión, contra ≥99 %, con 0 errores silenciosos en 36 000
+    preguntas. Cumple, con el umbral de 70 sin calibrar (R-04).
+  - **EC-03**, p95 de 1,22 s por hoja, contra ≤5 s. Cumple en local.
+  - **EC-04**, 600 de 600 hojas, cada lote de 200 en 3,5 a 3,6 min, contra ≤10 min. Cumple en
+    tiempo, en local; la CPU y la memoria del servidor no se midieron.
+- **Entorno:** local, no el desplegado, con los topes de CPU del servidor. Medir EC-03 y EC-04 en el
+  servidor es R-37.
+- **Revisión entre pares:** **no se realizó.** El profesor estuvo incapacitado la semana 14 y no
+  hubo clases, así que el equipo no recibió señalamientos. La sección 11.2 del arc42 lo deja
+  dicho, y la 11.3 recoge lo que dejó la medición, con su estado.
+
+| Lo que revisa la ficha | Dónde está |
+|---|---|
+| Escenario medido, con el umbral declarado en arc42 §10 | [`medicion-s14.md`, sección 1](docs/evidencia/medicion-s14.md#1-los-escenarios-y-su-umbral-como-están-en-la-sección-10) · [arc42 §10.2](docs/arc42/arc42-template-ES.md#102-escenarios-de-calidad-priorizados), fila «Resultado medido (S14)» de EC-01 a EC-04 |
+| Procedimiento con herramienta, carga y repeticiones | [sección 2](docs/evidencia/medicion-s14.md#2-procedimiento) · [`medir_lectura.py`](backend/herramientas/medir_lectura.py) · [`medir_procesamiento.py`](backend/herramientas/medir_procesamiento.py) · [`repetir-local.sh`](docs/evidencia/medicion-s14/repetir-local.sh) |
+| Medición reproducible por otra persona | [`docs/evidencia/medicion-s14/`](docs/evidencia/medicion-s14/): informes, registros y muestras de las doce corridas · [sección 7](docs/evidencia/medicion-s14.md#7-reproducibilidad) y [sección 10](docs/evidencia/medicion-s14.md#10-cómo-repetirla) |
+| Resultado contrastado con el umbral, con conclusión | [tabla «Resultado»](docs/evidencia/medicion-s14.md#resultado) y secciones 3 a 5 |
+| Entorno de la medición | [sección 6](docs/evidencia/medicion-s14.md#6-entorno-de-la-medición): local, y qué cambia eso en el número |
+| arc42 §11 con lo señalado por los pares | [§11.2](docs/arc42/arc42-template-ES.md#112-revisión-entre-pares-s14): la revisión no se hizo · [§11.3](docs/arc42/arc42-template-ES.md#113-lo-que-dejó-la-medición-de-la-s14): lo que dejó la medición · R-37 |
+| Estado de cada señalamiento | Columna «Estado» de §11.2 y §11.3: corregido, asumido o pendiente |
+| Evidencia del aspecto medido | [`docs/aspectos.md`](docs/aspectos.md#tabla-de-trazabilidad), columna «Evidencia» de A-02 y A-03 |
+
+**Antes del proyecto final** queda: medir EC-03 y EC-04 en el servidor (R-37); el conjunto de hojas
+escaneadas y la calibración del umbral (R-01, R-04); y llevar A-04 y A-05, que siguen declarados, a
+la tabla de aspectos de punta a punta.
+
 ## Lectura y calificación de las hojas (A-02, A-03)
 
 - **Construidas**, con la revisión manual de las preguntas dudosas (RF-08), en
@@ -217,6 +249,7 @@ qué archivo y en qué sección está.
 | Taller de mensajería | Contrato del mensaje, entrega al menos una vez, duplicados, reintentos, seguimiento y ADR frente a la alternativa síncrona | [`docs/evidencia/taller-mensajeria.md`](docs/evidencia/taller-mensajeria.md) · [ADR-0020](docs/adr/0020-entregar-los-trabajos-al-menos-una-vez-con-reintentos-y-lista-de-fallidos.md) |
 | Despliegue en iscoutb.dev | Revisión desplegada, comprobación desde fuera de la universidad, recorrido de una hoja de la API al worker y límites de memoria medidos | [`docs/evidencia/despliegue-iscoutb.md`](docs/evidencia/despliegue-iscoutb.md) · [ADR-0021](docs/adr/0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md) |
 | S13 | Amenazas priorizadas con su mitigación, análisis de dependencias y privacidad | [Evidencia S13](#evidencia-s13-modelado-de-amenazas) |
+| S14 | EC-01 a EC-04 con tres repeticiones contra su umbral, el entorno de la medición y la revisión entre pares, que no se hizo, en arc42 §11 | [Evidencia S14](#evidencia-s14-medición-de-atributos-de-calidad) · [`medicion-s14.md`](docs/evidencia/medicion-s14.md) |
 | Lectura OMR | A-02 y A-03 con RF-08: el prototipo, EC-01 a EC-04 medidos y ADR-0023 | [Lectura y calificación](#lectura-y-calificación-de-las-hojas-a-02-a-03) · [`medicion-lectura-omr.md`](docs/evidencia/medicion-lectura-omr.md) |
 | Todas | Pipeline de integración continua | [Runs de GitHub Actions](https://github.com/ISCOUTB/AS_202620_Sistema-de-calificacion-automatica/actions) |
 | Todas | Análisis estático y su *Quality Gate* | [SonarQube Cloud](https://sonarcloud.io/summary/new_code?id=ISCOUTB_AS_202620_Sistema-de-calificacion-automatica) |
@@ -744,6 +777,9 @@ Las decisiones de un ADR aceptado no se editan ni se borran: si una decisión ca
   (R-34)
 - [ ] Registro de la clave desde la aplicación (A-04); hoy se copia a mano (R-35)
 - [ ] Calibrar el umbral con hojas reales escaneadas (R-01, R-04); estadísticas del Panel (RF-05)
+- [x] S14: EC-01 a EC-04 medidos tres veces cada uno y contrastados con su umbral, con el entorno
+  declarado; arc42 §11.2 y §11.3
+- [ ] EC-03 y EC-04 medidos en el servidor desplegado, con su CPU y su memoria (R-37)
 
 ## Documentación
 
