@@ -2139,6 +2139,11 @@ Los **cinco escenarios priorizados** del árbol de utilidad, uno por cada hoja d
 riesgo más altos. Cada uno tiene las seis partes y una medida con cifra, unidad y condición
 de carga.
 
+**Desde la S14, EC-01 a EC-04 tienen su resultado medido** en una fila más de su tabla, frente a
+la misma medida de respuesta, que no cambió: tres repeticiones por escenario, en local, con su
+conclusión ([`medicion-s14.md`](../evidencia/medicion-s14.md)). Es la línea base del reto de
+corte.
+
 <a id="ec-01"></a>
 
 ### EC-01 · Exactitud de detección de marcas OMR
@@ -2152,6 +2157,7 @@ de carga.
 | **Respuesta** | El sistema identifica correctamente la opción marcada en cada pregunta. |
 | **Medida de respuesta** | **≥98% de exactitud** en la detección de la marca correcta, sobre un dataset de prueba de 300 hojas escaneadas con etiquetado manual de referencia. |
 | **Relacionado** | QG-1 · RF-02 · [ADR-0003](../adr/0003-usar-fastapi-y-flutter.md) · Aspecto [A-02](../aspectos.md#a-02) |
+| **Resultado medido (S14)** | **100 %** (28 127 de 28 127 marcas claras) en tres corridas de 300 hojas sintéticas, contra ≥98 %. **Cumple bajo una condición:** las hojas son sintéticas, no las 300 escaneadas con etiquetado manual que pide esta medida (R-01). [Medición de la S14](../evidencia/medicion-s14.md#3-ec-01-y-ec-02-tres-corridas-de-300-hojas) |
 
 <a id="ec-02"></a>
 
@@ -2166,6 +2172,7 @@ de carga.
 | **Respuesta** | El sistema no asigna una respuesta arbitraria: marca la pregunta como **requiere revisión manual** en el dashboard. |
 | **Medida de respuesta** | El sistema clasifica correctamente como ambigua **≥99% de las marcas** cuyo contraste de llenado no supera el umbral de confianza definido (valor inicial 70%, sujeto a calibración), evitando calificaciones erróneas silenciosas. |
 | **Relacionado** | QG-3 · RF-03 · Aspecto [A-02](../aspectos.md#a-02) |
+| **Resultado medido (S14)** | **100 %** (3 134 de 3 134 marcas ambiguas a revisión) en las mismas tres corridas, contra ≥99 %, y 0 errores silenciosos en 36 000 preguntas. **Cumple bajo dos condiciones:** las mismas hojas sintéticas, y el umbral inicial de 70, sin calibrar con hojas reales (R-04). [Medición de la S14](../evidencia/medicion-s14.md#3-ec-01-y-ec-02-tres-corridas-de-300-hojas) |
 
 <a id="ec-03"></a>
 
@@ -2180,6 +2187,7 @@ de carga.
 | **Respuesta** | El sistema procesa la hoja y el resultado queda visible en el dashboard. |
 | **Medida de respuesta** | **Tiempo end-to-end ≤5 segundos** por examen (percentil 95), medido desde la confirmación de carga hasta la disponibilidad del resultado. |
 | **Relacionado** | QG-2 · RF-01, RF-04, RF-05 · [ADR-0002](../adr/0002-procesar-calificacion-de-forma-asincrona.md) · Aspecto [A-03](../aspectos.md#a-03) |
+| **Resultado medido (S14)** | **p95 de 1,22 s** (60 hojas en tres corridas; 1,42 s la peor), contra ≤5 s. **Cumple en local**, con los topes de CPU del servidor; en el entorno desplegado no se midió (R-37). [Medición de la S14](../evidencia/medicion-s14.md#4-ec-03-tres-corridas-de-20-hojas-sueltas) |
 
 <a id="ec-04"></a>
 
@@ -2194,6 +2202,7 @@ de carga.
 | **Respuesta** | El sistema confirma la recepción del lote de inmediato, lo encola y lo procesa completo sin caídas ni pérdida de datos, mostrando el avance en el dashboard. |
 | **Medida de respuesta** | **100% de las hojas procesadas correctamente en ≤10 minutos** desde la confirmación de recepción, con uso de CPU y memoria del servidor por debajo del 85% durante todo el proceso. |
 | **Relacionado** | QG-2 · RF-01 · [ADR-0002](../adr/0002-procesar-calificacion-de-forma-asincrona.md) · Aspecto [A-03](../aspectos.md#a-03) |
+| **Resultado medido (S14)** | **600 de 600 hojas**, cada lote de 200 en 3,5 a 3,6 min, contra el 100 % en ≤10 min. **Cumple en tiempo y en hojas procesadas, en local.** La condición de CPU y memoria del servidor no se midió (R-37): el worker usa todo su tope de 0,25 CPU y 66 MiB de sus 96. [Medición de la S14](../evidencia/medicion-s14.md#5-ec-04-tres-lotes-de-200-hojas) |
 
 > **Nota de coherencia entre EC-03 y EC-04.** 200 hojas × 5 s = 16,6 min de trabajo
 > secuencial, por encima del límite de 10 minutos. Los dos escenarios solo son satisfacibles a
@@ -2217,6 +2226,17 @@ de carga.
 > | EC-02 | ≥99 % | 100 % (1 026 de 1 026 marcas ambiguas a revisión), 0 errores silenciosos | Las mismas 300, y las 3 fotos del prototipo |
 > | EC-03 | ≤5 s (p95) | 1,7 s (p95), 2,5 s el máximo | 20 hojas sueltas, sistema completo en local con los límites del servidor |
 > | EC-04 | ≤10 min, CPU y memoria <85 % | 200 de 200 en 3,6 min; el worker al 81 % de su memoria y al 100 % de su cuarto de CPU, que es su tope | Un lote, el mismo sistema. La CPU del servidor, que es lo que pide el escenario, se mide allá |
+
+> **EC-01 a EC-04, repetidos en la S14** con tres corridas cada uno, en otra máquina y en local,
+> con los topes de CPU del servidor ([`medicion-s14.md`](../evidencia/medicion-s14.md)). Es la
+> línea base del reto de corte:
+>
+> | Escenario | Umbral | 6-nov, una corrida | S14, tres corridas | Conclusión |
+> |---|---|---|---|---|
+> | EC-01 | ≥98 % | 100 % | 100 % (28 127 de 28 127) | Cumple, con hojas sintéticas (R-01) |
+> | EC-02 | ≥99 % | 100 % | 100 % (3 134 de 3 134), 0 errores silenciosos en 36 000 preguntas | Cumple, con el umbral de 70 sin calibrar (R-04) |
+> | EC-03 | ≤5 s (p95) | 1,7 s | 1,22 s (p95 de 60 hojas) | Cumple en local; sin medir en el desplegado (R-37) |
+> | EC-04 | ≤10 min, CPU y memoria <85 % | 3,6 min | 3,5 a 3,6 min, 600 de 600 | Cumple en tiempo, en local; la CPU y la memoria del servidor, sin medir (R-37) |
 
 <a id="ec-05"></a>
 
