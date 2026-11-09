@@ -7,6 +7,11 @@ manual de las preguntas dudosas (RF-08) con las mismas fotos, y lo que pasa con 
 más memoria de la que tiene el worker. La decisión que explica cada corte es
 [ADR-0023](../adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md).
 
+**Repetida en la S14.** Cada medición de este documento es una corrida. La
+[medición de la S14](medicion-s14.md) repitió EC-01 a EC-04 tres veces cada uno, en otra máquina
+y sin Docker, con los mismos topes de CPU, y las contrasta con su umbral: dio lo mismo dentro del
+margen esperable.
+
 ---
 
 ## Resultado
