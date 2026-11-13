@@ -29,6 +29,12 @@ Uso, desde backend/
         --examen MEDICION-EC04 --hojas 200 --clave clave.json
     docker compose logs --no-log-prefix api worker | \\
         python -m herramientas.medir_procesamiento analizar - --examen MEDICION-EC04
+    python -m herramientas.medir_procesamiento clave --examen MEDICION-EC04 > /otra/ruta.json
+
+`--url` solo acepta la API en local o la del servidor del laboratorio, y `--clave` y el registro
+solo se escriben y se leen dentro del repositorio (`herramientas/rutas.py`). Un registro de otra
+parte entra por la entrada estándar (`analizar - < ruta`), y la clave sale por la salida estándar
+con el paso `clave`.
 """
 
 import argparse
@@ -45,6 +51,7 @@ import numpy as np
 
 from herramientas.hojas_sinteticas import Foto, patron
 from herramientas.medir_lectura import generar_hoja
+from herramientas.rutas import ruta_en_el_repositorio, url_de_la_api
 
 ESCANEO = Foto(escala=0.72, ruido=2.0, calidad_jpeg=80)  # 8,5 px/mm, como 200 DPI
 UMBRAL_EC03_MS = 5000
@@ -163,15 +170,24 @@ def main(argv: list[str] | None = None) -> int:
     leer = pasos.add_parser("analizar", help="calcula los tiempos con el registro")
     leer.add_argument("registro", help="- para la entrada estándar")
     leer.add_argument("--examen", required=True)
+    solo_clave = pasos.add_parser("clave", help="escribe la clave del examen en la salida estándar")
+    solo_clave.add_argument("--examen", required=True)
     args = parser.parse_args(argv)
 
+    if args.paso == "clave":
+        print(json.dumps(clave(args.examen), ensure_ascii=False, indent=2))
+        return 0
+
     if args.paso == "cargar":
-        if args.clave:
-            with open(args.clave, "w", encoding="utf-8") as archivo:
+        # Las dos se comprueban antes de generar las hojas, que tarda.
+        url = url_de_la_api(args.url)
+        destino = ruta_en_el_repositorio(args.clave, "--clave") if args.clave else None
+        if destino:
+            with open(destino, "w", encoding="utf-8") as archivo:
                 json.dump(clave(args.examen), archivo, ensure_ascii=False, indent=2)
         hojas = hojas_escaneadas(args.hojas, args.semilla)
         print(f"{len(hojas)} hojas, {sum(map(len, hojas)) / 2**20:.1f} MB", file=sys.stderr)
-        for respuesta in cargar(args.url, args.examen, hojas, args.pausa):
+        for respuesta in cargar(url, args.examen, hojas, args.pausa):
             print(json.dumps({k: v for k, v in respuesta.items() if k != "hojas"},
                              ensure_ascii=False))
         return 0
@@ -179,7 +195,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.registro == "-":
         eventos = leer_lineas(sys.stdin)
     else:
-        with open(args.registro, encoding="utf-8") as archivo:
+        with open(ruta_en_el_repositorio(args.registro, "El registro"), encoding="utf-8") as archivo:
             eventos = leer_lineas(archivo)
     print(json.dumps(analizar(eventos, args.examen), ensure_ascii=False, indent=2))
     return 0

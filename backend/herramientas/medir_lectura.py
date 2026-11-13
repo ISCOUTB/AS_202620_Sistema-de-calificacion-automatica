@@ -29,6 +29,9 @@ Uso, desde backend/
 -------------------
     python -m herramientas.medir_lectura                       # 300 hojas, semilla 2026
     python -m herramientas.medir_lectura --hojas 50 --json medicion.json
+
+`--json` solo escribe dentro del repositorio (`herramientas/rutas.py`). Para guardar el informe en
+otra parte, se redirige la salida: `python -m herramientas.medir_lectura > /otra/ruta.json`.
 """
 
 import argparse
@@ -55,6 +58,7 @@ from herramientas.hojas_sinteticas import (
     hoja_en_blanco,
     marcar,
 )
+from herramientas.rutas import ruta_en_el_repositorio
 from infraestructura.modelo import DOBLE_MARCA, DUDOSA, SIN_MARCA, UNA_MARCA
 from omr import FORMATO_V1, LecturaImposible, leer_hoja
 
@@ -252,13 +256,15 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Mide EC-01 y EC-02 sobre hojas sintéticas.")
     parser.add_argument("--hojas", type=int, default=300)
     parser.add_argument("--semilla", type=int, default=2026)
-    parser.add_argument("--json", help="dónde guardar el informe")
+    parser.add_argument("--json", help="dónde guardar el informe, dentro del repositorio")
     args = parser.parse_args(argv)
+    # La ruta se comprueba antes de medir: la medición de 300 hojas tarda unos 6 minutos.
+    destino = ruta_en_el_repositorio(args.json, "--json") if args.json else None
     informe = medir(args.hojas, args.semilla)
     texto = json.dumps(informe, ensure_ascii=False, indent=2)
     print(texto)
-    if args.json:
-        with open(args.json, "w", encoding="utf-8") as archivo:
+    if destino:
+        with open(destino, "w", encoding="utf-8") as archivo:
             archivo.write(texto + "\n")
     return 0 if informe["errores_silenciosos"] == 0 else 1
 
