@@ -31,10 +31,10 @@ Uso, desde backend/
         python -m herramientas.medir_procesamiento analizar - --examen MEDICION-EC04
     python -m herramientas.medir_procesamiento clave --examen MEDICION-EC04 > /otra/ruta.json
 
-`--url` solo acepta la API en local o la del servidor del laboratorio, y `--clave` y el registro
-solo se escriben y se leen dentro del repositorio (`herramientas/rutas.py`). Un registro de otra
-parte entra por la entrada estándar (`analizar - < ruta`), y la clave sale por la salida estándar
-con el paso `clave`.
+`--url` solo acepta la API en local (en el 8000 o el 8010) o la del servidor del laboratorio
+(`APIS_PERMITIDAS`), y `--clave` y el registro solo se escriben y se leen dentro del repositorio
+(`herramientas/rutas.py`). Un registro de otra parte entra por la entrada estándar
+(`analizar - < ruta`), y la clave sale por la salida estándar con el paso `clave`.
 """
 
 import argparse

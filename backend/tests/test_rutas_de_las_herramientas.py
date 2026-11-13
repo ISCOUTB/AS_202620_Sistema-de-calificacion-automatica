@@ -49,16 +49,28 @@ def test_una_ruta_fuera_del_repositorio_se_rechaza(repositorio):
 ])
 def test_la_url_de_la_api_en_local_o_en_el_servidor_se_acepta(url):
     assert rutas.url_de_la_api(url) == url
+    assert rutas.url_de_la_api(url + "/") == url
+
+
+def test_la_url_que_sale_es_la_de_la_lista_y_no_el_argumento():
+    """Es lo que cierra el hallazgo S8703 de `--url`: lo que llega a `httpx` es la cadena de
+    `APIS_PERMITIDAS`, no la que vino por la línea de comandos."""
+    pedida = "http://localhost:8010/"
+
+    assert any(rutas.url_de_la_api(pedida) is permitida for permitida in rutas.APIS_PERMITIDAS)
 
 
 @pytest.mark.parametrize("url", [
     "http://localhost.otro.example:8000",   # empieza con un host permitido
-    "http://otro.example/?h=localhost",     # lo contiene
-    "http://localhost@otro.example",        # lo lleva como usuario
+    "http://localhost:8000.otro.example",   # empieza con una dirección permitida
+    "http://otro.example/?h=localhost",     # la contiene
+    "http://localhost@otro.example",        # la lleva como usuario
+    "http://localhost:9000",                # un puerto que no está en la lista
+    "http://localhost:8000/admin",          # una ruta: solo se acepta la raíz de la API
     "http://169.254.169.254/latest",        # metadatos de una nube
     "file:///etc/passwd",
     "ftp://localhost/",
-    "localhost:8000",                       # sin esquema, el host no se separa
+    "localhost:8000",                       # sin esquema
 ])
 def test_cualquier_otra_url_se_rechaza(url):
     with pytest.raises(SystemExit, match="--url"):
