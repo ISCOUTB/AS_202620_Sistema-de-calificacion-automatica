@@ -7,10 +7,11 @@ memoria no se limita: se mide, para compararla con el tope. VmRSS cuenta tambié
 bibliotecas (NumPy y OpenCV), que se leen del disco y el kernel puede soltar; RssAnon es la memoria
 propia del proceso, la que no se puede soltar, y es la que se compara con el tope.
 
-Cada 2 s escribe una línea JSON con la CPU de cada proceso (en fracción de un núcleo), su memoria
-residente y la CPU de toda la máquina.
+Cada 2 s escribe en la salida estándar una línea JSON con la CPU de cada proceso (en fracción de un
+núcleo), su memoria residente y la CPU de toda la máquina. El archivo lo elige quien la llama, con
+una redirección: así el script no recibe ninguna ruta por la línea de comandos (SonarCloud, S8707).
 
-    python limitar.py --muestras muestras.jsonl worker:<pid>:0.25 api:<pid>:0.5
+    python limitar.py worker:<pid>:0.25 api:<pid>:0.5 > muestras.jsonl
 """
 
 import argparse
@@ -65,7 +66,6 @@ def cpu_de_la_maquina() -> tuple[int, int]:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--muestras", required=True)
     parser.add_argument("procesos", nargs="+", help="nombre:pid:fraccion")
     args = parser.parse_args()
     procesos = [(n, int(p), float(f)) for n, p, f in (x.split(":") for x in args.procesos)]
@@ -78,24 +78,24 @@ def main() -> int:
     nucleos = os.cpu_count() or 1
     antes = {n: cpu_del_proceso(p) for n, p, _ in procesos}
     maquina_antes, t_antes = cpu_de_la_maquina(), time.monotonic()
-    with open(args.muestras, "w", encoding="utf-8") as salida:
-        while not parar.wait(2):
-            ahora, t = {}, time.monotonic()
-            muestra = {"t": round(time.time(), 1)}
-            try:
-                for nombre, pid, _ in procesos:
-                    ahora[nombre] = cpu_del_proceso(pid)
-                    muestra[nombre] = {"cpu": round((ahora[nombre] - antes[nombre]) / (t - t_antes), 3),
-                                       **memoria(pid)}
-            except (FileNotFoundError, ProcessLookupError):
-                break
-            maquina = cpu_de_la_maquina()
-            total, ocioso = maquina[0] - maquina_antes[0], maquina[1] - maquina_antes[1]
-            muestra["maquina_cpu"] = round(1 - ocioso / total, 3) if total else 0.0
-            muestra["nucleos"] = nucleos
-            salida.write(json.dumps(muestra) + "\n")
-            salida.flush()
-            antes, maquina_antes, t_antes = ahora, maquina, t
+    salida = sys.stdout
+    while not parar.wait(2):
+        ahora, t = {}, time.monotonic()
+        muestra = {"t": round(time.time(), 1)}
+        try:
+            for nombre, pid, _ in procesos:
+                ahora[nombre] = cpu_del_proceso(pid)
+                muestra[nombre] = {"cpu": round((ahora[nombre] - antes[nombre]) / (t - t_antes), 3),
+                                   **memoria(pid)}
+        except (FileNotFoundError, ProcessLookupError):
+            break
+        maquina = cpu_de_la_maquina()
+        total, ocioso = maquina[0] - maquina_antes[0], maquina[1] - maquina_antes[1]
+        muestra["maquina_cpu"] = round(1 - ocioso / total, 3) if total else 0.0
+        muestra["nucleos"] = nucleos
+        salida.write(json.dumps(muestra) + "\n")
+        salida.flush()
+        antes, maquina_antes, t_antes = ahora, maquina, t
     parar.set()
     for hilo in hilos:
         hilo.join(1)

@@ -40,25 +40,26 @@ API=$!
 taskset -c 1 $PY -m worker.main 2> "$SALIDA/$EXAMEN-worker.log" &
 WORKER=$!
 for _ in $(seq 1 50); do curl -s "localhost:$PUERTO_API/health" >/dev/null && break; sleep 0.2; done
-$PY "$AQUI/limitar.py" --muestras "$SALIDA/$EXAMEN-muestras.jsonl" \
-    "worker:$WORKER:0.25" "api:$API:0.5" &
+$PY "$AQUI/limitar.py" "worker:$WORKER:0.25" "api:$API:0.5" > "$SALIDA/$EXAMEN-muestras.jsonl" &
 LIMITE=$!
 
-# La clave del examen va al volumen antes de subir las hojas, como en la medición del 6-nov.
-if [ "$ESCENARIO" = ec03 ]; then
+# La clave del examen va al volumen antes de subir las hojas, como en la medición del 6-nov. Sale
+# por la salida estándar, porque la herramienta solo escribe archivos dentro del repositorio.
+$PY -m herramientas.medir_procesamiento clave --examen "$EXAMEN" > "$RUTA_CLAVES/$EXAMEN.json"
+if [[ "$ESCENARIO" = ec03 ]]; then
     $PY -m herramientas.medir_procesamiento cargar --url "http://localhost:$PUERTO_API" \
         --examen "$EXAMEN" --hojas 20 --pausa 8 --semilla "$SEMILLA" \
-        --clave "$RUTA_CLAVES/$EXAMEN.json" > "$SALIDA/$EXAMEN-carga.jsonl" 2>&1
+        > "$SALIDA/$EXAMEN-carga.jsonl" 2>&1
     ESPERADAS=20
 else
     $PY -m herramientas.medir_procesamiento cargar --url "http://localhost:$PUERTO_API" \
         --examen "$EXAMEN" --hojas 200 --semilla "$SEMILLA" \
-        --clave "$RUTA_CLAVES/$EXAMEN.json" > "$SALIDA/$EXAMEN-carga.jsonl" 2>&1
+        > "$SALIDA/$EXAMEN-carga.jsonl" 2>&1
     ESPERADAS=200
 fi
 # Espera a que el worker termine (con un tope de 15 min, más que el umbral de EC-04).
 for _ in $(seq 1 900); do
-    [ "$(grep -c '"hoja_procesada"' "$SALIDA/$EXAMEN-worker.log")" -ge "$ESPERADAS" ] && break
+    [[ "$(grep -c '"hoja_procesada"' "$SALIDA/$EXAMEN-worker.log")" -ge "$ESPERADAS" ]] && break
     sleep 1
 done
 sleep 3
@@ -66,7 +67,7 @@ kill $LIMITE; wait $LIMITE 2>/dev/null
 kill $WORKER $API; wait 2>/dev/null
 redis-cli -p "$PUERTO_REDIS" shutdown nosave >/dev/null 2>&1
 cat "$SALIDA/$EXAMEN-api.log" "$SALIDA/$EXAMEN-worker.log" | grep '{' > "$SALIDA/$EXAMEN-registro.jsonl"
-$PY -m herramientas.medir_procesamiento analizar "$SALIDA/$EXAMEN-registro.jsonl" \
-    --examen "$EXAMEN" > "$SALIDA/$EXAMEN.json"
+$PY -m herramientas.medir_procesamiento analizar - --examen "$EXAMEN" \
+    < "$SALIDA/$EXAMEN-registro.jsonl" > "$SALIDA/$EXAMEN.json"
 rm -rf "$DATOS"
 cat "$SALIDA/$EXAMEN.json"
