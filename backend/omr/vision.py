@@ -289,8 +289,10 @@ def localizar_marcas_de_registro(gris: Imagen) -> Cuadrilatero:
     Busca cuadrados llenos en una copia reducida, con la luz emparejada (se divide por el fondo
     estimado con un máximo local). Entre los que pasan los filtros, toma el más cercano a cada
     esquina. Lanza `MarcasDeRegistroNoEncontradas` si no hay cuatro."""
+    # Se compara el lado en píxeles, que es entero, y no la escala: comparar flotantes con `==`
+    # depende del redondeo (SonarCloud, S1244). Las dos condiciones dicen lo mismo.
     escala = min(1.0, LADO_DE_DETECCION_PX / max(gris.shape))
-    chica = gris if escala == 1.0 else cv2.resize(
+    chica = gris if max(gris.shape) <= LADO_DE_DETECCION_PX else cv2.resize(
         gris, None, fx=escala, fy=escala, interpolation=cv2.INTER_AREA
     )
     lado = max(chica.shape)
