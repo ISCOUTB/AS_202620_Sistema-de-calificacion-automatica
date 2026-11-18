@@ -9,6 +9,12 @@ resuelta, para que el profesor pueda cambiar de opinión.
 (AM-02): el profesor dice qué marcó el estudiante y `calificacion` decide si es correcto, así que
 aquí no viaja la respuesta correcta. Solo entran las hojas con nota: sin clave no hay nada que
 recalcular.
+
+**Con el nombre del archivo y la hora en que llegó**, que salen de la bitácora de recepción
+(`LectorDeRecepciones`): el `hoja_id` no le dice nada al profesor, y los nombres se repiten de un
+lote a otro (`hoja1.jpg`), así que hace falta la hora para distinguirlas. El nombre puede ser el del
+estudiante si el docente los nombra así; el riesgo de publicarlo se acepta en las mismas
+condiciones que el resto de la ruta (AM-02, arc42 §8.7).
 """
 
 from dataclasses import dataclass
@@ -16,6 +22,7 @@ from datetime import datetime
 from typing import Any
 
 from calificacion import recalcular, resoluciones_vigentes
+from infraestructura.bitacora import LectorDeRecepciones
 from infraestructura.modelo import CODIGO_COMPLETO, POR_REVISAR
 from infraestructura.resultados import LectorDeResultados, calificacion_del_hecho
 from infraestructura.revisiones import LectorDeRevisiones
@@ -55,13 +62,16 @@ class PreguntaEnRevision:
 
 @dataclass(frozen=True)
 class HojaEnRevision:
-    """Una hoja con preguntas en revisión y su nota vigente, con lo resuelto hasta ahora."""
+    """Una hoja con preguntas en revisión y su nota vigente, con lo resuelto hasta ahora.
+    `nombre_archivo` y `recibida_en` son None si la bitácora no tiene la línea de la hoja."""
 
     hoja_id: str
     nota_en_decimas: int
     provisional: bool
     codigo_completo: bool
     preguntas: tuple[PreguntaEnRevision, ...]
+    nombre_archivo: str | None = None
+    recibida_en: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -73,9 +83,13 @@ class RevisionDelExamen:
 
 
 def revision_del_examen(
-    examen_id: str, lector: LectorDeResultados, revisiones: LectorDeRevisiones | None = None
+    examen_id: str,
+    lector: LectorDeResultados,
+    revisiones: LectorDeRevisiones | None = None,
+    recepciones: LectorDeRecepciones | None = None,
 ) -> RevisionDelExamen:
     resueltas = {} if revisiones is None else revisiones.resoluciones_del_examen(examen_id)
+    llegadas = {} if recepciones is None else recepciones.recepciones_del_examen(examen_id)
     hojas = []
     for hoja_id, hecho in _ultimos_hechos(examen_id, lector).items():
         calificacion = calificacion_del_hecho(hecho)
@@ -107,6 +121,7 @@ def revision_del_examen(
                     resuelta_en=None if resolucion is None else resolucion.en,
                 )
             )
+        llegada = llegadas.get(hoja_id)
         hojas.append(
             HojaEnRevision(
                 hoja_id=hoja_id,
@@ -114,6 +129,8 @@ def revision_del_examen(
                 provisional=nota.provisional,
                 codigo_completo=(lectura.get("codigo") or {}).get("estado") == CODIGO_COMPLETO,
                 preguntas=tuple(preguntas),
+                nombre_archivo=None if llegada is None else llegada.nombre_archivo,
+                recibida_en=None if llegada is None else llegada.recibida_en,
             )
         )
     return RevisionDelExamen(examen_id=examen_id, hojas=tuple(hojas))

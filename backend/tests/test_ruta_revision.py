@@ -3,24 +3,34 @@ el recorte de cada pregunta y la que guarda lo que resolvió.
 
 La hoja es sintética y se lee de verdad: todas las respuestas bien menos la 7, marcada a medias.
 Lo que cuidan, además de la nota, es que las rutas públicas no publiquen la clave ni el código del
-estudiante (AM-02), que quede quién resolvió y cuándo (RF-10) y que una solicitud que no cuadra no
-deje nada escrito."""
+estudiante (AM-02), que quede quién resolvió y cuándo (RF-10), que una solicitud que no cuadra no
+deje nada escrito y que cada hoja diga con qué nombre y a qué hora llegó, para que el profesor sepa
+cuál es."""
 
+import json
 import logging
 from collections.abc import Iterator
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi.testclient import TestClient
 
-from api.main import app, obtener_almacen, obtener_lector_de_resultados, obtener_revisiones
+from api.main import (
+    app,
+    obtener_almacen,
+    obtener_lector_de_recepciones,
+    obtener_lector_de_resultados,
+    obtener_revisiones,
+)
 from calificacion import calificar
 from herramientas.hojas_sinteticas import fotografiar, hoja_marcada, patron
 from infraestructura.almacen import AlmacenEnDisco
+from infraestructura.bitacora import BitacoraEnDisco, BitacoraEnMemoria, RecepcionDeHoja
 from infraestructura.modelo import (
     CALIFICADA,
     EN_REVISION,
     ClaveDeRespuestas,
+    EntradaDeBitacora,
     Habilitacion,
     PreguntaDeLaClave,
 )
@@ -37,6 +47,7 @@ CLAVE = ClaveDeRespuestas(
     Habilitacion(por="Docente de prueba", en=datetime(2026, 11, 5, tzinfo=timezone.utc)),
 )
 DOCENTE = "Docente de prueba"
+NOMBRE = "foto inclinada.jpg"
 
 
 @pytest.fixture(scope="module")
@@ -65,10 +76,13 @@ def cliente(tmp_path, leida, revisiones) -> Iterator[TestClient]:
     )
     # Leída sin clave: no tiene nota que recalcular, así que no entra a la revisión.
     resultados.registrar_lectura("h-2", "t-2", EXAMEN, lectura, None, SIN_CLAVE)
+    bitacora = BitacoraEnDisco(tmp_path / "bitacora.jsonl")
+    bitacora.registrar(EntradaDeBitacora("t-1", EXAMEN, "referencia-h-1", NOMBRE, "h-1"))
 
     app.dependency_overrides[obtener_lector_de_resultados] = lambda: resultados
     app.dependency_overrides[obtener_revisiones] = lambda: revisiones
     app.dependency_overrides[obtener_almacen] = lambda: almacen
+    app.dependency_overrides[obtener_lector_de_recepciones] = lambda: bitacora
     yield TestClient(app)
     app.dependency_overrides.clear()
 
@@ -93,6 +107,63 @@ def test_la_revision_muestra_cada_pregunta_dudosa_con_sus_burbujas_y_su_recorte(
     assert pregunta["numero"] == 7
     assert [b["opcion"] for b in pregunta["burbujas"]] == ["A", "B", "C", "D"]
     assert (pregunta["con_recorte"], pregunta["resuelta"]) == (True, False)
+
+
+def test_cada_hoja_dice_con_que_nombre_y_a_que_hora_llego(cliente):
+    [hoja] = cliente.get(f"/examenes/{EXAMEN}/revision").json()["hojas"]
+
+    assert hoja["nombre_archivo"] == NOMBRE
+    recibida = datetime.fromisoformat(hoja["recibida_en"])
+    assert recibida.tzinfo is not None
+    assert abs(datetime.now(timezone.utc) - recibida) < timedelta(minutes=5)
+
+
+def test_sin_su_linea_en_la_bitacora_la_hoja_sale_sin_nombre_ni_hora(cliente):
+    app.dependency_overrides[obtener_lector_de_recepciones] = BitacoraEnMemoria
+
+    [hoja] = cliente.get(f"/examenes/{EXAMEN}/revision").json()["hojas"]
+
+    assert (hoja["hoja_id"], hoja["nombre_archivo"], hoja["recibida_en"]) == ("h-1", None, None)
+
+
+def test_la_bitacora_da_la_primera_llegada_de_cada_hoja_del_examen(tmp_path):
+    def recibida(hoja: str | None, trabajo: str, nombre: str, momento: str, examen=EXAMEN):
+        linea = {"hecho": "recibida", "trabajo_id": trabajo, "examen_id": examen,
+                 "referencia": "r", "nombre_archivo": nombre, "momento": momento}
+        return json.dumps(linea if hoja is None else linea | {"hoja_id": hoja})
+
+    ruta = tmp_path / "bitacora.jsonl"
+    ruta.write_text(
+        "\n".join([
+            recibida("h-1", "t-1", "hoja1.jpg", "2026-11-16T19:32:00+00:00"),
+            json.dumps({"hecho": "encolada", "trabajo_id": "t-1", "momento": "2026-11-16T19:33Z"}),
+            # El mismo nombre en otro examen no entra.
+            recibida("h-9", "t-9", "hoja1.jpg", "2026-11-16T19:32:00+00:00", examen="OTRO"),
+            # Anterior a ADR-0018, sin `hoja_id`: su trabajo es la hoja.
+            recibida(None, "t-2", "hoja2.jpg", "2026-11-16T19:33:00+00:00"),
+            # La misma hoja registrada otra vez: vale cuando llegó.
+            recibida("h-1", "t-3", "otra.jpg", "2026-11-17T08:00:00+00:00"),
+            # Truncada por una caída: se salta.
+            f'{{"hecho": "recibida", "examen_id": "{EXAMEN}", "hoja_id": "h-',
+        ]),
+        encoding="utf-8",
+    )
+
+    assert BitacoraEnDisco(ruta).recepciones_del_examen(EXAMEN) == {
+        "h-1": RecepcionDeHoja("hoja1.jpg", datetime(2026, 11, 16, 19, 32, tzinfo=timezone.utc)),
+        "t-2": RecepcionDeHoja("hoja2.jpg", datetime(2026, 11, 16, 19, 33, tzinfo=timezone.utc)),
+    }
+
+
+def test_la_bitacora_en_memoria_tambien_dice_como_llego_cada_hoja():
+    bitacora = BitacoraEnMemoria()
+    bitacora.registrar(EntradaDeBitacora("t-1", EXAMEN, "r", "hoja1.jpg", "h-1"))
+    bitacora.registrar(EntradaDeBitacora("t-9", "OTRO", "r", "hoja1.jpg", "h-9"))
+
+    [(hoja_id, recepcion)] = bitacora.recepciones_del_examen(EXAMEN).items()
+
+    assert (hoja_id, recepcion.nombre_archivo) == ("h-1", "hoja1.jpg")
+    assert recepcion.recibida_en is not None
 
 
 def test_la_revision_no_publica_la_clave_ni_el_codigo(cliente):

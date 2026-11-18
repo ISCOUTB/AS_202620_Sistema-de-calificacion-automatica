@@ -268,6 +268,13 @@ class HojaEnRevisionEnRespuesta(BaseModel):
     provisional: bool
     codigo_completo: bool
     preguntas: list[PreguntaEnRevisionEnRespuesta]
+    nombre_archivo: str | None = Field(
+        default=None,
+        description="Nombre con el que el docente envio el archivo; nulo si no quedo registrado.",
+    )
+    recibida_en: datetime | None = Field(
+        default=None, description="Cuando quedo registrada la hoja, en UTC; nulo si no se sabe."
+    )
 
 
 class RevisionDelExamenEnRespuesta(BaseModel):

@@ -381,6 +381,18 @@
             "title": "Hoja Id",
             "type": "string"
           },
+          "nombre_archivo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Nombre con el que el docente envio el archivo; nulo si no quedo registrado.",
+            "title": "Nombre Archivo"
+          },
           "nota_en_decimas": {
             "maximum": 50.0,
             "minimum": 0.0,
@@ -397,6 +409,19 @@
           "provisional": {
             "title": "Provisional",
             "type": "boolean"
+          },
+          "recibida_en": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Cuando quedo registrada la hoja, en UTC; nulo si no se sabe.",
+            "title": "Recibida En"
           }
         },
         "required": [
@@ -1226,7 +1251,7 @@
     },
     "/examenes/{examen_id}/revision": {
       "get": {
-        "description": "Las hojas con preguntas que la lectura no pudo decidir, y en cada pregunta lo que se midió\nen sus burbujas y lo que el profesor ya resolvió (RF-08). Una hoja sigue apareciendo después de\nresuelta, para poder cambiar una decisión.\n\n**No lleva la respuesta correcta ni el código del estudiante**: la ruta es pública hasta A-05\n(AM-02). El profesor dice qué marcó el estudiante y el sistema decide si es correcto.",
+        "description": "Las hojas con preguntas que la lectura no pudo decidir, y en cada pregunta lo que se midió\nen sus burbujas y lo que el profesor ya resolvió (RF-08). Una hoja sigue apareciendo después de\nresuelta, para poder cambiar una decisión. Cada hoja lleva el nombre con que se subió y la hora\nen que llegó, para que el profesor sepa cuál es.\n\n**No lleva la respuesta correcta ni el código del estudiante**: la ruta es pública hasta A-05\n(AM-02). El profesor dice qué marcó el estudiante y el sistema decide si es correcto. El nombre\ndel archivo sí viaja, y es el del estudiante si el docente los nombra así: el riesgo se acepta\nsolo mientras no entren hojas reales, como el resto de la ruta.",
         "operationId": "revision_examenes__examen_id__revision_get",
         "parameters": [
           {

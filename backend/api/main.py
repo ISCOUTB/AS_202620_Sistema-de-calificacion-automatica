@@ -74,7 +74,7 @@ from autoria import (
 from calificacion import HojaSinNotaQueRevisar, resolver_preguntas
 from dashboard import referencia_del_recorte, resultados_del_examen, revision_del_examen
 from infraestructura.almacen import AlmacenDeImagenes, AlmacenEnDisco
-from infraestructura.bitacora import BitacoraDeRecepcion, BitacoraEnDisco
+from infraestructura.bitacora import BitacoraDeRecepcion, BitacoraEnDisco, LectorDeRecepciones
 from infraestructura.claves import CatalogoDeClaves, ClavesEnDisco
 from infraestructura.cola import ESPERA_AL_PUBLICAR_SEGUNDOS, cliente_redis
 from infraestructura.modelo import PENDIENTE_DE_ENCOLAR, ArchivoCargado
@@ -133,6 +133,12 @@ def obtener_almacen() -> AlmacenDeImagenes:
 def obtener_bitacora() -> BitacoraDeRecepcion:
     """Dependencia de la bitácora de recepción (ADR-0006). Por petición y sustituible, por las
     mismas dos razones que el almacén."""
+    return BitacoraEnDisco(Path(RUTA_BITACORA))
+
+
+def obtener_lector_de_recepciones() -> LectorDeRecepciones:
+    """La misma bitácora, vista solo para leer cómo llegó cada hoja (la revisión la usa para el
+    nombre del archivo y la hora). Por petición y sustituible, como las demás."""
     return BitacoraEnDisco(Path(RUTA_BITACORA))
 
 
@@ -589,14 +595,18 @@ def revision(
     examen_id: str,
     lector: LectorDeResultados = Depends(obtener_lector_de_resultados),
     revisiones: RevisionesDelProfesor = Depends(obtener_revisiones),
+    recepciones: LectorDeRecepciones = Depends(obtener_lector_de_recepciones),
 ) -> RevisionDelExamenEnRespuesta:
     """Las hojas con preguntas que la lectura no pudo decidir, y en cada pregunta lo que se midió
     en sus burbujas y lo que el profesor ya resolvió (RF-08). Una hoja sigue apareciendo después de
-    resuelta, para poder cambiar una decisión.
+    resuelta, para poder cambiar una decisión. Cada hoja lleva el nombre con que se subió y la hora
+    en que llegó, para que el profesor sepa cuál es.
 
     **No lleva la respuesta correcta ni el código del estudiante**: la ruta es pública hasta A-05
-    (AM-02). El profesor dice qué marcó el estudiante y el sistema decide si es correcto."""
-    proyeccion = revision_del_examen(examen_id, lector, revisiones)
+    (AM-02). El profesor dice qué marcó el estudiante y el sistema decide si es correcto. El nombre
+    del archivo sí viaja, y es el del estudiante si el docente los nombra así: el riesgo se acepta
+    solo mientras no entren hojas reales, como el resto de la ruta."""
+    proyeccion = revision_del_examen(examen_id, lector, revisiones, recepciones)
     return RevisionDelExamenEnRespuesta(
         examen_id=proyeccion.examen_id,
         hojas=[HojaEnRevisionEnRespuesta.model_validate(hoja) for hoja in proyeccion.hojas],
