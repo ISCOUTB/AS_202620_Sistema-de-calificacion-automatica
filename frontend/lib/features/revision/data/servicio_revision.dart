@@ -63,6 +63,8 @@ class HojaEnRevision {
     required this.provisional,
     required this.codigoCompleto,
     required this.preguntas,
+    this.nombreArchivo,
+    this.recibidaEn,
   });
 
   final String hojaId;
@@ -71,18 +73,42 @@ class HojaEnRevision {
   final bool codigoCompleto;
   final List<PreguntaEnRevision> preguntas;
 
+  /// El nombre con que se subió el archivo. Nulo si la API no lo sabe o no lo manda.
+  final String? nombreArchivo;
+
+  /// Cuándo llegó la hoja, en UTC tal como lo manda la API. Los nombres se repiten de un lote a
+  /// otro (`hoja1.jpg`), y la hora es lo que las distingue.
+  final DateTime? recibidaEn;
+
   int get pendientes => preguntas.where((p) => !p.resuelta).length;
 
-  factory HojaEnRevision.desdeJson(Map<String, dynamic> json) => HojaEnRevision(
-        hojaId: json['hoja_id'] as String,
-        notaEnDecimas: json['nota_en_decimas'] as int,
-        provisional: json['provisional'] as bool,
-        codigoCompleto: json['codigo_completo'] as bool,
-        preguntas: [
-          for (final p in json['preguntas'] as List)
-            PreguntaEnRevision.desdeJson(p as Map<String, dynamic>),
-        ],
-      );
+  factory HojaEnRevision.desdeJson(Map<String, dynamic> json) {
+    final nombre = json['nombre_archivo'] as String?;
+    final recibida = json['recibida_en'] as String?;
+    return HojaEnRevision(
+      hojaId: json['hoja_id'] as String,
+      notaEnDecimas: json['nota_en_decimas'] as int,
+      provisional: json['provisional'] as bool,
+      codigoCompleto: json['codigo_completo'] as bool,
+      preguntas: [
+        for (final p in json['preguntas'] as List)
+          PreguntaEnRevision.desdeJson(p as Map<String, dynamic>),
+      ],
+      nombreArchivo: nombre == null || nombre.trim().isEmpty ? null : nombre,
+      recibidaEn: recibida == null ? null : DateTime.tryParse(recibida),
+    );
+  }
+}
+
+const _meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+/// «Subida el 16 nov, 14:32», en la hora del navegador del docente. Sin el paquete `intl`, como
+/// las cifras del panel.
+String llegadaLegible(DateTime instante) {
+  final local = instante.toLocal();
+  final hora = local.hour.toString().padLeft(2, '0');
+  final minuto = local.minute.toString().padLeft(2, '0');
+  return 'Subida el ${local.day} ${_meses[local.month - 1]}, $hora:$minuto';
 }
 
 class RevisionDelExamen {

@@ -217,8 +217,10 @@ class _PantallaRevisionState extends State<PantallaRevision> {
     return null;
   }
 
+  /// El nombre con que se subió: el que guardó la API, que sirve en cualquier sesión; si no lo
+  /// trae, el de esta sesión de carga; y si tampoco, su lugar en el examen.
   String _nombreDe(HojaEnRevision hoja) {
-    final nombre = widget.nombresDeHojas?.value[hoja.hojaId];
+    final nombre = hoja.nombreArchivo ?? widget.nombresDeHojas?.value[hoja.hojaId];
     if (nombre != null) return nombre;
     final indice = _revision?.hojas.indexOf(hoja) ?? 0;
     return 'Hoja ${indice + 1}';
@@ -424,6 +426,13 @@ class _PantallaRevisionState extends State<PantallaRevision> {
           titulo: _nombreDe(hoja),
           descripcion: hoja.provisional ? 'Nota provisional $nota' : 'Nota $nota',
         ),
+        if (hoja.recibidaEn case final recibida?) ...[
+          const SizedBox(height: QEspacios.xs),
+          Text(
+            llegadaLegible(recibida),
+            style: textos.bodySmall?.copyWith(color: QColores.textoSuave),
+          ),
+        ],
         if (!hoja.codigoCompleto) ...[
           const SizedBox(height: QEspacios.sm),
           Text(
@@ -540,22 +549,23 @@ class _FilaDeHoja extends StatelessWidget {
   Widget build(BuildContext context) {
     final pendientes = hoja.pendientes;
     final nota = notaLegible(hoja.notaEnDecimas);
+    final recibida = hoja.recibidaEn;
+    final estado = pendientes == 0
+        ? 'Revisada'
+        : pendientes == 1
+            ? '1 pregunta por revisar'
+            : '$pendientes preguntas por revisar';
     return ListTile(
       selected: elegida,
       selectedTileColor: QColores.superficieAzul,
       onTap: alElegir,
+      isThreeLine: recibida != null,
       leading: Icon(
         pendientes > 0 ? Icons.rate_review_outlined : Icons.task_alt_outlined,
         color: pendientes > 0 ? QColores.advertenciaTexto : QColores.exitoTexto,
       ),
       title: Text(nombre, maxLines: 2, overflow: TextOverflow.ellipsis),
-      subtitle: Text(
-        pendientes == 0
-            ? 'Revisada'
-            : pendientes == 1
-                ? '1 pregunta por revisar'
-                : '$pendientes preguntas por revisar',
-      ),
+      subtitle: Text(recibida == null ? estado : '$estado\n${llegadaLegible(recibida)}'),
       trailing: QChipEstado(
         texto: nota,
         tono: hoja.provisional ? QTono.advertencia : QTono.exito,

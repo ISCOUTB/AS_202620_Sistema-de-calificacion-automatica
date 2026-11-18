@@ -141,6 +141,38 @@ void main() {
     expect(find.text('Se ve: C tenue (58 %).'), findsNWidgets(2));
   });
 
+  testWidgets('Cada hoja dice con qué nombre y cuándo se subió, aunque el nombre se repita',
+      (tester) async {
+    _fijarTamano(tester, const Size(1280, 1800));
+    HojaEnRevision hoja(String id, int dia, {List<PreguntaEnRevision>? preguntas}) =>
+        HojaEnRevision(
+          hojaId: id,
+          notaEnDecimas: 39,
+          provisional: true,
+          codigoCompleto: true,
+          preguntas: preguntas ?? [_pregunta(7)],
+          nombreArchivo: 'hoja1.jpg',
+          recibidaEn: DateTime(2026, 11, dia, 14, 32),
+        );
+    await tester.pumpWidget(_pantalla(
+      // El nombre de la API gana al de la sesión de carga, que ya no sirve después de recargar.
+      nombres: const {'h-1': 'nombre de la sesión.jpg'},
+      consultar: (examen) async => RevisionDelExamen(
+        examenId: examen,
+        hojas: [hoja('h-1', 15), hoja('h-2', 16, preguntas: [_pregunta(9)])],
+      ),
+    ));
+    await tester.pumpAndSettle();
+    await _elegirExamen(tester, 'PROTOTIPO-R05');
+
+    expect(find.text('nombre de la sesión.jpg'), findsNothing);
+    expect(find.text('hoja1.jpg'), findsWidgets);
+    expect(find.text('1 pregunta por revisar\nSubida el 15 nov, 14:32'), findsOneWidget);
+    expect(find.text('1 pregunta por revisar\nSubida el 16 nov, 14:32'), findsOneWidget);
+    // El detalle de la hoja elegida también lo dice.
+    expect(find.text('Subida el 15 nov, 14:32'), findsOneWidget);
+  });
+
   testWidgets('Guarda lo elegido con el nombre del docente y recalcula', (tester) async {
     _fijarTamano(tester, const Size(1280, 1800));
     final guardados = <_Guardado>[];

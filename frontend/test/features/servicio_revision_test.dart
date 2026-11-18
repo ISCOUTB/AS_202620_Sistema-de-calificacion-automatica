@@ -16,7 +16,8 @@ void main() {
           'hojas': [
             {
               'hoja_id': 'h-1', 'nota_en_decimas': 49, 'provisional': true,
-              'codigo_completo': true,
+              'codigo_completo': true, 'nombre_archivo': 'hoja1.jpg',
+              'recibida_en': '2026-11-16T19:32:00Z',
               'preguntas': [
                 {
                   'numero': 7,
@@ -39,9 +40,27 @@ void main() {
 
     final hoja = revision.hojas.single;
     expect((hoja.hojaId, hoja.notaEnDecimas, hoja.pendientes), ('h-1', 49, 0));
+    expect(hoja.nombreArchivo, 'hoja1.jpg');
+    expect(hoja.recibidaEn, DateTime.utc(2026, 11, 16, 19, 32));
     final pregunta = hoja.preguntas.single;
     expect((pregunta.numero, pregunta.resuelta, pregunta.opcionResuelta), (7, true, null));
     expect(pregunta.burbujas[1].tipo, 'tenue');
+  });
+
+  test('Si la API no manda el nombre ni la hora, la hoja queda sin ellos', () {
+    final hoja = HojaEnRevision.desdeJson({
+      'hoja_id': 'h-1', 'nota_en_decimas': 49, 'provisional': true,
+      'codigo_completo': true, 'preguntas': [],
+    });
+
+    expect((hoja.nombreArchivo, hoja.recibidaEn), (null, null));
+  });
+
+  test('La llegada se lee en la hora del docente, con el mes abreviado', () {
+    expect(llegadaLegible(DateTime(2026, 11, 16, 9, 5)), 'Subida el 16 nov, 09:05');
+    // La API la manda en UTC; se muestra en la hora del navegador.
+    final utc = DateTime.utc(2026, 11, 16, 19, 32);
+    expect(llegadaLegible(utc), llegadaLegible(utc.toLocal()));
   });
 
   test('Guardar manda el nombre y cada opción, y «ninguna» como nula', () async {
