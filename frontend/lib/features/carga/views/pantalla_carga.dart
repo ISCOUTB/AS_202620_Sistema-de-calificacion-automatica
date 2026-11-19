@@ -39,6 +39,7 @@ class PantallaCarga extends StatefulWidget {
     this.alRecibirHojas,
     this.alRevisar,
     this.revisionesGuardadas,
+    this.tomarFoto,
     this.intervaloDeConsulta = const Duration(seconds: 3),
   });
 
@@ -62,6 +63,10 @@ class PantallaCarga extends StatefulWidget {
 
   /// Cambia cada vez que el docente guarda una revisión: el reporte vuelve a pedir las notas.
   final ValueListenable<int>? revisionesGuardadas;
+
+  /// Toma una foto con la cámara del celular, lista para subir, o null si el docente cerró la
+  /// cámara. Sin él (en el computador) no se ofrece «Tomar foto».
+  final Future<ArchivoSeleccionado?> Function()? tomarFoto;
 
   /// Cada cuánto se pregunta, después de subir, si ya se leyeron las hojas. Una hoja tarda unos
   /// dos segundos en el servidor (EC-03).
@@ -267,7 +272,27 @@ class _PantallaCargaState extends State<PantallaCarga> {
       if (mounted) setState(() => _preparando = null);
     }
     if (!mounted || elegidos.isEmpty) return;
+    _sumar(elegidos);
+  }
 
+  /// Una foto de la cámara, sumada a la selección igual que lo elegido en la galería. La pantalla
+  /// no se bloquea mientras la cámara está abierta: un navegador que no avisa cuando el docente la
+  /// cierra dejaría esta espera abierta, y el botón no puede quedarse deshabilitado por eso.
+  Future<void> _tomarFoto() async {
+    final tomar = widget.tomarFoto;
+    if (tomar == null) return;
+    final ArchivoSeleccionado? foto;
+    try {
+      foto = await tomar();
+    } catch (_) {
+      if (mounted) _avisar('No se pudo leer la foto. Vuelva a intentarlo.');
+      return;
+    }
+    if (!mounted || foto == null) return;
+    _sumar([foto]);
+  }
+
+  void _sumar(List<ArchivoSeleccionado> elegidos) {
     final nuevos = <ArchivoSeleccionado>[];
     var repetidos = 0;
     for (final archivo in elegidos) {
@@ -438,6 +463,7 @@ class _PantallaCargaState extends State<PantallaCarga> {
           habilitada: !_subiendo && _preparando == null,
           compacta: compacta,
           alSeleccionar: _elegir,
+          alTomarFoto: widget.tomarFoto == null ? null : _tomarFoto,
           alQuitar: _quitar,
           alQuitarTodos: _quitarTodos,
         ),

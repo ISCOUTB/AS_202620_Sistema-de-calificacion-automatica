@@ -1,5 +1,7 @@
 import '../common/api/servicio_salud.dart' as salud;
+import '../features/carga/data/camara.dart' as camara;
 import '../features/carga/data/selector_archivos.dart' as selector;
+import '../features/carga/data/tomar_foto.dart' as foto;
 import '../features/carga/data/servicio_examenes.dart' as examenes;
 import '../features/carga/data/servicio_carga.dart' as carga;
 import '../features/carga/data/servicio_resultados.dart' as resultados;
@@ -27,10 +29,13 @@ class ServiciosApp {
     this.consultarRevision,
     this.guardarRevision,
     this.urlDelRecorte,
+    this.tomarFoto,
   });
 
-  /// Las implementaciones reales: HTTP contra `BACKEND_URL` y el diálogo del navegador.
-  factory ServiciosApp.reales() => const ServiciosApp(
+  /// Las implementaciones reales: HTTP contra `BACKEND_URL` y el diálogo del navegador. La cámara
+  /// solo en una pantalla táctil.
+  factory ServiciosApp.reales() => ServiciosApp(
+        tomarFoto: camara.esPantallaTactil() ? foto.tomarFoto : null,
         verificarSalud: salud.verificarSalud,
         seleccionarArchivos: selector.seleccionarArchivos,
         subirHojas: carga.subirHojas,
@@ -43,6 +48,10 @@ class ServiciosApp {
       );
 
   final Future<bool> Function() verificarSalud;
+
+  /// Toma una foto con la cámara del celular y la prepara para subir. Opcional: sin él, la carga
+  /// solo ofrece elegir archivos.
+  final Future<carga.ArchivoSeleccionado?> Function()? tomarFoto;
 
   /// Abre el diálogo y prepara las fotos elegidas; `alAvanzar` recibe cuántas van y cuántas son.
   final Future<List<carga.ArchivoSeleccionado>> Function({

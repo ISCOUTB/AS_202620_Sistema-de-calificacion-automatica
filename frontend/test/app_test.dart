@@ -11,7 +11,12 @@ import 'package:frontend/features/pauta/data/servicio_distractores.dart';
 import 'package:frontend/main.dart';
 
 /// Servicios sustitutos: la aplicación entera se monta sin backend y sin diálogo de archivos.
-ServiciosApp _servicios({bool apiConectada = true}) => ServiciosApp(
+ServiciosApp _servicios({
+  bool apiConectada = true,
+  Future<ArchivoSeleccionado?> Function()? tomarFoto,
+}) =>
+    ServiciosApp(
+      tomarFoto: tomarFoto,
       verificarSalud: () async => apiConectada,
       seleccionarArchivos: ({alAvanzar}) async => [
         ArchivoSeleccionado(nombre: 'hoja1.png', contenido: Uint8List.fromList(const [1, 2, 3])),
@@ -25,15 +30,40 @@ ServiciosApp _servicios({bool apiConectada = true}) => ServiciosApp(
           const ResultadoDistractores(distractores: [], descartados: []),
     );
 
-Future<void> _montar(WidgetTester tester, {required Size tamano, bool apiConectada = true}) async {
+Future<void> _montar(
+  WidgetTester tester, {
+  required Size tamano,
+  bool apiConectada = true,
+  Future<ArchivoSeleccionado?> Function()? tomarFoto,
+}) async {
   tester.view.physicalSize = tamano;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
-  await tester.pumpWidget(QuantiaApp(servicios: _servicios(apiConectada: apiConectada)));
+  await tester.pumpWidget(
+    QuantiaApp(servicios: _servicios(apiConectada: apiConectada, tomarFoto: tomarFoto)),
+  );
   await tester.pumpAndSettle();
 }
 
 void main() {
+  testWidgets('Con cámara, la sección Carga ofrece tomar la foto desde la aplicación',
+      (tester) async {
+    await _montar(
+      tester,
+      tamano: const Size(390, 1700),
+      tomarFoto: () async =>
+          ArchivoSeleccionado(nombre: 'foto 14.32.05.jpg', contenido: Uint8List(4)),
+    );
+    await tester.tap(find.text('Carga'));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Tomar foto'));
+    await tester.tap(find.text('Tomar foto'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('foto 14.32.05.jpg'), findsOneWidget);
+  });
+
   testWidgets('Cambiar el ancho de la ventana no borra el examen ni las fotos elegidas',
       (tester) async {
     // En ancho la navegación es un riel junto al contenido, y en angosto una barra abajo: antes,

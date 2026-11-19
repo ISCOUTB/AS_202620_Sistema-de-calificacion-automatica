@@ -89,6 +89,7 @@ class _MarcoAppState extends State<MarcoApp> {
       const PantallaPanel(),
       PantallaCarga(
         seleccionarArchivos: servicios.seleccionarArchivos,
+        tomarFoto: servicios.tomarFoto,
         subirHojas: servicios.subirHojas,
         consultarResultados: servicios.consultarResultados,
         listarExamenes: servicios.listarExamenes,

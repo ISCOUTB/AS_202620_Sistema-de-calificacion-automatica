@@ -36,6 +36,7 @@ Widget _pantallaCarga({
   Future<List<ExamenConClave>> Function()? listar,
   void Function(String)? alRevisar,
   ValueNotifier<int>? revisionesGuardadas,
+  Future<ArchivoSeleccionado?> Function()? tomarFoto,
 }) {
   final estado = estadoApi ?? ValueNotifier(EstadoApi.conectada);
   if (estadoApi == null) addTearDown(estado.dispose);
@@ -50,6 +51,7 @@ Widget _pantallaCarga({
         listarExamenes: listar,
         alRevisar: alRevisar,
         revisionesGuardadas: revisionesGuardadas,
+        tomarFoto: tomarFoto,
       ),
     ),
   );
@@ -483,6 +485,70 @@ void main() {
     );
   });
 
+  group('Tomar foto', () {
+    testWidgets('Sin cámara no se ofrece', (tester) async {
+      await tester.pumpWidget(_pantallaCarga());
+      await tester.pumpAndSettle();
+
+      expect(find.text('Tomar foto'), findsNothing);
+      expect(find.text('Seleccionar archivos'), findsOneWidget);
+    });
+
+    testWidgets('Cada toque suma una foto a la selección', (tester) async {
+      final fotos = [_archivo('foto 14.32.05.jpg', 5), _archivo('foto 14.32.40.jpg', 6)];
+      await tester.pumpWidget(_pantallaCarga(tomarFoto: () async => fotos.removeAt(0)));
+      await tester.pumpAndSettle();
+
+      await _tocar(tester, find.text('Tomar foto'));
+      expect(find.text('1 archivo seleccionado'), findsOneWidget);
+
+      await _tocar(tester, find.text('Tomar foto'));
+      expect(find.text('2 archivos seleccionados'), findsOneWidget);
+      expect(find.text('foto 14.32.05.jpg'), findsOneWidget);
+      expect(find.text('foto 14.32.40.jpg'), findsOneWidget);
+    });
+
+    testWidgets('Las fotos tomadas se suben con lo elegido en la galería', (tester) async {
+      final enviados = <String>[];
+      await tester.pumpWidget(_pantallaCarga(
+        seleccion: [_archivo('hoja1.jpg')],
+        tomarFoto: () async => _archivo('foto 14.32.05.jpg'),
+        subir: (examenId, archivos) async {
+          enviados.addAll([for (final a in archivos) a.nombre]);
+          return _todoEncolado(archivos);
+        },
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField), 'CALC-2026-02');
+      await _tocar(tester, find.text('Seleccionar archivos'));
+      await _tocar(tester, find.text('Tomar foto'));
+      await _tocar(tester, find.text('Subir al sistema'));
+
+      expect(enviados, ['hoja1.jpg', 'foto 14.32.05.jpg']);
+    });
+
+    testWidgets('Cerrar la cámara sin tomar nada no cambia la selección ni avisa', (tester) async {
+      await tester.pumpWidget(_pantallaCarga(tomarFoto: () async => null));
+      await tester.pumpAndSettle();
+
+      await _tocar(tester, find.text('Tomar foto'));
+
+      expect(find.textContaining('seleccionado'), findsNothing);
+      expect(find.byType(SnackBar), findsNothing);
+    });
+
+    testWidgets('Si la foto no se pudo leer lo avisa', (tester) async {
+      await tester.pumpWidget(_pantallaCarga(tomarFoto: () async => throw StateError('cámara')));
+      await tester.pumpAndSettle();
+
+      await _tocar(tester, find.text('Tomar foto'));
+
+      expect(find.text('No se pudo leer la foto. Vuelva a intentarlo.'), findsOneWidget);
+      expect(find.textContaining('seleccionado'), findsNothing);
+    });
+  });
+
   testWidgets('Avisa si el reporte no da cuenta de todos los archivos enviados', (tester) async {
     await tester.pumpWidget(_pantallaCarga(
       seleccion: [_archivo('hoja1.jpg'), _archivo('hoja2.jpg')],
@@ -621,6 +687,8 @@ void main() {
 
       await tester.pumpWidget(_pantallaCarga(
         estadoApi: estado,
+        // Con cámara, como en un celular: los dos botones tienen que caber.
+        tomarFoto: () async => _archivo('foto 14.32.05.jpg'),
         seleccion: [
           _archivo(nombreLargo, 2400000),
           _archivo('hoja_2.pdf', 850 * 1024),
