@@ -486,6 +486,24 @@
             "description": "La opcion que el profesor vio marcada, o nula si dijo que ninguna vale.",
             "title": "Opcion Resuelta"
           },
+          "opcion_sugerida": {
+            "anyOf": [
+              {
+                "enum": [
+                  "A",
+                  "B",
+                  "C",
+                  "D"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "La unica opcion que la lectura vio marcada, para preseleccionarla; nula si vio dos o ninguna. No es la respuesta correcta y no cuenta en la nota hasta que se guarda.",
+            "title": "Opcion Sugerida"
+          },
           "resuelta": {
             "title": "Resuelta",
             "type": "boolean"

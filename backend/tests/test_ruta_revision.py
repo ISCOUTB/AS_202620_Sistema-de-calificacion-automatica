@@ -166,6 +166,34 @@ def test_la_bitacora_en_memoria_tambien_dice_como_llego_cada_hoja():
     assert recepcion.recibida_en is not None
 
 
+def test_la_revision_trae_la_opcion_sugerida(cliente):
+    """ADR-0024: la 7, marcada a medias en la C, llega con la C para preseleccionarla."""
+    [hoja] = cliente.get(f"/examenes/{EXAMEN}/revision").json()["hojas"]
+
+    [pregunta] = hoja["preguntas"]
+    assert (pregunta["opcion_sugerida"], pregunta["resuelta"]) == ("C", False)
+    assert hoja["provisional"] is True
+
+
+def test_una_hoja_leida_antes_del_corte_llega_sin_sugerencia(cliente, tmp_path):
+    """Las hojas leídas antes de ADR-0024 no traen la sugerencia en el registro: la revisión las
+    muestra igual, sin nada preseleccionado."""
+    ruta = tmp_path / "resultados.jsonl"
+    hechos = [json.loads(linea) for linea in ruta.read_text(encoding="utf-8").splitlines()]
+    for hecho in hechos:
+        lectura = hecho.get("lectura") or {}
+        lectura.pop("corte_de_intencion", None)
+        for fila in lectura.get("preguntas", ()):
+            fila.pop("opcion_sugerida", None)
+    ruta.write_text("".join(json.dumps(hecho) + "\n" for hecho in hechos), encoding="utf-8")
+
+    respuesta = cliente.get(f"/examenes/{EXAMEN}/revision")
+
+    assert respuesta.status_code == 200
+    [pregunta] = respuesta.json()["hojas"][0]["preguntas"]
+    assert pregunta["opcion_sugerida"] is None
+
+
 def test_la_revision_no_publica_la_clave_ni_el_codigo(cliente):
     texto = cliente.get(f"/examenes/{EXAMEN}/revision").text
 
