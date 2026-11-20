@@ -79,6 +79,10 @@ class _PantallaRevisionState extends State<PantallaRevision> {
 
   String? _hojaElegida;
 
+  /// Los dos filtros de la lista, cada uno por su lado: se puede ver una clase, las dos o ninguna.
+  bool _verPorRevisar = true;
+  bool _verRevisadas = true;
+
   /// Lo que el docente eligió y todavía no guardó, por hoja y por pregunta.
   final Map<String, Map<int, String>> _elecciones = {};
   bool _guardando = false;
@@ -187,9 +191,7 @@ class _PantallaRevisionState extends State<PantallaRevision> {
       if (!mounted || examen != _examenVisto) return;
       setState(() {
         _revision = revision;
-        final elegida = _hojaElegida;
-        final sigue = elegida != null && revision.hojas.any((h) => h.hojaId == elegida);
-        _hojaElegida = sigue ? elegida : _primeraPorRevisar(revision)?.hojaId;
+        _hojaElegida = _elegidaVisible(_hojaElegida);
       });
     } catch (error) {
       if (!mounted || examen != _examenVisto) return;
@@ -201,12 +203,33 @@ class _PantallaRevisionState extends State<PantallaRevision> {
     }
   }
 
-  static HojaEnRevision? _primeraPorRevisar(RevisionDelExamen revision) {
-    for (final hoja in revision.hojas) {
+  /// Las hojas de la lista, con los filtros y en su orden (la más nueva arriba).
+  List<HojaEnRevision> get _visibles => hojasVisibles(
+        _revision?.hojas ?? const [],
+        porRevisar: _verPorRevisar,
+        revisadas: _verRevisadas,
+      );
+
+  /// La hoja que queda abierta: [elegida] si la lista la muestra; si no, la primera visible con
+  /// preguntas por revisar, la primera visible, o ninguna.
+  String? _elegidaVisible(String? elegida) {
+    final visibles = _visibles;
+    if (elegida != null && visibles.any((h) => h.hojaId == elegida)) return elegida;
+    return _primeraPorRevisar(visibles)?.hojaId;
+  }
+
+  static HojaEnRevision? _primeraPorRevisar(List<HojaEnRevision> hojas) {
+    for (final hoja in hojas) {
       if (hoja.pendientes > 0) return hoja;
     }
-    return revision.hojas.isEmpty ? null : revision.hojas.first;
+    return hojas.isEmpty ? null : hojas.first;
   }
+
+  void _filtrar({bool? porRevisar, bool? revisadas}) => setState(() {
+        _verPorRevisar = porRevisar ?? _verPorRevisar;
+        _verRevisadas = revisadas ?? _verRevisadas;
+        _hojaElegida = _elegidaVisible(_hojaElegida);
+      });
 
   HojaEnRevision? get _hoja {
     final revision = _revision;
@@ -226,8 +249,16 @@ class _PantallaRevisionState extends State<PantallaRevision> {
     return 'Hoja ${indice + 1}';
   }
 
-  Map<int, String> _eleccionesDe(HojaEnRevision hoja) =>
-      _elecciones.putIfAbsent(hoja.hojaId, () => {});
+  /// Lo elegido en la hoja. La primera vez trae la opción sugerida de cada pregunta sin resolver
+  /// (ADR-0024): se ve igual que una elección del profesor y «Guardar» la envía con las demás.
+  Map<int, String> _eleccionesDe(HojaEnRevision hoja) => _elecciones.putIfAbsent(
+        hoja.hojaId,
+        () => {
+          for (final pregunta in hoja.preguntas)
+            if (!pregunta.resuelta)
+              if (pregunta.opcionSugerida case final sugerida?) pregunta.numero: sugerida,
+        },
+      );
 
   /// Lo elegido que cambia lo que ya estaba guardado.
   Map<int, String?> _cambios(HojaEnRevision hoja) {
@@ -249,15 +280,19 @@ class _PantallaRevisionState extends State<PantallaRevision> {
     try {
       final resultado = await guardar(examen, hoja.hojaId, _nombre.text.trim(), cambios);
       if (!mounted) return;
-      _eleccionesDe(hoja).clear();
       final nota = resultado.notaEnDecimas == null ? '' : notaLegible(resultado.notaEnDecimas!);
       _avisar(resultado.provisional ? 'Guardado. Nota provisional $nota.' : 'Guardado. Nota $nota.');
       widget.alGuardar?.call();
       await _cargarRevision(examen);
+      // Lo elegido se vuelve a armar con lo que acaba de llegar: lo guardado se ve como resuelto, y
+      // solo lo que sigue sin resolver vuelve a traer su sugerencia. Se quita después de recargar y
+      // no antes, para que mientras llega no se rearme con la hoja vieja.
+      if (!mounted) return;
+      setState(() => _elecciones.remove(hoja.hojaId));
       // Si en esta hoja no queda nada, se pasa a la siguiente con preguntas por revisar.
       final actual = _hoja;
-      if (mounted && actual != null && actual.pendientes == 0 && _revision != null) {
-        final siguiente = _primeraPorRevisar(_revision!);
+      if (mounted && actual != null && actual.pendientes == 0) {
+        final siguiente = _primeraPorRevisar(_visibles);
         if (siguiente != null && siguiente.pendientes > 0) {
           setState(() => _hojaElegida = siguiente.hojaId);
         }
@@ -374,7 +409,11 @@ class _PantallaRevisionState extends State<PantallaRevision> {
       builder: (context, restricciones) {
         final ancha = restricciones.maxWidth >= QAnchos.dosColumnas;
         final lista = _ListaDeHojas(
-          hojas: revision.hojas,
+          hojas: _visibles,
+          porRevisar: revision.hojas.where((h) => h.pendientes > 0).length,
+          verPorRevisar: _verPorRevisar,
+          verRevisadas: _verRevisadas,
+          alFiltrar: _filtrar,
           elegida: _hojaElegida,
           nombreDe: _nombreDe,
           alElegir: (hoja) => setState(() => _hojaElegida = hoja.hojaId),
@@ -441,7 +480,7 @@ class _PantallaRevisionState extends State<PantallaRevision> {
           ),
         ],
         const SizedBox(height: QEspacios.md),
-        for (final pregunta in hoja.preguntas) ...[
+        for (final pregunta in preguntasEnOrden(hoja)) ...[
           _TarjetaPregunta(
             pregunta: pregunta,
             elegida: elegidas[pregunta.numero] ??
@@ -478,54 +517,103 @@ class _PantallaRevisionState extends State<PantallaRevision> {
   }
 }
 
-/// Las hojas del examen, primero las que tienen preguntas por revisar.
+/// Las hojas del examen que dejan ver los filtros, ya ordenadas (la más nueva arriba). El título
+/// cuenta todas las que tienen preguntas por revisar, no solo las que se ven.
 class _ListaDeHojas extends StatelessWidget {
   const _ListaDeHojas({
     required this.hojas,
+    required this.porRevisar,
+    required this.verPorRevisar,
+    required this.verRevisadas,
+    required this.alFiltrar,
     required this.elegida,
     required this.nombreDe,
     required this.alElegir,
   });
 
   final List<HojaEnRevision> hojas;
+  final int porRevisar;
+  final bool verPorRevisar;
+  final bool verRevisadas;
+  final void Function({bool? porRevisar, bool? revisadas}) alFiltrar;
   final String? elegida;
   final String Function(HojaEnRevision) nombreDe;
   final ValueChanged<HojaEnRevision> alElegir;
 
   @override
   Widget build(BuildContext context) {
-    final ordenadas = [
-      ...hojas.where((h) => h.pendientes > 0),
-      ...hojas.where((h) => h.pendientes == 0),
-    ];
-    final porRevisar = hojas.where((h) => h.pendientes > 0).length;
+    final textos = Theme.of(context).textTheme;
+    // Los filtros van al lado del título si caben y debajo si no (en un teléfono). Por eso no son
+    // la `accion` de QTituloSeccion: en una fila no bajarían nunca.
+    final titulo = Wrap(
+      alignment: WrapAlignment.spaceBetween,
+      crossAxisAlignment: WrapCrossAlignment.end,
+      spacing: QEspacios.md,
+      runSpacing: QEspacios.sm,
+      children: [
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Hojas', style: textos.headlineSmall),
+            const SizedBox(height: 2),
+            Text(
+              porRevisar == 0
+                  ? 'Todas revisadas'
+                  : porRevisar == 1
+                      ? '1 por revisar'
+                      : '$porRevisar por revisar',
+              style: textos.bodyMedium?.copyWith(color: QColores.textoSuave),
+            ),
+          ],
+        ),
+        Wrap(
+          spacing: QEspacios.sm,
+          runSpacing: QEspacios.xs,
+          children: [
+            FilterChip(
+              label: const Text('Por revisar'),
+              selected: verPorRevisar,
+              onSelected: (valor) => alFiltrar(porRevisar: valor),
+            ),
+            FilterChip(
+              label: const Text('Revisadas'),
+              selected: verRevisadas,
+              onSelected: (valor) => alFiltrar(revisadas: valor),
+            ),
+          ],
+        ),
+      ],
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        QTituloSeccion(
-          titulo: 'Hojas',
-          descripcion: porRevisar == 0
-              ? 'Todas revisadas'
-              : porRevisar == 1
-                  ? '1 por revisar'
-                  : '$porRevisar por revisar',
-        ),
+        titulo,
         const SizedBox(height: QEspacios.sm + 4),
         QTarjeta(
-          padding: EdgeInsets.zero,
-          child: Column(
-            children: [
-              for (var i = 0; i < ordenadas.length; i++) ...[
-                if (i > 0) const Divider(height: 1),
-                _FilaDeHoja(
-                  hoja: ordenadas[i],
-                  nombre: nombreDe(ordenadas[i]),
-                  elegida: ordenadas[i].hojaId == elegida,
-                  alElegir: () => alElegir(ordenadas[i]),
+          padding: hojas.isEmpty ? const EdgeInsets.all(QEspacios.lg) : EdgeInsets.zero,
+          child: hojas.isEmpty
+              ? Text(
+                  switch ((verPorRevisar, verRevisadas)) {
+                    (true, false) => 'No quedan hojas por revisar.',
+                    (false, true) => 'Todavía no hay hojas revisadas.',
+                    _ => 'No hay hojas para mostrar. Marque «Por revisar» o «Revisadas».',
+                  },
+                  style: textos.bodyMedium?.copyWith(color: QColores.textoSuave),
+                )
+              : Column(
+                  children: [
+                    for (var i = 0; i < hojas.length; i++) ...[
+                      if (i > 0) const Divider(height: 1),
+                      _FilaDeHoja(
+                        hoja: hojas[i],
+                        nombre: nombreDe(hojas[i]),
+                        elegida: hojas[i].hojaId == elegida,
+                        alElegir: () => alElegir(hojas[i]),
+                      ),
+                    ],
+                  ],
                 ),
-              ],
-            ],
-          ),
         ),
       ],
     );
@@ -550,22 +638,28 @@ class _FilaDeHoja extends StatelessWidget {
     final pendientes = hoja.pendientes;
     final nota = notaLegible(hoja.notaEnDecimas);
     final recibida = hoja.recibidaEn;
+    final editada = hoja.editadaEn;
     final estado = pendientes == 0
         ? 'Revisada'
         : pendientes == 1
             ? '1 pregunta por revisar'
             : '$pendientes preguntas por revisar';
+    final lineas = [
+      estado,
+      if (recibida != null) llegadaLegible(recibida),
+      if (editada != null) edicionLegible(editada),
+    ];
     return ListTile(
       selected: elegida,
       selectedTileColor: QColores.superficieAzul,
       onTap: alElegir,
-      isThreeLine: recibida != null,
+      isThreeLine: lineas.length > 1,
       leading: Icon(
         pendientes > 0 ? Icons.rate_review_outlined : Icons.task_alt_outlined,
         color: pendientes > 0 ? QColores.advertenciaTexto : QColores.exitoTexto,
       ),
       title: Text(nombre, maxLines: 2, overflow: TextOverflow.ellipsis),
-      subtitle: Text(recibida == null ? estado : '$estado\n${llegadaLegible(recibida)}'),
+      subtitle: Text(lineas.join('\n')),
       trailing: QChipEstado(
         texto: nota,
         tono: hoja.provisional ? QTono.advertencia : QTono.exito,

@@ -12,7 +12,13 @@ const _examenes = [
   ExamenConClave(examenId: 'QUIZ-3', habilitada: true),
 ];
 
-PreguntaEnRevision _pregunta(int numero, {String? resuelta, bool estaResuelta = false}) =>
+PreguntaEnRevision _pregunta(
+  int numero, {
+  String? resuelta,
+  bool estaResuelta = false,
+  String? sugerida,
+  DateTime? resueltaEn,
+}) =>
     PreguntaEnRevision(
       numero: numero,
       burbujas: const [
@@ -25,7 +31,36 @@ PreguntaEnRevision _pregunta(int numero, {String? resuelta, bool estaResuelta = 
       resuelta: estaResuelta,
       opcionResuelta: resuelta,
       resueltaPor: estaResuelta ? 'Docente de prueba' : null,
+      opcionSugerida: sugerida,
+      resueltaEn: resueltaEn,
     );
+
+/// Una hoja por revisar con la 7 preseleccionada en la C y la 9 confusa. Después de guardar, la 7
+/// vuelve resuelta con lo que se guardó, conservando su sugerencia.
+RevisionDelExamen _revisionConSugerida({String? guardada}) => RevisionDelExamen(
+      examenId: 'PROTOTIPO-R05',
+      hojas: [
+        HojaEnRevision(
+          hojaId: 'h-2',
+          notaEnDecimas: 23,
+          provisional: true,
+          codigoCompleto: true,
+          preguntas: [
+            _pregunta(7, sugerida: 'C', resuelta: guardada, estaResuelta: guardada != null),
+            _pregunta(9),
+          ],
+        ),
+      ],
+    );
+
+SegmentedButton<String> _selectorDe(WidgetTester tester, int numero) =>
+    tester.widget<SegmentedButton<String>>(find.descendant(
+      of: find.ancestor(
+        of: find.text('Pregunta $numero'),
+        matching: find.byWidgetPredicate((w) => w.runtimeType.toString() == '_TarjetaPregunta'),
+      ),
+      matching: find.byType(SegmentedButton<String>),
+    ));
 
 /// Dos hojas: la primera ya revisada y la segunda con dos preguntas por revisar.
 RevisionDelExamen _revision({bool resuelta = false}) => RevisionDelExamen(
@@ -59,6 +94,7 @@ Widget _pantalla({
   ValueNotifier<String?>? pedido,
   Map<String, String> nombres = const {'h-2': 'foto inclinada.jpg'},
   VoidCallback? alGuardar,
+  bool guardarFalla = false,
 }) {
   var resuelta = false;
   return MaterialApp(
@@ -68,6 +104,7 @@ Widget _pantalla({
         listarExamenes: () async => _examenes,
         consultarRevision: consultar ?? (examen) async => _revision(resuelta: resuelta),
         guardarRevision: (examen, hoja, por, opciones) async {
+          if (guardarFalla) throw const ExcepcionDeRevision('No se pudo contactar con el servidor.');
           guardados?.add((examen, hoja, por, opciones));
           resuelta = true;
           return const ResultadoDeHoja(
@@ -169,8 +206,8 @@ void main() {
     expect(find.text('hoja1.jpg'), findsWidgets);
     expect(find.text('1 pregunta por revisar\nSubida el 15 nov, 14:32'), findsOneWidget);
     expect(find.text('1 pregunta por revisar\nSubida el 16 nov, 14:32'), findsOneWidget);
-    // El detalle de la hoja elegida también lo dice.
-    expect(find.text('Subida el 15 nov, 14:32'), findsOneWidget);
+    // El detalle de la hoja elegida también lo dice: la más nueva, que es la de arriba.
+    expect(find.text('Subida el 16 nov, 14:32'), findsOneWidget);
   });
 
   testWidgets('Guarda lo elegido con el nombre del docente y recalcula', (tester) async {
@@ -223,6 +260,226 @@ void main() {
     await _tocar(tester, find.text('Guardar'));
 
     expect(guardados.single.$4, {3: 'A'});
+  });
+
+  group('Preselección (ADR-0024)', () {
+    testWidgets('Una pregunta con sugerencia llega marcada y se guarda con solo escribir el nombre',
+        (tester) async {
+      _fijarTamano(tester, const Size(1280, 1800));
+      final guardados = <_Guardado>[];
+      await tester.pumpWidget(_pantalla(
+        guardados: guardados,
+        consultar: (examen) async => _revisionConSugerida(guardada: guardados.isEmpty ? null : 'C'),
+      ));
+      await tester.pumpAndSettle();
+      await _elegirExamen(tester, 'PROTOTIPO-R05');
+
+      expect(_selectorDe(tester, 7).selected, {'C'});
+      expect(_selectorDe(tester, 9).selected, isEmpty);
+      expect(find.text('Escriba su nombre para guardar.'), findsOneWidget);
+
+      await tester.enterText(find.widgetWithText(TextField, 'Su nombre'), 'Docente de prueba');
+      await tester.pumpAndSettle();
+      expect(find.text('Se guardará 1 pregunta.'), findsOneWidget);
+      expect(_guardar(tester).enabled, isTrue);
+      await _tocar(tester, find.text('Guardar'));
+
+      final (examen, hoja, por, opciones) = guardados.single;
+      expect((examen, hoja, por), ('PROTOTIPO-R05', 'h-2', 'Docente de prueba'));
+      expect(opciones, {7: 'C'});
+    });
+
+    testWidgets('La nota provisional no cambia por las preseleccionadas', (tester) async {
+      _fijarTamano(tester, const Size(1280, 1800));
+      await tester.pumpWidget(_pantalla(consultar: (examen) async => _revisionConSugerida()));
+      await tester.pumpAndSettle();
+      await _elegirExamen(tester, 'PROTOTIPO-R05');
+
+      expect(_selectorDe(tester, 7).selected, {'C'});
+      expect(find.text('Nota provisional 2,3'), findsOneWidget);
+    });
+
+    testWidgets('Cambiar una preselección a Ninguna la envía como nula', (tester) async {
+      _fijarTamano(tester, const Size(1280, 1800));
+      final guardados = <_Guardado>[];
+      await tester.pumpWidget(_pantalla(
+        guardados: guardados,
+        consultar: (examen) async => _revisionConSugerida(),
+      ));
+      await tester.pumpAndSettle();
+      await _elegirExamen(tester, 'PROTOTIPO-R05');
+
+      await tester.enterText(find.widgetWithText(TextField, 'Su nombre'), 'Docente de prueba');
+      // Las confusas van primero: la 9 es la primera tarjeta y la 7 la segunda.
+      await _tocar(tester, find.text('Ninguna').at(1));
+      await _tocar(tester, find.text('Guardar'));
+
+      expect(guardados.single.$4, {7: null});
+    });
+
+    testWidgets('Si guardar falla, las preselecciones siguen marcadas', (tester) async {
+      _fijarTamano(tester, const Size(1280, 1800));
+      await tester.pumpWidget(_pantalla(
+        guardarFalla: true,
+        consultar: (examen) async => _revisionConSugerida(),
+      ));
+      await tester.pumpAndSettle();
+      await _elegirExamen(tester, 'PROTOTIPO-R05');
+
+      await tester.enterText(find.widgetWithText(TextField, 'Su nombre'), 'Docente de prueba');
+      await _tocar(tester, find.text('Guardar'));
+
+      expect(find.text('No se pudo contactar con el servidor.'), findsOneWidget);
+      expect(_selectorDe(tester, 7).selected, {'C'});
+      expect(_guardar(tester).enabled, isTrue);
+    });
+
+    testWidgets('Después de guardar se ve lo guardado y no la sugerencia', (tester) async {
+      _fijarTamano(tester, const Size(1280, 1800));
+      final guardados = <_Guardado>[];
+      await tester.pumpWidget(_pantalla(
+        guardados: guardados,
+        consultar: (examen) async => _revisionConSugerida(
+          guardada: guardados.isEmpty ? null : guardados.single.$4[7],
+        ),
+      ));
+      await tester.pumpAndSettle();
+      await _elegirExamen(tester, 'PROTOTIPO-R05');
+
+      await tester.enterText(find.widgetWithText(TextField, 'Su nombre'), 'Docente de prueba');
+      await _tocar(tester, find.text('A').at(1));
+      await _tocar(tester, find.text('Guardar'));
+
+      expect(guardados.single.$4, {7: 'A'});
+      expect(_selectorDe(tester, 7).selected, {'A'});
+      expect(_guardar(tester).enabled, isFalse, reason: 'nada cambió desde lo guardado');
+    });
+
+    testWidgets('Las confusas van antes que las preseleccionadas', (tester) async {
+      _fijarTamano(tester, const Size(1280, 1800));
+      await tester.pumpWidget(_pantalla(consultar: (examen) async => _revisionConSugerida()));
+      await tester.pumpAndSettle();
+      await _elegirExamen(tester, 'PROTOTIPO-R05');
+
+      expect(
+        tester.getTopLeft(find.text('Pregunta 9')).dy,
+        lessThan(tester.getTopLeft(find.text('Pregunta 7')).dy),
+      );
+    });
+  });
+
+  group('Lista de hojas', () {
+    /// Dos hojas con el mismo nombre: la de ayer ya revisada (editada esta mañana) y la de hoy por
+    /// revisar.
+    RevisionDelExamen fechadas(String examen) => RevisionDelExamen(
+          examenId: examen,
+          hojas: [
+            HojaEnRevision(
+              hojaId: 'h-1',
+              notaEnDecimas: 40,
+              provisional: false,
+              codigoCompleto: true,
+              preguntas: [
+                _pregunta(3,
+                    resuelta: 'B', estaResuelta: true, resueltaEn: DateTime(2026, 11, 19, 10, 5)),
+              ],
+              nombreArchivo: 'hoja1.jpg',
+              recibidaEn: DateTime(2026, 11, 18, 14, 32),
+            ),
+            HojaEnRevision(
+              hojaId: 'h-2',
+              notaEnDecimas: 23,
+              provisional: true,
+              codigoCompleto: true,
+              preguntas: [_pregunta(7)],
+              nombreArchivo: 'hoja1.jpg',
+              recibidaEn: DateTime(2026, 11, 19, 9, 0),
+            ),
+          ],
+        );
+    const revisada = 'Revisada\nSubida el 18 nov, 14:32\nEditada el 19 nov, 10:05';
+    const porRevisar = '1 pregunta por revisar\nSubida el 19 nov, 09:00';
+
+    testWidgets('La lista pone arriba la hoja más nueva y dice cuándo se editó', (tester) async {
+      _fijarTamano(tester, const Size(1280, 1800));
+      await tester.pumpWidget(_pantalla(consultar: (examen) async => fechadas(examen)));
+      await tester.pumpAndSettle();
+      await _elegirExamen(tester, 'PROTOTIPO-R05');
+
+      expect(find.text(revisada), findsOneWidget);
+      expect(
+        tester.getTopLeft(find.text(porRevisar)).dy,
+        lessThan(tester.getTopLeft(find.text(revisada)).dy),
+      );
+    });
+
+    testWidgets('Desmarcar Por revisar oculta la hoja abierta y abre la primera visible',
+        (tester) async {
+      _fijarTamano(tester, const Size(1280, 1800));
+      await tester.pumpWidget(_pantalla());
+      await tester.pumpAndSettle();
+      await _elegirExamen(tester, 'PROTOTIPO-R05');
+      expect(find.text('Pregunta 7'), findsOneWidget);
+
+      await _tocar(tester, find.widgetWithText(FilterChip, 'Por revisar'));
+
+      expect(find.text('Pregunta 7'), findsNothing);
+      expect(find.text('Pregunta 3'), findsOneWidget, reason: 'se abre la hoja revisada');
+      expect(find.text('1 por revisar'), findsOneWidget, reason: 'cuenta todas, no las filtradas');
+
+      await _tocar(tester, find.widgetWithText(FilterChip, 'Por revisar'));
+      expect(find.text('foto inclinada.jpg'), findsOneWidget, reason: 'vuelve a la lista');
+    });
+
+    testWidgets('Con los dos filtros desmarcados lo dice', (tester) async {
+      _fijarTamano(tester, const Size(1280, 1800));
+      await tester.pumpWidget(_pantalla());
+      await tester.pumpAndSettle();
+      await _elegirExamen(tester, 'PROTOTIPO-R05');
+
+      await _tocar(tester, find.widgetWithText(FilterChip, 'Por revisar'));
+      await _tocar(tester, find.widgetWithText(FilterChip, 'Revisadas'));
+
+      expect(
+        find.text('No hay hojas para mostrar. Marque «Por revisar» o «Revisadas».'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Pregunta'), findsNothing);
+      expect(find.text('1 por revisar'), findsOneWidget);
+    });
+
+    testWidgets('Con un solo filtro y nada que mostrar, dice qué falta', (tester) async {
+      _fijarTamano(tester, const Size(1280, 1800));
+      var revisadas = true;
+      await tester.pumpWidget(_pantalla(
+        consultar: (examen) async =>
+            revisadas ? _revision(resuelta: true) : _revisionConSugerida(),
+      ));
+      await tester.pumpAndSettle();
+      await _elegirExamen(tester, 'PROTOTIPO-R05');
+
+      // Todo revisado y solo «Por revisar» marcado: el final de una sesión.
+      await _tocar(tester, find.widgetWithText(FilterChip, 'Revisadas'));
+      expect(find.text('No quedan hojas por revisar.'), findsOneWidget);
+
+      // Nada revisado y solo «Revisadas» marcado.
+      revisadas = false;
+      await _elegirExamen(tester, 'QUIZ-3');
+      await _tocar(tester, find.widgetWithText(FilterChip, 'Revisadas'));
+      await _tocar(tester, find.widgetWithText(FilterChip, 'Por revisar'));
+      expect(find.text('Todavía no hay hojas revisadas.'), findsOneWidget);
+    });
+
+    testWidgets('En el teléfono caben los filtros y las tres líneas de cada hoja', (tester) async {
+      _fijarTamano(tester, const Size(390, 900));
+      await tester.pumpWidget(_pantalla(consultar: (examen) async => fechadas(examen)));
+      await tester.pumpAndSettle();
+      await _elegirExamen(tester, 'PROTOTIPO-R05');
+
+      expect(find.widgetWithText(FilterChip, 'Revisadas'), findsOneWidget);
+      expect(find.text(revisada), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
   });
 
   testWidgets('Un examen sin dudas lo dice', (tester) async {
