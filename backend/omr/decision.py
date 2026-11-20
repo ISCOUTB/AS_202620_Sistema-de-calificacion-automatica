@@ -28,6 +28,23 @@ decisión posible, que no llegó al umbral; si solo hay una burbuja con algo, co
 burbuja, que es como la muestra la pantalla («la de su lectura más fuerte»). El sistema nunca
 elige entre candidatas (RF-03): `UNA_MARCA` exige descartar las demás con la misma confianza con
 que se acepta la elegida.
+
+**La sugerencia** (ADR-0024). Una pregunta que va a revisión (`DUDOSA` o `DOBLE_MARCA`) puede llegar
+con una opción ya elegida en la pantalla, para que el profesor solo la mire y guarde. Una burbuja
+cuenta como intención si su confianza llega al **corte de intención**, 40 por omisión
+(`OMR_CORTE_DE_INTENCION` en el worker). Si exactamente una burbuja de la fila llega, esa es la
+`opcion_sugerida`; con dos o más, o con ninguna, no hay sugerencia y la pregunta es de las confusas.
+La sugerencia no es la respuesta: la nota no la cuenta hasta que el profesor guarda.
+
+En las tres fotos del prototipo (R-05), lo que quedó al borrar dio de 2 a 35 de confianza y toda
+marca real (chulo, X, media burbuja, lápiz sin apretar, marca completa con brillo), 50 o más. El
+corte va de 31 a 50: con 30 o menos, una burbuja que la curva da por vacía contaría como
+intención, y por encima de 50 dejaría de contar una burbuja que la lectura no vio bien (la que
+queda en 50 por brillo o contorno), que en las fotos siempre fue una marca.
+
+**El código del estudiante** usa el mismo corte, pero ahí la intención decide: una columna con
+exactamente una burbuja que llega al corte da ese dígito sin pasar por el profesor, porque la
+pantalla no tiene revisión del código. Con dos o con ninguna, la columna queda por revisar.
 """
 
 from infraestructura.modelo import (
@@ -51,7 +68,10 @@ __all__ = [
     "clasificar_burbuja",
     "decidir_pregunta",
     "decidir_codigo",
+    "sugerir_opcion",
     "comprobar_umbral_de_confianza",
+    "comprobar_corte_de_intencion",
+    "CORTE_DE_INTENCION_POR_OMISION",
 ]
 
 # Hasta qué relleno una burbuja se ve vacía y desde cuál se ve completa. Con el relleno que mide
@@ -82,6 +102,9 @@ CONFIANZA_EN_EL_CORTE_DE_COMPLETA = 70
 DISPERSION_MINIMA_PARA_DUDAR = 0.07
 CONTORNO_MINIMO_DE_UNA_VACIA = 0.3
 CONFIANZA_DE_UNA_BURBUJA_EN_DUDA = 50
+# Desde qué confianza una burbuja cuenta como intención, para la sugerencia y el código
+# (ADR-0024): entre lo borrado de las fotos (hasta 35) y la marca real más débil (50).
+CORTE_DE_INTENCION_POR_OMISION = 40
 
 
 def clasificar_burbuja(
@@ -115,31 +138,52 @@ def clasificar_burbuja(
 
 
 def decidir_pregunta(
-    numero: int, burbujas: tuple[LecturaDeBurbuja, ...], umbral_de_confianza: int
+    numero: int,
+    burbujas: tuple[LecturaDeBurbuja, ...],
+    umbral_de_confianza: int,
+    corte_de_intencion: int = CORTE_DE_INTENCION_POR_OMISION,
 ) -> LecturaDePregunta:
-    """Decide una fila: `UNA_MARCA` con su opción, `SIN_MARCA`, `DOBLE_MARCA` o `DUDOSA`."""
+    """Decide una fila: `UNA_MARCA` con su opción, `SIN_MARCA`, `DOBLE_MARCA` o `DUDOSA`. Las dos
+    últimas van a revisión y llevan `opcion_sugerida` si una sola burbuja llega al corte."""
     comprobar_umbral_de_confianza(umbral_de_confianza)
+    comprobar_corte_de_intencion(corte_de_intencion)
     estado, opcion, confianza = _decidir(burbujas, umbral_de_confianza)
-    return LecturaDePregunta(numero, estado, opcion, confianza, burbujas)
+    sugerida = (
+        sugerir_opcion(burbujas, corte_de_intencion) if estado in (DUDOSA, DOBLE_MARCA) else None
+    )
+    return LecturaDePregunta(numero, estado, opcion, confianza, burbujas, sugerida)
+
+
+def sugerir_opcion(burbujas: tuple[LecturaDeBurbuja, ...], corte: int) -> str | None:
+    """La opción de la única burbuja con confianza de al menos `corte`, o `None` si llegan dos o
+    más, o ninguna: entre candidatas no se elige (RF-03)."""
+    intenciones = [burbuja.opcion for burbuja in burbujas if burbuja.confianza >= corte]
+    return intenciones[0] if len(intenciones) == 1 else None
 
 
 def decidir_codigo(
-    columnas: tuple[tuple[LecturaDeBurbuja, ...], ...], umbral_de_confianza: int
+    columnas: tuple[tuple[LecturaDeBurbuja, ...], ...],
+    umbral_de_confianza: int,
+    corte_de_intencion: int = CORTE_DE_INTENCION_POR_OMISION,
 ) -> LecturaDelCodigo:
-    """Decide el código del estudiante, columna por columna, con la misma regla que una pregunta.
+    """Decide el código del estudiante, columna por columna.
 
-    Si alguna columna no queda con una sola marca confiable, el código es `CODIGO_INCOMPLETO` y la
-    columna va en `columnas_por_revisar`. El valor es la `T` seguida de los ocho dígitos; en un
-    código incompleto lleva `?` en las columnas por revisar, para que el profesor vea lo que sí se
-    leyó."""
+    Una columna da su dígito si es `UNA_MARCA`, como una pregunta, o si exactamente una burbuja
+    llega al corte de intención (ADR-0024). Si alguna columna no da dígito, el código es
+    `CODIGO_INCOMPLETO` y la columna va en `columnas_por_revisar`. El valor es la `T` seguida de
+    los ocho dígitos; en un código incompleto lleva `?` en las columnas por revisar, para que el
+    profesor vea lo que sí se leyó."""
     comprobar_umbral_de_confianza(umbral_de_confianza)
+    comprobar_corte_de_intencion(corte_de_intencion)
     if not columnas:
         raise ValueError("Un código sin columnas no se puede decidir")
     digitos = []
     por_revisar = []
     for posicion, burbujas in enumerate(columnas, start=1):
         estado, digito, _ = _decidir(burbujas, umbral_de_confianza)
-        if estado == UNA_MARCA and digito is not None:
+        if estado != UNA_MARCA:
+            digito = sugerir_opcion(burbujas, corte_de_intencion)
+        if digito is not None:
             digitos.append(digito)
         else:
             digitos.append("?")
@@ -182,6 +226,17 @@ def _decidir(
     if sin_marca >= umbral:
         return SIN_MARCA, None, sin_marca
     return DUDOSA, None, max(una_marca, sin_marca)
+
+
+def comprobar_corte_de_intencion(corte: int) -> int:
+    """Devuelve el corte de intención si la regla lo admite (de 31 a 50), o lanza `ValueError`. El
+    worker la llama al arrancar, como con el umbral."""
+    if not CONFIANZA_EN_EL_CORTE_DE_VACIA < corte <= CONFIANZA_DE_UNA_BURBUJA_EN_DUDA:
+        raise ValueError(
+            f"El corte de intención va de {CONFIANZA_EN_EL_CORTE_DE_VACIA + 1} a "
+            f"{CONFIANZA_DE_UNA_BURBUJA_EN_DUDA}, y llegó {corte}"
+        )
+    return corte
 
 
 def comprobar_umbral_de_confianza(umbral: int) -> int:

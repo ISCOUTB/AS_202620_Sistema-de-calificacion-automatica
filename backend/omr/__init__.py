@@ -5,7 +5,11 @@ Importa: infraestructura, identidad
 Posee: LecturaDeBurbuja, LecturaDePregunta, LecturaDelCodigo, LecturaDeHoja
 """
 
-from omr.decision import comprobar_umbral_de_confianza
+from omr.decision import (
+    CORTE_DE_INTENCION_POR_OMISION,
+    comprobar_corte_de_intencion,
+    comprobar_umbral_de_confianza,
+)
 from omr.errores import (
     FormatoNoSoportado,
     HojaNoReconocida,
@@ -23,6 +27,8 @@ __all__ = [
     "leer_hoja",
     "leer_hoja_con_recortes",
     "comprobar_umbral_de_confianza",
+    "comprobar_corte_de_intencion",
+    "CORTE_DE_INTENCION_POR_OMISION",
     "FormatoDeHoja",
     "Cuadricula",
     "FORMATO_V1",

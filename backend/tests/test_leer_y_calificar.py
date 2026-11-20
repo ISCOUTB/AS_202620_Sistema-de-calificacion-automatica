@@ -100,7 +100,7 @@ def leer(monkeypatch):
 
     def fijar(resultado):
         def leer_hoja_con_recortes(
-            contenido: bytes, umbral_de_confianza: int
+            contenido: bytes, umbral_de_confianza: int, corte_de_intencion: int = 40
         ) -> tuple[LecturaDeHoja, dict[int, bytes]]:
             if isinstance(resultado, Exception):
                 raise resultado
@@ -259,6 +259,34 @@ def test_la_fila_de_cada_pregunta_en_revision_queda_recortada_en_el_almacen(tmp_
     assert estado == EN_REVISION
     assert list(hecho["recortes"]) == ["7"]
     assert almacen.leer(hecho["recortes"]["7"])[:4] == bytes([0x89]) + b"PNG"
+
+
+def test_el_registro_guarda_la_sugerencia_y_el_corte(tmp_path):
+    """ADR-0024: la ruta de revisión lee la sugerencia del registro, así que tiene que quedar ahí,
+    con el corte con que se decidió."""
+    imagen = fotografiar(hoja_marcada({}, "12345678", a_medias=((1, "C"),)))
+
+    estado, [hecho] = _procesar_imagen(tmp_path, imagen, Claves(_clave(1)))
+
+    assert estado == EN_REVISION
+    assert hecho["lectura"]["preguntas"][0]["opcion_sugerida"] == "C"
+    assert hecho["lectura"]["corte_de_intencion"] == 40
+
+
+def test_el_worker_lee_con_el_corte_que_le_pasan(tmp_path):
+    imagen = fotografiar(hoja_marcada({}, "12345678", a_medias=((1, "C"),)))
+    ruta = tmp_path / "resultados.jsonl"
+
+    worker_main.leer_y_calificar(
+        imagen, TRABAJO, Claves(_clave(1)), ResultadosEnDisco(ruta), 70, corte_de_intencion=50
+    )
+
+    [hecho] = [json.loads(linea) for linea in ruta.read_text(encoding="utf-8").splitlines()]
+    assert hecho["lectura"]["corte_de_intencion"] == 50
+
+
+def test_el_corte_del_worker_es_40_por_omision():
+    assert worker_main.CORTE_DE_INTENCION == 40
 
 
 def test_una_imagen_que_no_es_una_hoja_queda_ilegible_con_el_motivo(tmp_path):

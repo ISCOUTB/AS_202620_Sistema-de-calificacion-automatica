@@ -82,7 +82,13 @@ from infraestructura.resultados import (
     ResultadosEnDisco,
     estado_tras_la_lectura,
 )
-from omr import LecturaImposible, comprobar_umbral_de_confianza, leer_hoja_con_recortes
+from omr import (
+    CORTE_DE_INTENCION_POR_OMISION,
+    LecturaImposible,
+    comprobar_corte_de_intencion,
+    comprobar_umbral_de_confianza,
+    leer_hoja_con_recortes,
+)
 
 configurar_registro()
 logger = logging.getLogger("worker")
@@ -102,6 +108,12 @@ RUTA_CLAVES = os.environ.get("RUTA_CLAVES", RUTA_CLAVES_POR_OMISION)
 RUTA_RESULTADOS = os.environ.get("RUTA_RESULTADOS", RUTA_RESULTADOS_POR_OMISION)
 UMBRAL_DE_CONFIANZA = comprobar_umbral_de_confianza(
     int(os.environ.get("OMR_UMBRAL_DE_CONFIANZA", "70"))
+)
+# Desde qué confianza una burbuja cuenta como intención: la única de una pregunta en revisión llega
+# preseleccionada y la única de una columna del código da el dígito (ADR-0024). Es configuración
+# por la misma razón que el umbral, y se comprueba igual, al arrancar (de 31 a 50).
+CORTE_DE_INTENCION = comprobar_corte_de_intencion(
+    int(os.environ.get("OMR_CORTE_DE_INTENCION", str(CORTE_DE_INTENCION_POR_OMISION)))
 )
 ESPERA_TRAS_ERROR_SEGUNDOS = 5
 # Cuánto bloquea `tomar` esperando un trabajo. Con reintentos programados se espera menos, para
@@ -247,7 +259,15 @@ def atender_una_vez(
         },
     )
     try:
-        leer_y_calificar(contenido, trabajo, claves, resultados, UMBRAL_DE_CONFIANZA, almacen)
+        leer_y_calificar(
+            contenido,
+            trabajo,
+            claves,
+            resultados,
+            UMBRAL_DE_CONFIANZA,
+            almacen,
+            corte_de_intencion=CORTE_DE_INTENCION,
+        )
     except OSError as error:
         motivo = f"No se pudo leer la clave o guardar el resultado: {type(error).__name__}: {error}"
         return _reintentar_o_descartar(cliente, cola, crudo, trabajo, motivo, reloj, azar)
@@ -310,6 +330,7 @@ def leer_y_calificar(
     resultados: RegistroDeResultados,
     umbral_de_confianza: int,
     almacen: AlmacenDeImagenes | None = None,
+    corte_de_intencion: int = CORTE_DE_INTENCION_POR_OMISION,
 ) -> str:
     """El paso que sigue a abrir la imagen: `omr` lee, `calificacion` califica y el resultado
     queda en el registro. Devuelve el estado final de la hoja: `CALIFICADA`, `EN_REVISION`,
@@ -343,7 +364,9 @@ def leer_y_calificar(
     rastro = {"trabajo": trabajo.id, "hoja": hoja_id, "intento": trabajo.intento}
 
     try:
-        lectura, recortes = leer_hoja_con_recortes(contenido, umbral_de_confianza)
+        lectura, recortes = leer_hoja_con_recortes(
+            contenido, umbral_de_confianza, corte_de_intencion=corte_de_intencion
+        )
     except LecturaImposible as error:
         resultados.registrar_lectura_imposible(hoja_id, trabajo.id, examen_id, error.motivo)
         logger.warning(
