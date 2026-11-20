@@ -25,6 +25,11 @@ Cada pregunta termina en uno de tres resultados:
 - **error silencioso:** una respuesta asignada que no era, o una marca leída como vacía. Es lo que
   EC-02 y QG-3 prohíben.
 
+Desde ADR-0024 cuenta además cómo llega a la pantalla cada pregunta que va a revisión:
+**preseleccionada bien** (con lo que quiso el estudiante), **confusa** (sin sugerencia) o con una
+**sugerencia equivocada**. No cambia cómo se generan las hojas: con la misma semilla, EC-01 y EC-02
+dan lo mismo que antes.
+
 Uso, desde backend/
 -------------------
     python -m herramientas.medir_lectura                       # 300 hojas, semilla 2026
@@ -60,9 +65,10 @@ from herramientas.hojas_sinteticas import (
 )
 from herramientas.rutas import ruta_en_el_repositorio
 from infraestructura.modelo import DOBLE_MARCA, DUDOSA, SIN_MARCA, UNA_MARCA
-from omr import FORMATO_V1, LecturaImposible, leer_hoja
+from omr import CORTE_DE_INTENCION_POR_OMISION, FORMATO_V1, LecturaImposible, leer_hoja
 
 UMBRAL = 70
+CORTE = CORTE_DE_INTENCION_POR_OMISION
 OPCIONES = "ABCD"
 
 # Cómo se marcó cada pregunta y con qué frecuencia. Las claras son la mayoría, como en un examen.
@@ -194,9 +200,19 @@ def juzgar(pregunta: Pregunta, estado: str, opcion: str | None) -> str:
     return "bien" if estado in (DUDOSA, DOBLE_MARCA) else "error_silencioso"
 
 
+def juzgar_sugerencia(pregunta: Pregunta, sugerida: str | None) -> str:
+    """`confusa` (sin sugerencia), `bien` (la que quiso el estudiante) o `equivocada`, para una
+    pregunta que fue a revisión (ADR-0024). Donde no quiso ninguna, toda sugerencia es equivocada."""
+    if sugerida is None:
+        return "confusa"
+    return "bien" if sugerida == pregunta.opcion else "equivocada"
+
+
 def medir(hojas: int = 300, semilla: int = 2026) -> dict:
     azar = np.random.default_rng(semilla)
     resultados: dict[str, Counter[str]] = {caso: Counter() for caso in CASOS}
+    preseleccion: dict[str, Counter[str]] = {caso: Counter() for caso in CASOS}
+    equivocadas = []
     silenciosos = []
     ilegibles: Counter[str] = Counter()
     codigos: Counter[str] = Counter()
@@ -216,6 +232,13 @@ def medir(hojas: int = 300, semilla: int = 2026) -> dict:
             if juicio == "error_silencioso":
                 silenciosos.append({"hoja": indice, "pregunta": leida.numero, "caso": pregunta.caso,
                                     "esperada": pregunta.opcion, "leida": [leida.estado, leida.opcion]})
+            if leida.estado in (DUDOSA, DOBLE_MARCA):
+                sugerencia = juzgar_sugerencia(pregunta, leida.opcion_sugerida)
+                preseleccion[pregunta.caso][sugerencia] += 1
+                if sugerencia == "equivocada":
+                    equivocadas.append({"hoja": indice, "pregunta": leida.numero,
+                                        "caso": pregunta.caso, "esperada": pregunta.opcion,
+                                        "sugerida": leida.opcion_sugerida})
         valor = lectura.codigo.valor or ""
         if valor == "T" + codigo:
             codigos["completo_y_correcto"] += 1
@@ -249,6 +272,12 @@ def medir(hojas: int = 300, semilla: int = 2026) -> dict:
             "p95": round(float(np.percentile(duraciones, 95)), 1) if duraciones else None,
         },
         "detalle_de_los_errores_silenciosos": silenciosos[:50],
+        "corte_de_intencion": CORTE,
+        "preseleccion_por_caso": {
+            caso: dict(conteo) for caso, conteo in preseleccion.items() if conteo
+        },
+        "sugerencias_equivocadas": len(equivocadas),
+        "detalle_de_las_sugerencias_equivocadas": equivocadas[:50],
     }
 
 

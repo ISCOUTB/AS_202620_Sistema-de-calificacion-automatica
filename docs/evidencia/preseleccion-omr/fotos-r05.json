@@ -1,0 +1,381 @@
+{
+  "umbral_de_confianza": 70,
+  "corte_de_intencion": 40,
+  "fotos": {
+    "foto desde arriba": {
+      "en_revision": 4,
+      "preseleccionadas_bien": 3,
+      "confusas": 1,
+      "equivocadas": 0,
+      "codigo_completo": true,
+      "codigo_coincide_con_la_hoja": true,
+      "columnas_del_codigo_por_revisar": [],
+      "preguntas": [
+        {
+          "pregunta": 32,
+          "estado": "doble_marca",
+          "sugerida": null,
+          "juicio": "confusa",
+          "confianzas": {
+            "A": 99,
+            "B": 0,
+            "C": 100,
+            "D": 0
+          }
+        },
+        {
+          "pregunta": 36,
+          "estado": "dudosa",
+          "sugerida": "C",
+          "juicio": "preseleccionada_bien",
+          "confianzas": {
+            "A": 0,
+            "B": 0,
+            "C": 50,
+            "D": 0
+          }
+        },
+        {
+          "pregunta": 38,
+          "estado": "dudosa",
+          "sugerida": "B",
+          "juicio": "preseleccionada_bien",
+          "confianzas": {
+            "A": 0,
+            "B": 63,
+            "C": 0,
+            "D": 0
+          }
+        },
+        {
+          "pregunta": 39,
+          "estado": "dudosa",
+          "sugerida": "D",
+          "juicio": "preseleccionada_bien",
+          "confianzas": {
+            "A": 0,
+            "B": 0,
+            "C": 0,
+            "D": 51
+          }
+        }
+      ]
+    },
+    "foto inclinada 30°": {
+      "en_revision": 19,
+      "preseleccionadas_bien": 18,
+      "confusas": 1,
+      "equivocadas": 0,
+      "codigo_completo": true,
+      "codigo_coincide_con_la_hoja": true,
+      "columnas_del_codigo_por_revisar": [],
+      "preguntas": [
+        {
+          "pregunta": 1,
+          "estado": "dudosa",
+          "sugerida": "A",
+          "juicio": "preseleccionada_bien",
+          "confianzas": {
+            "A": 64,
+            "B": 0,
+            "C": 0,
+            "D": 0
+          }
+        },
+        {
+          "pregunta": 2,
+          "estado": "dudosa",
+          "sugerida": "B",
+          "juicio": "preseleccionada_bien",
+          "confianzas": {
+            "A": 0,
+            "B": 50,
+            "C": 0,
+            "D": 0
+          }
+        },
+        {
+          "pregunta": 3,
+          "estado": "dudosa",
+          "sugerida": "C",
+          "juicio": "preseleccionada_bien",
+          "confianzas": {
+            "A": 0,
+            "B": 0,
+            "C": 50,
+            "D": 0
+          }
+        },
+        {
+          "pregunta": 4,
+          "estado": "dudosa",
+          "sugerida": "D",
+          "juicio": "preseleccionada_bien",
+          "confianzas": {
+            "A": 0,
+            "B": 0,
+            "C": 0,
+            "D": 50
+          }
+        },
+        {
+          "pregunta": 5,
+          "estado": "dudosa",
+          "sugerida": "A",
+          "juicio": "preseleccionada_bien",
+          "confianzas": {
+            "A": 53,
+            "B": 0,
+            "C": 0,
+            "D": 0
+          }
+        },
+        {
+          "pregunta": 6,
+          "estado": "dudosa",
+          "sugerida": "B",
+          "juicio": "preseleccionada_bien",
+          "confianzas": {
+            "A": 0,
+            "B": 50,
+            "C": 0,
+            "D": 0
+          }
+        },
+        {
+          "pregunta": 7,
+          "estado": "dudosa",
+          "sugerida": "C",
+          "juicio": "preseleccionada_bien",
+          "confianzas": {
+            "A": 0,
+            "B": 0,
+            "C": 51,
+            "D": 0
+          }
+        },
+        {
+          "pregunta": 8,
+          "estado": "dudosa",
+          "sugerida": "D",
+          "juicio": "preseleccionada_bien",
+          "confianzas": {
+            "A": 0,
+            "B": 0,
+            "C": 0,
+            "D": 50
+          }
+        },
+        {
+          "pregunta": 9,
+          "estado": "dudosa",
+          "sugerida": "A",
+          "juicio": "preseleccionada_bien",
+          "confianzas": {
+            "A": 63,
+            "B": 0,
+            "C": 0,
+            "D": 0
+          }
+        },
+        {
+          "pregunta": 10,
+          "estado": "dudosa",
+          "sugerida": "B",
+          "juicio": "preseleccionada_bien",
+          "confianzas": {
+            "A": 0,
+            "B": 63,
+            "C": 0,
+            "D": 0
+          }
+        },
+        {
+          "pregunta": 11,
+          "estado": "dudosa",
+          "sugerida": "C",
+          "juicio": "preseleccionada_bien",
+          "confianzas": {
+            "A": 0,
+            "B": 0,
+            "C": 52,
+            "D": 0
+          }
+        },
+        {
+          "pregunta": 12,
+          "estado": "dudosa",
+          "sugerida": "D",
+          "juicio": "preseleccionada_bien",
+          "confianzas": {
+            "A": 0,
+            "B": 0,
+            "C": 0,
+            "D": 58
+          }
+        },
+        {
+          "pregunta": 32,
+          "estado": "dudosa",
+          "sugerida": null,
+          "juicio": "confusa",
+          "confianzas": {
+            "A": 50,
+            "B": 0,
+            "C": 54,
+            "D": 0
+          }
+        },
+        {
+          "pregunta": 33,
+          "estado": "dudosa",
+          "sugerida": "B",
+          "juicio": "preseleccionada_bien",
+          "confianzas": {
+            "A": 0,
+            "B": 54,
+            "C": 0,
+            "D": 0
+          }
+        },
+        {
+          "pregunta": 34,
+          "estado": "dudosa",
+          "sugerida": "B",
+          "juicio": "preseleccionada_bien",
+          "confianzas": {
+            "A": 0,
+            "B": 51,
+            "C": 0,
+            "D": 7
+          }
+        },
+        {
+          "pregunta": 36,
+          "estado": "dudosa",
+          "sugerida": "C",
+          "juicio": "preseleccionada_bien",
+          "confianzas": {
+            "A": 0,
+            "B": 0,
+            "C": 50,
+            "D": 0
+          }
+        },
+        {
+          "pregunta": 37,
+          "estado": "dudosa",
+          "sugerida": "C",
+          "juicio": "preseleccionada_bien",
+          "confianzas": {
+            "A": 0,
+            "B": 0,
+            "C": 50,
+            "D": 0
+          }
+        },
+        {
+          "pregunta": 38,
+          "estado": "dudosa",
+          "sugerida": "B",
+          "juicio": "preseleccionada_bien",
+          "confianzas": {
+            "A": 0,
+            "B": 61,
+            "C": 0,
+            "D": 0
+          }
+        },
+        {
+          "pregunta": 39,
+          "estado": "dudosa",
+          "sugerida": "D",
+          "juicio": "preseleccionada_bien",
+          "confianzas": {
+            "A": 0,
+            "B": 0,
+            "C": 0,
+            "D": 50
+          }
+        }
+      ]
+    },
+    "foto sombra": {
+      "en_revision": 5,
+      "preseleccionadas_bien": 4,
+      "confusas": 1,
+      "equivocadas": 0,
+      "codigo_completo": true,
+      "codigo_coincide_con_la_hoja": true,
+      "columnas_del_codigo_por_revisar": [],
+      "preguntas": [
+        {
+          "pregunta": 32,
+          "estado": "doble_marca",
+          "sugerida": null,
+          "juicio": "confusa",
+          "confianzas": {
+            "A": 100,
+            "B": 0,
+            "C": 100,
+            "D": 0
+          }
+        },
+        {
+          "pregunta": 34,
+          "estado": "dudosa",
+          "sugerida": "B",
+          "juicio": "preseleccionada_bien",
+          "confianzas": {
+            "A": 0,
+            "B": 100,
+            "C": 0,
+            "D": 35
+          }
+        },
+        {
+          "pregunta": 36,
+          "estado": "dudosa",
+          "sugerida": "C",
+          "juicio": "preseleccionada_bien",
+          "confianzas": {
+            "A": 0,
+            "B": 0,
+            "C": 50,
+            "D": 0
+          }
+        },
+        {
+          "pregunta": 38,
+          "estado": "dudosa",
+          "sugerida": "B",
+          "juicio": "preseleccionada_bien",
+          "confianzas": {
+            "A": 0,
+            "B": 65,
+            "C": 0,
+            "D": 0
+          }
+        },
+        {
+          "pregunta": 39,
+          "estado": "dudosa",
+          "sugerida": "D",
+          "juicio": "preseleccionada_bien",
+          "confianzas": {
+            "A": 0,
+            "B": 0,
+            "C": 0,
+            "D": 54
+          }
+        }
+      ]
+    }
+  },
+  "total": {
+    "en_revision": 28,
+    "preseleccionadas_bien": 25,
+    "confusas": 3,
+    "equivocadas": 0
+  }
+}
