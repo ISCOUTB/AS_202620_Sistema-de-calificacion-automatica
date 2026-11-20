@@ -5,10 +5,13 @@ Es una proyección, como `dashboard.resultados`: se calcula en cada consulta a p
 resultados (el último hecho de cada hoja) y del de revisiones. Una hoja sigue apareciendo después de
 resuelta, para que el profesor pueda cambiar de opinión.
 
-**Sin la clave y sin el código del estudiante.** La ruta que la publica es pública hasta A-05
-(AM-02): el profesor dice qué marcó el estudiante y `calificacion` decide si es correcto, así que
-aquí no viaja la respuesta correcta. Solo entran las hojas con nota: sin clave no hay nada que
-recalcular.
+**Sin la clave.** La ruta que la publica es pública hasta A-05 (AM-02): el profesor dice qué marcó
+el estudiante y `calificacion` decide si es correcto, así que aquí no viaja la respuesta correcta.
+Solo entran las hojas con nota: sin clave no hay nada que recalcular.
+
+**Con el código del estudiante**, tal como se leyó (con `?` en los dígitos que no se leyeron): es
+como el profesor reconoce de quién es la hoja. Mientras no exista A-05 la ruta es pública, así que
+el riesgo se acepta con la misma condición que el resto de AM-02: ninguna hoja real antes.
 
 **Con el nombre del archivo y la hora en que llegó**, que salen de la bitácora de recepción
 (`LectorDeRecepciones`): el `hoja_id` no le dice nada al profesor, y los nombres se repiten de un
@@ -66,7 +69,8 @@ class PreguntaEnRevision:
 @dataclass(frozen=True)
 class HojaEnRevision:
     """Una hoja con preguntas en revisión y su nota vigente, con lo resuelto hasta ahora.
-    `nombre_archivo` y `recibida_en` son None si la bitácora no tiene la línea de la hoja."""
+    `nombre_archivo` y `recibida_en` son None si la bitácora no tiene la línea de la hoja, y
+    `codigo` si la lectura no lo trae."""
 
     hoja_id: str
     nota_en_decimas: int
@@ -75,6 +79,7 @@ class HojaEnRevision:
     preguntas: tuple[PreguntaEnRevision, ...]
     nombre_archivo: str | None = None
     recibida_en: datetime | None = None
+    codigo: str | None = None
 
 
 @dataclass(frozen=True)
@@ -126,15 +131,17 @@ def revision_del_examen(
                 )
             )
         llegada = llegadas.get(hoja_id)
+        codigo = lectura.get("codigo") or {}
         hojas.append(
             HojaEnRevision(
                 hoja_id=hoja_id,
                 nota_en_decimas=nota.nota_en_decimas,
                 provisional=nota.provisional,
-                codigo_completo=(lectura.get("codigo") or {}).get("estado") == CODIGO_COMPLETO,
+                codigo_completo=codigo.get("estado") == CODIGO_COMPLETO,
                 preguntas=tuple(preguntas),
                 nombre_archivo=None if llegada is None else llegada.nombre_archivo,
                 recibida_en=None if llegada is None else llegada.recibida_en,
+                codigo=codigo.get("valor"),
             )
         )
     return RevisionDelExamen(examen_id=examen_id, hojas=tuple(hojas))

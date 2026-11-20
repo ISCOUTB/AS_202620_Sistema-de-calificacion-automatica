@@ -266,7 +266,7 @@ class PreguntaEnRevisionEnRespuesta(BaseModel):
 
 
 class HojaEnRevisionEnRespuesta(BaseModel):
-    """Una hoja con preguntas en revision, con su nota vigente. Sin el codigo del estudiante."""
+    """Una hoja con preguntas en revision, con su nota vigente y el codigo del estudiante."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -281,6 +281,14 @@ class HojaEnRevisionEnRespuesta(BaseModel):
     )
     recibida_en: datetime | None = Field(
         default=None, description="Cuando quedo registrada la hoja, en UTC; nulo si no se sabe."
+    )
+    codigo: str | None = Field(
+        default=None,
+        description=(
+            "El codigo del estudiante tal como se leyo: la T y ocho digitos, con ? en los que no se"
+            " leyeron. Nulo si la lectura no lo trae. Es un dato personal: la ruta es publica hasta"
+            " A-05, y por eso solo se cargan hojas sinteticas (AM-02)."
+        ),
     )
 
 

@@ -10,7 +10,6 @@ import '../../../common/widgets/q_encabezado_pantalla.dart';
 import '../../../common/widgets/q_estado_vacio.dart';
 import '../../../common/widgets/q_pagina.dart';
 import '../../../common/widgets/q_tarjeta.dart';
-import '../../../common/widgets/q_titulo_seccion.dart';
 import '../../carga/data/servicio_examenes.dart';
 import '../../carga/data/servicio_resultados.dart';
 import '../../carga/views/widgets/tarjeta_examen.dart';
@@ -20,7 +19,8 @@ import '../data/servicio_revision.dart';
 /// decidir, y en cada pregunta el recorte de su fila para que el docente diga qué marcó el
 /// estudiante. El sistema decide con la clave si es correcto y recalcula la nota.
 ///
-/// La pantalla no recibe la clave ni el código del estudiante: las rutas son públicas hasta A-05.
+/// La pantalla no recibe la clave. Sí recibe el código del estudiante, que es como el docente sabe
+/// de quién es cada hoja: hasta A-05 la ruta es pública, y por eso solo se cargan hojas sintéticas.
 /// El nombre que escribe el docente queda con cada decisión (RF-10), sin verificar hasta entonces.
 class PantallaRevision extends StatefulWidget {
   const PantallaRevision({
@@ -476,9 +476,26 @@ class _PantallaRevisionState extends State<PantallaRevision> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        QTituloSeccion(
-          titulo: _nombreDe(hoja),
-          descripcion: hoja.provisional ? 'Nota provisional $nota' : 'Nota $nota',
+        // El código va a la derecha, en la línea del nombre: es lo que dice de quién es la hoja.
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: [
+            Expanded(child: Text(_nombreDe(hoja), style: textos.headlineSmall)),
+            if (hoja.codigo case final codigo?) ...[
+              const SizedBox(width: QEspacios.md),
+              _CodigoDelEstudiante(
+                codigo: codigo,
+                completo: hoja.codigoCompleto,
+                estilo: textos.titleMedium,
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 2),
+        Text(
+          hoja.provisional ? 'Nota provisional $nota' : 'Nota $nota',
+          style: textos.bodyMedium?.copyWith(color: QColores.textoSuave),
         ),
         if (hoja.recibidaEn case final recibida?) ...[
           const SizedBox(height: QEspacios.xs),
@@ -673,11 +690,44 @@ class _FilaDeHoja extends StatelessWidget {
         pendientes > 0 ? Icons.rate_review_outlined : Icons.task_alt_outlined,
         color: pendientes > 0 ? QColores.advertenciaTexto : QColores.exitoTexto,
       ),
-      title: Text(nombre, maxLines: 2, overflow: TextOverflow.ellipsis),
+      title: Row(
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
+        children: [
+          Expanded(child: Text(nombre, maxLines: 2, overflow: TextOverflow.ellipsis)),
+          if (hoja.codigo case final codigo?) ...[
+            const SizedBox(width: QEspacios.sm),
+            _CodigoDelEstudiante(codigo: codigo, completo: hoja.codigoCompleto),
+          ],
+        ],
+      ),
       subtitle: Text(lineas.join('\n')),
       trailing: QChipEstado(
         texto: nota,
         tono: hoja.provisional ? QTono.advertencia : QTono.exito,
+      ),
+    );
+  }
+}
+
+/// El código del estudiante, con cifras del mismo ancho para que quede alineado de una fila a otra.
+/// Si quedó incompleto va en el color de advertencia, con `?` donde no se leyó.
+class _CodigoDelEstudiante extends StatelessWidget {
+  const _CodigoDelEstudiante({required this.codigo, required this.completo, this.estilo});
+
+  final String codigo;
+  final bool completo;
+  final TextStyle? estilo;
+
+  @override
+  Widget build(BuildContext context) {
+    final base = estilo ?? Theme.of(context).textTheme.bodyMedium;
+    return Text(
+      codigo,
+      semanticsLabel: completo ? 'Código $codigo' : 'Código incompleto $codigo',
+      style: base?.copyWith(
+        color: completo ? QColores.textoSuave : QColores.advertenciaTexto,
+        fontFeatures: const [FontFeature.tabularFigures()],
       ),
     );
   }

@@ -371,8 +371,20 @@
         "type": "object"
       },
       "HojaEnRevisionEnRespuesta": {
-        "description": "Una hoja con preguntas en revision, con su nota vigente. Sin el codigo del estudiante.",
+        "description": "Una hoja con preguntas en revision, con su nota vigente y el codigo del estudiante.",
         "properties": {
+          "codigo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "El codigo del estudiante tal como se leyo: la T y ocho digitos, con ? en los que no se leyeron. Nulo si la lectura no lo trae. Es un dato personal: la ruta es publica hasta A-05, y por eso solo se cargan hojas sinteticas (AM-02).",
+            "title": "Codigo"
+          },
           "codigo_completo": {
             "title": "Codigo Completo",
             "type": "boolean"
@@ -1269,7 +1281,7 @@
     },
     "/examenes/{examen_id}/revision": {
       "get": {
-        "description": "Las hojas con preguntas que la lectura no pudo decidir, y en cada pregunta lo que se midió\nen sus burbujas y lo que el profesor ya resolvió (RF-08). Una hoja sigue apareciendo después de\nresuelta, para poder cambiar una decisión. Cada hoja lleva el nombre con que se subió y la hora\nen que llegó, para que el profesor sepa cuál es.\n\n**No lleva la respuesta correcta ni el código del estudiante**: la ruta es pública hasta A-05\n(AM-02). El profesor dice qué marcó el estudiante y el sistema decide si es correcto. El nombre\ndel archivo sí viaja, y es el del estudiante si el docente los nombra así: el riesgo se acepta\nsolo mientras no entren hojas reales, como el resto de la ruta.",
+        "description": "Las hojas con preguntas que la lectura no pudo decidir, y en cada pregunta lo que se midió\nen sus burbujas y lo que el profesor ya resolvió (RF-08). Una hoja sigue apareciendo después de\nresuelta, para poder cambiar una decisión. Cada hoja lleva el nombre con que se subió y la hora\nen que llegó, para que el profesor sepa cuál es.\n\n**No lleva la respuesta correcta**: la ruta es pública hasta A-05 (AM-02). El profesor dice qué\nmarcó el estudiante y el sistema decide si es correcto. **Sí lleva el código del estudiante**,\npara que el profesor sepa de quién es la hoja, y el nombre del archivo, que puede ser el del\nestudiante: el riesgo se acepta solo mientras no entren hojas reales, como el resto de la ruta.",
         "operationId": "revision_examenes__examen_id__revision_get",
         "parameters": [
           {
@@ -1291,7 +1303,7 @@
                 }
               }
             },
-            "description": "Cada hoja con preguntas en revisión, sin la clave ni el código."
+            "description": "Cada hoja en revisión, con el código del estudiante y sin la clave."
           },
           "422": {
             "content": {

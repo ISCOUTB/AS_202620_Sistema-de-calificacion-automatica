@@ -2,10 +2,10 @@
 el recorte de cada pregunta y la que guarda lo que resolvió.
 
 La hoja es sintética y se lee de verdad: todas las respuestas bien menos la 7, marcada a medias.
-Lo que cuidan, además de la nota, es que las rutas públicas no publiquen la clave ni el código del
-estudiante (AM-02), que quede quién resolvió y cuándo (RF-10), que una solicitud que no cuadra no
-deje nada escrito y que cada hoja diga con qué nombre y a qué hora llegó, para que el profesor sepa
-cuál es."""
+Lo que cuidan, además de la nota, es que las rutas públicas no publiquen la clave (AM-02), que
+quede quién resolvió y cuándo (RF-10), que una solicitud que no cuadra no deje nada escrito y que
+cada hoja diga de qué estudiante es (su código), con qué nombre y a qué hora llegó, para que el
+profesor sepa cuál es."""
 
 import json
 import logging
@@ -28,6 +28,7 @@ from infraestructura.almacen import AlmacenEnDisco
 from infraestructura.bitacora import BitacoraEnDisco, BitacoraEnMemoria, RecepcionDeHoja
 from infraestructura.modelo import (
     CALIFICADA,
+    CODIGO_INCOMPLETO,
     EN_REVISION,
     ClaveDeRespuestas,
     EntradaDeBitacora,
@@ -194,11 +195,37 @@ def test_una_hoja_leida_antes_del_corte_llega_sin_sugerencia(cliente, tmp_path):
     assert pregunta["opcion_sugerida"] is None
 
 
-def test_la_revision_no_publica_la_clave_ni_el_codigo(cliente):
+def test_la_revision_no_publica_la_clave(cliente):
     texto = cliente.get(f"/examenes/{EXAMEN}/revision").text
 
     assert "correcta" not in texto
-    assert CODIGO not in texto
+
+
+def test_la_revision_trae_el_codigo_del_estudiante(cliente):
+    """El docente reconoce la hoja por el código, no por el nombre del archivo. Hasta A-05 la ruta
+    es pública, como las demás: por eso solo entran hojas sintéticas (AM-02)."""
+    [hoja] = cliente.get(f"/examenes/{EXAMEN}/revision").json()["hojas"]
+
+    assert hoja["codigo"] == "T" + CODIGO
+
+
+def test_un_codigo_incompleto_llega_con_lo_que_se_leyo(cliente, tmp_path):
+    """Los dígitos que no se leyeron llegan como `?`, y una lectura sin código llega nula."""
+    ruta = tmp_path / "resultados.jsonl"
+    hechos = [json.loads(linea) for linea in ruta.read_text(encoding="utf-8").splitlines()]
+    hechos[0]["lectura"]["codigo"] = {
+        "estado": CODIGO_INCOMPLETO, "valor": "T2026?105", "columnas_por_revisar": [5],
+    }
+    ruta.write_text("".join(json.dumps(hecho) + "\n" for hecho in hechos), encoding="utf-8")
+
+    [hoja] = cliente.get(f"/examenes/{EXAMEN}/revision").json()["hojas"]
+    assert (hoja["codigo"], hoja["codigo_completo"]) == ("T2026?105", False)
+
+    del hechos[0]["lectura"]["codigo"]
+    ruta.write_text("".join(json.dumps(hecho) + "\n" for hecho in hechos), encoding="utf-8")
+
+    [hoja] = cliente.get(f"/examenes/{EXAMEN}/revision").json()["hojas"]
+    assert hoja["codigo"] is None
 
 
 def test_el_recorte_de_la_pregunta_es_un_png(cliente):

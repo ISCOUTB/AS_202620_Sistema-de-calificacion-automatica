@@ -260,16 +260,17 @@ def test_la_lista_de_examenes_no_publica_las_respuestas_de_la_clave(contrato_pub
     assert set(esquema["properties"]) == {"examen_id", "habilitada"}
 
 
-def test_la_revision_no_publica_la_clave_ni_el_codigo(contrato_publicado):
+def test_la_revision_no_publica_la_clave_y_trae_el_codigo(contrato_publicado):
     """`GET /examenes/{examen_id}/revision` es publica hasta A-05. El profesor dice que marco el
     estudiante y el sistema decide si es correcto, asi que ningun esquema de la revision lleva la
-    respuesta correcta, y la hoja no lleva el codigo del estudiante."""
+    respuesta correcta. La hoja si lleva el codigo del estudiante, que es como el profesor sabe de
+    quien es; es la unica ruta que lo publica, y por eso solo entran hojas sinteticas (AM-02)."""
     esquemas = contrato_publicado["components"]["schemas"]
     pregunta = set(esquemas["PreguntaEnRevisionEnRespuesta"]["properties"])
     hoja = set(esquemas["HojaEnRevisionEnRespuesta"]["properties"])
 
     assert not [campo for campo in pregunta | hoja if "correcta" in campo]
-    assert [campo for campo in hoja if "codigo" in campo] == ["codigo_completo"]
+    assert sorted(campo for campo in hoja if "codigo" in campo) == ["codigo", "codigo_completo"]
 
 
 def test_el_resultado_dice_si_la_nota_la_corrigio_el_profesor(contrato_publicado):

@@ -402,6 +402,44 @@ void main() {
     const revisada = 'Revisada\nSubida el 18 nov, 14:32\nEditada el 19 nov, 10:05';
     const porRevisar = '1 pregunta por revisar\nSubida el 19 nov, 09:00';
 
+    testWidgets('El código del estudiante va junto al nombre, en la lista y en el detalle',
+        (tester) async {
+      _fijarTamano(tester, const Size(1280, 1800));
+      final revision = fechadas('PROTOTIPO-R05');
+      await tester.pumpWidget(_pantalla(
+        consultar: (examen) async => RevisionDelExamen(examenId: examen, hojas: [
+          for (final (indice, hoja) in revision.hojas.indexed)
+            HojaEnRevision(
+              hojaId: hoja.hojaId,
+              notaEnDecimas: hoja.notaEnDecimas,
+              provisional: hoja.provisional,
+              // La revisada, con un dígito sin leer.
+              codigoCompleto: indice == 1,
+              codigo: indice == 1 ? 'T20261105' : 'T2026?105',
+              preguntas: hoja.preguntas,
+              nombreArchivo: hoja.nombreArchivo,
+              recibidaEn: hoja.recibidaEn,
+            ),
+        ]),
+      ));
+      await tester.pumpAndSettle();
+      await _elegirExamen(tester, 'PROTOTIPO-R05');
+
+      // La abierta es la por revisar: su código está en la lista y en el detalle.
+      expect(find.text('T20261105'), findsNWidgets(2));
+      expect(find.text('T2026?105'), findsOneWidget);
+      final nombreDelDetalle = find.text('hoja1.jpg').last;
+      final codigoDelDetalle = find.text('T20261105').last;
+      expect(
+        tester.getTopLeft(codigoDelDetalle).dx,
+        greaterThan(tester.getTopRight(nombreDelDetalle).dx),
+      );
+      expect(
+        tester.getTopLeft(codigoDelDetalle).dy,
+        lessThan(tester.getBottomLeft(nombreDelDetalle).dy),
+      );
+    });
+
     testWidgets('La lista pone arriba la hoja más nueva y dice cuándo se editó', (tester) async {
       _fijarTamano(tester, const Size(1280, 1800));
       await tester.pumpWidget(_pantalla(consultar: (examen) async => fechadas(examen)));

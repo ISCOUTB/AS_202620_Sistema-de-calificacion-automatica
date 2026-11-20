@@ -93,6 +93,7 @@ class HojaEnRevision {
     required this.preguntas,
     this.nombreArchivo,
     this.recibidaEn,
+    this.codigo,
   });
 
   final String hojaId;
@@ -107,6 +108,10 @@ class HojaEnRevision {
   /// Cuándo llegó la hoja, en UTC tal como lo manda la API. Los nombres se repiten de un lote a
   /// otro (`hoja1.jpg`), y la hora es lo que las distingue.
   final DateTime? recibidaEn;
+
+  /// El código del estudiante tal como se leyó, con `?` en los dígitos que no se leyeron. Nulo si
+  /// la lectura no lo trae. Es como el profesor sabe de quién es la hoja.
+  final String? codigo;
 
   int get pendientes => preguntas.where((p) => !p.resuelta).length;
 
@@ -134,6 +139,7 @@ class HojaEnRevision {
       ],
       nombreArchivo: nombre == null || nombre.trim().isEmpty ? null : nombre,
       recibidaEn: recibida == null ? null : DateTime.tryParse(recibida),
+      codigo: json['codigo'] as String?,
     );
   }
 }

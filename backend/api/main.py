@@ -589,7 +589,7 @@ def resultados(
 @app.get(
     "/examenes/{examen_id}/revision",
     summary="Las preguntas que esperan al profesor en un examen",
-    response_description="Cada hoja con preguntas en revisión, sin la clave ni el código.",
+    response_description="Cada hoja en revisión, con el código del estudiante y sin la clave.",
 )
 def revision(
     examen_id: str,
@@ -602,10 +602,10 @@ def revision(
     resuelta, para poder cambiar una decisión. Cada hoja lleva el nombre con que se subió y la hora
     en que llegó, para que el profesor sepa cuál es.
 
-    **No lleva la respuesta correcta ni el código del estudiante**: la ruta es pública hasta A-05
-    (AM-02). El profesor dice qué marcó el estudiante y el sistema decide si es correcto. El nombre
-    del archivo sí viaja, y es el del estudiante si el docente los nombra así: el riesgo se acepta
-    solo mientras no entren hojas reales, como el resto de la ruta."""
+    **No lleva la respuesta correcta**: la ruta es pública hasta A-05 (AM-02). El profesor dice qué
+    marcó el estudiante y el sistema decide si es correcto. **Sí lleva el código del estudiante**,
+    para que el profesor sepa de quién es la hoja, y el nombre del archivo, que puede ser el del
+    estudiante: el riesgo se acepta solo mientras no entren hojas reales, como el resto de la ruta."""
     proyeccion = revision_del_examen(examen_id, lector, revisiones, recepciones)
     return RevisionDelExamenEnRespuesta(
         examen_id=proyeccion.examen_id,
