@@ -95,6 +95,7 @@ Widget _pantalla({
   Map<String, String> nombres = const {'h-2': 'foto inclinada.jpg'},
   VoidCallback? alGuardar,
   bool guardarFalla = false,
+  Listenable? alMostrarse,
 }) {
   var resuelta = false;
   return MaterialApp(
@@ -117,6 +118,7 @@ Widget _pantalla({
         nombresDeHojas: ValueNotifier(nombres),
         examenPedido: pedido,
         alGuardar: alGuardar,
+        alMostrarse: alMostrarse,
       ),
     ),
   );
@@ -517,6 +519,84 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Pregunta 7'), findsOneWidget);
+  });
+
+  group('Volver a la revisión', () {
+    /// Cada consulta trae una hoja más, como si entre una y otra se hubiera subido otra hoja.
+    Future<RevisionDelExamen> Function(String) creciente(List<String> pedidos) =>
+        (examen) async {
+          pedidos.add(examen);
+          return RevisionDelExamen(examenId: examen, hojas: [
+            for (var i = 1; i <= pedidos.length; i++)
+              HojaEnRevision(
+                hojaId: 'h-$i',
+                notaEnDecimas: 23,
+                provisional: true,
+                codigoCompleto: true,
+                preguntas: [_pregunta(7)],
+                nombreArchivo: 'hoja $i.jpg',
+              ),
+          ]);
+        };
+
+    testWidgets('Si la carga pide el examen que ya estaba elegido, trae las hojas nuevas',
+        (tester) async {
+      // Lo que se vio en local: elegir el examen en Revisión, subir hojas en Carga y tocar
+      // «Revisar» mostraba la revisión de antes de subir.
+      _fijarTamano(tester, const Size(1280, 1800));
+      final pedidos = <String>[];
+      final pedido = ValueNotifier<String?>(null);
+      final mostrada = ValueNotifier<int>(0);
+      addTearDown(pedido.dispose);
+      addTearDown(mostrada.dispose);
+      await tester.pumpWidget(
+        _pantalla(consultar: creciente(pedidos), pedido: pedido, alMostrarse: mostrada),
+      );
+      await tester.pumpAndSettle();
+      await _elegirExamen(tester, 'PROTOTIPO-R05');
+      expect(find.text('hoja 2.jpg'), findsNothing);
+
+      pedido.value = 'PROTOTIPO-R05';
+      mostrada.value++;
+      await tester.pumpAndSettle();
+
+      expect(find.text('hoja 2.jpg'), findsOneWidget);
+      expect(pedidos, ['PROTOTIPO-R05', 'PROTOTIPO-R05']);
+    });
+
+    testWidgets('Si la carga pide otro examen, lo pide una sola vez', (tester) async {
+      _fijarTamano(tester, const Size(1280, 1800));
+      final pedidos = <String>[];
+      final pedido = ValueNotifier<String?>(null);
+      final mostrada = ValueNotifier<int>(0);
+      addTearDown(pedido.dispose);
+      addTearDown(mostrada.dispose);
+      await tester.pumpWidget(
+        _pantalla(consultar: creciente(pedidos), pedido: pedido, alMostrarse: mostrada),
+      );
+      await tester.pumpAndSettle();
+      await _elegirExamen(tester, 'PROTOTIPO-R05');
+
+      pedido.value = 'QUIZ-3';
+      mostrada.value++;
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+
+      expect(pedidos, ['PROTOTIPO-R05', 'QUIZ-3']);
+    });
+
+    testWidgets('Volver sin examen elegido no pide nada', (tester) async {
+      final pedidos = <String>[];
+      final mostrada = ValueNotifier<int>(0);
+      addTearDown(mostrada.dispose);
+      await tester.pumpWidget(_pantalla(consultar: creciente(pedidos), alMostrarse: mostrada));
+      await tester.pumpAndSettle();
+
+      mostrada.value++;
+      await tester.pumpAndSettle();
+
+      expect(pedidos, isEmpty);
+    });
   });
 
   testWidgets('En el teléfono no se desborda', (tester) async {

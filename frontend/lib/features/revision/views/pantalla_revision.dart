@@ -31,6 +31,7 @@ class PantallaRevision extends StatefulWidget {
     this.urlDelRecorte,
     this.nombresDeHojas,
     this.examenPedido,
+    this.alMostrarse,
     this.alGuardar,
   });
 
@@ -51,6 +52,10 @@ class PantallaRevision extends StatefulWidget {
 
   /// El examen que pidió revisar la pantalla de carga.
   final ValueListenable<String?>? examenPedido;
+
+  /// Avisa cada vez que la pantalla vuelve a la vista, para pedir otra vez la revisión del examen
+  /// elegido: mientras se miraba otra sección pudieron llegar hojas nuevas.
+  final Listenable? alMostrarse;
 
   /// Avisa que se guardó una revisión, para que el reporte de carga refresque las notas.
   final VoidCallback? alGuardar;
@@ -95,6 +100,7 @@ class _PantallaRevisionState extends State<PantallaRevision> {
     _examen.addListener(_alCambiarElExamen);
     _nombre.addListener(_redibujar);
     widget.examenPedido?.addListener(_alPedirExamen);
+    widget.alMostrarse?.addListener(_alMostrarse);
     widget.nombresDeHojas?.addListener(_redibujar);
     if (widget.listarExamenes != null) {
       _cargandoExamenes = true;
@@ -108,6 +114,7 @@ class _PantallaRevisionState extends State<PantallaRevision> {
   void dispose() {
     _espera?.cancel();
     widget.examenPedido?.removeListener(_alPedirExamen);
+    widget.alMostrarse?.removeListener(_alMostrarse);
     widget.nombresDeHojas?.removeListener(_redibujar);
     _examen.dispose();
     _nombre.dispose();
@@ -121,6 +128,14 @@ class _PantallaRevisionState extends State<PantallaRevision> {
   void _alPedirExamen() {
     final pedido = widget.examenPedido?.value;
     if (pedido != null && pedido != _examen.text) _examen.text = pedido;
+  }
+
+  /// Vuelve a pedir la revisión del examen elegido, salvo que ya venga en camino la de un examen
+  /// recién elegido: así, si la carga pide otro examen, se pide una sola vez.
+  void _alMostrarse() {
+    final examen = _examenVisto;
+    if (!mounted || examen == null || (_espera?.isActive ?? false)) return;
+    _cargarRevision(examen);
   }
 
   Future<void> _pedirExamenes() async {
