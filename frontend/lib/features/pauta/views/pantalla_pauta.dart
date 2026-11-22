@@ -12,13 +12,15 @@ import '../../../common/widgets/q_estado_vacio.dart';
 import '../../../common/widgets/q_pagina.dart';
 import '../../../common/widgets/q_titulo_seccion.dart';
 import '../data/datos_ejemplo_pauta.dart';
+import '../../carga/data/servicio_examenes.dart';
+import '../data/servicio_clave.dart';
 import '../data/servicio_distractores.dart';
 import 'widgets/aviso_tono.dart';
 import 'widgets/cabecera_generador.dart';
 import 'widgets/esqueleto_propuestas.dart';
 import 'widgets/formulario_distractores.dart';
 import 'widgets/lista_preguntas.dart';
-import 'widgets/tarjeta_examen.dart';
+import 'widgets/tarjeta_clave.dart';
 import 'widgets/tarjetas_propuesta.dart';
 import 'widgets/vista_propuestas.dart';
 
@@ -29,8 +31,9 @@ enum _Fase { inicial, cargando, resultado, error }
 ///
 /// Tiene dos partes con distinto grado de realidad, y la pantalla no las mezcla:
 ///
-/// * El examen, su clave y su banco de preguntas son de ejemplo, porque el backend todavía no
-///   los tiene (A-04). Van bajo [QAvisoDatosEjemplo].
+/// * La clave del examen es real desde ADR-0026: se registra y se habilita con [TarjetaClaveDelExamen].
+/// * El banco de preguntas es de ejemplo, porque el backend todavía no lo tiene (RF-06). Va bajo
+///   [QAvisoDatosEjemplo].
 /// * El generador de distractores diagnósticos es real: llama a `POST /distractores` con
 ///   [proponerDistractores] (RF-11). Es la única función del sistema con modelo de lenguaje
 ///   (ADR-0005), y es opcional: el modelo propone y el docente decide qué usa (RF-07).
@@ -39,10 +42,22 @@ class PantallaPauta extends StatefulWidget {
     super.key,
     required this.proponerDistractores,
     required this.estadoApi,
+    this.listarExamenes,
+    this.consultarClave,
+    this.guardarClave,
+    this.habilitarClave,
+    this.alCambiarLaClave,
   });
 
   final Future<ResultadoDistractores> Function(SolicitudDistractores) proponerDistractores;
   final ValueListenable<EstadoApi> estadoApi;
+
+  /// La clave del examen (A-04). Sin [consultarClave], la pantalla no ofrece registrarla.
+  final Future<List<ExamenConClave>> Function()? listarExamenes;
+  final Future<ClaveDelExamen?> Function(String examenId)? consultarClave;
+  final Future<ClaveDelExamen> Function(String examenId, List<String> respuestas)? guardarClave;
+  final Future<ClaveDelExamen> Function(String examenId)? habilitarClave;
+  final VoidCallback? alCambiarLaClave;
 
   @override
   State<PantallaPauta> createState() => _PantallaPautaState();
@@ -246,6 +261,16 @@ class _PantallaPautaState extends State<PantallaPauta> {
               ),
             ),
             const SizedBox(height: QEspacios.lg),
+            if (widget.consultarClave case final consultar?) ...[
+              TarjetaClaveDelExamen(
+                listarExamenes: widget.listarExamenes,
+                consultarClave: consultar,
+                guardarClave: widget.guardarClave!,
+                habilitarClave: widget.habilitarClave!,
+                alCambiar: widget.alCambiarLaClave,
+              ),
+              const SizedBox(height: QEspacios.xl),
+            ],
             LayoutBuilder(
               builder: (context, restricciones) {
                 final ancha = restricciones.maxWidth >= _anchoDosColumnas;
@@ -282,10 +307,8 @@ class _PantallaPautaState extends State<PantallaPauta> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const QAvisoDatosEjemplo(
-          detalle: 'El generador de distractores sí funciona.',
+          detalle: 'Estas preguntas son de ejemplo. El generador de distractores sí funciona.',
         ),
-        const SizedBox(height: QEspacios.md),
-        const TarjetaExamen(examen: _examen),
         const SizedBox(height: QEspacios.lg),
         const QTituloSeccion(
           titulo: 'Preguntas del examen',

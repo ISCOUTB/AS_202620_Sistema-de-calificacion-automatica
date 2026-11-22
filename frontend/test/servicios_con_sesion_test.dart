@@ -40,6 +40,9 @@ Future<void> _llamarATodos(ServiciosApp servicios) async {
   await intentar(() => servicios.listarExamenes!());
   await intentar(() => servicios.consultarRevision!('E'));
   await intentar(() => servicios.guardarRevision!('E', 'h-1', {7: 'C'}));
+  await intentar(() => servicios.consultarClave!('E'));
+  await intentar(() => servicios.guardarClave!('E', ['A']));
+  await intentar(() => servicios.habilitarClave!('E'));
 }
 
 void main() {
@@ -62,6 +65,9 @@ void main() {
       'GET /examenes',
       'GET /examenes/E/revision',
       'POST /examenes/E/hojas/h-1/revision',
+      'GET /examenes/E/clave',
+      'PUT /examenes/E/clave',
+      'POST /examenes/E/clave/habilitacion',
     });
     expect(enviadas.values.toSet(), {'Bearer v1.abc.def'});
   });

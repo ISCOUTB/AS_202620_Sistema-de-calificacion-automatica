@@ -26,6 +26,7 @@ class PantallaRevision extends StatefulWidget {
   const PantallaRevision({
     super.key,
     this.listarExamenes,
+    this.clavesCambiadas,
     this.consultarRevision,
     this.guardarRevision,
     this.urlDelRecorte,
@@ -37,6 +38,10 @@ class PantallaRevision extends StatefulWidget {
   });
 
   final Future<List<ExamenConClave>> Function()? listarExamenes;
+
+  /// Avisa que se guardó o se habilitó una clave en Pauta: la lista de exámenes se vuelve a
+  /// pedir para que aparezca el nuevo, o su clave habilitada.
+  final Listenable? clavesCambiadas;
   final Future<RevisionDelExamen> Function(String examenId)? consultarRevision;
   final Future<ResultadoDeHoja> Function(
     String examenId,
@@ -102,6 +107,7 @@ class _PantallaRevisionState extends State<PantallaRevision> {
     _examen.addListener(_alCambiarElExamen);
     widget.examenPedido?.addListener(_alPedirExamen);
     widget.alMostrarse?.addListener(_alMostrarse);
+    widget.clavesCambiadas?.addListener(_pedirExamenesOtraVez);
     widget.nombresDeHojas?.addListener(_redibujar);
     if (widget.listarExamenes != null) {
       _cargandoExamenes = true;
@@ -116,6 +122,7 @@ class _PantallaRevisionState extends State<PantallaRevision> {
     _espera?.cancel();
     widget.examenPedido?.removeListener(_alPedirExamen);
     widget.alMostrarse?.removeListener(_alMostrarse);
+    widget.clavesCambiadas?.removeListener(_pedirExamenesOtraVez);
     widget.nombresDeHojas?.removeListener(_redibujar);
     _examen.dispose();
     super.dispose();
@@ -136,6 +143,10 @@ class _PantallaRevisionState extends State<PantallaRevision> {
     final examen = _examenVisto;
     if (!mounted || examen == null || (_espera?.isActive ?? false)) return;
     _cargarRevision(examen);
+  }
+
+  void _pedirExamenesOtraVez() {
+    if (widget.listarExamenes != null) _pedirExamenes();
   }
 
   Future<void> _pedirExamenes() async {

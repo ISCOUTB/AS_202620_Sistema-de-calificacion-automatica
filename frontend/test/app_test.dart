@@ -10,6 +10,7 @@ import 'package:frontend/app/sesion_actual.dart';
 import 'package:frontend/common/api/sesion.dart';
 import 'package:frontend/features/carga/data/servicio_carga.dart';
 import 'package:frontend/features/carga/data/servicio_examenes.dart';
+import 'package:frontend/features/pauta/data/servicio_clave.dart';
 import 'package:frontend/features/pauta/data/servicio_distractores.dart';
 import 'package:frontend/features/revision/data/servicio_revision.dart';
 import 'package:frontend/main.dart';
@@ -183,6 +184,54 @@ void main() {
     expect(seccionDesdeUrl(Uri.parse('https://x/?seccion=pauta')), Seccion.pauta);
     expect(seccionDesdeUrl(Uri.parse('https://x/?seccion=otra')), Seccion.panel);
     expect(seccionDesdeUrl(Uri.parse('https://x/')), Seccion.panel);
+  });
+
+  testWidgets('Una clave registrada en Pauta aparece en la carga sin recargar la página',
+      (tester) async {
+    tester.view.physicalSize = const Size(1280, 2600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final claves = <String, ClaveDelExamen>{};
+    await tester.pumpWidget(QuantiaApp(
+      servicios: ServiciosApp(
+        verificarSalud: () async => true,
+        seleccionarArchivos: ({alAvanzar}) async => const [],
+        subirHojas: (examenId, archivos) async =>
+            const ResultadoCarga(totalProcesados: 0, aceptadas: [], rechazados: []),
+        proponerDistractores: (solicitud) async =>
+            const ResultadoDistractores(distractores: [], descartados: []),
+        listarExamenes: () async => [
+          for (final clave in claves.values)
+            ExamenConClave(examenId: clave.examenId, habilitada: clave.habilitada),
+        ],
+        consultarClave: (examen) async => claves[examen],
+        guardarClave: (examen, respuestas) async => claves[examen] =
+            ClaveDelExamen(examenId: examen, respuestas: respuestas, sePuedeCambiar: true),
+        habilitarClave: (examen) async => claves[examen]!,
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text(Seccion.pauta.etiqueta).last);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, 'Examen'), 'QUIZ-9');
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, 'Pegar las respuestas'), 'ABCD');
+    await tester.tap(find.text('Llenar'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Llenar la cuadrícula'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Guardar clave'));
+    await tester.tap(find.text('Guardar clave'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text(Seccion.carga.etiqueta).last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(DropdownMenu<String>));
+    await tester.pumpAndSettle();
+
+    expect(find.text('QUIZ-9'), findsWidgets);
   });
 
   group('La puerta de la sesión', () {

@@ -63,6 +63,10 @@ class _MarcoAppState extends State<MarcoApp> {
   /// Avisa cada vez que Revisión vuelve a la vista: la pantalla sigue viva mientras se mira otra
   /// sección, y lo subido en Carga no aparecía hasta recargar la página.
   final _revisionALaVista = ValueNotifier<int>(0);
+
+  /// Avisa que se guardó o se habilitó una clave en Pauta, para que la carga y la revisión
+  /// vuelvan a pedir la lista de exámenes: sin esto, uno nuevo no aparecía hasta recargar.
+  final _clavesCambiadas = ValueNotifier<int>(0);
   late Seccion _seccion = widget.seccionInicial;
 
   @override
@@ -78,6 +82,7 @@ class _MarcoAppState extends State<MarcoApp> {
     _examenParaRevisar.dispose();
     _revisionesGuardadas.dispose();
     _revisionALaVista.dispose();
+    _clavesCambiadas.dispose();
     super.dispose();
   }
 
@@ -121,6 +126,7 @@ class _MarcoAppState extends State<MarcoApp> {
             _nombresDeHojas.value = {..._nombresDeHojas.value, ...nombres},
         alRevisar: _irARevisar,
         revisionesGuardadas: _revisionesGuardadas,
+        clavesCambiadas: _clavesCambiadas,
         estadoApi: _estadoApi,
       ),
       PantallaRevision(
@@ -132,11 +138,17 @@ class _MarcoAppState extends State<MarcoApp> {
         nombresDeHojas: _nombresDeHojas,
         examenPedido: _examenParaRevisar,
         alMostrarse: _revisionALaVista,
+        clavesCambiadas: _clavesCambiadas,
         alGuardar: () => _revisionesGuardadas.value++,
       ),
       PantallaPauta(
         proponerDistractores: servicios.proponerDistractores,
         estadoApi: _estadoApi,
+        listarExamenes: servicios.listarExamenes,
+        consultarClave: servicios.consultarClave,
+        guardarClave: servicios.guardarClave,
+        habilitarClave: servicios.habilitarClave,
+        alCambiarLaClave: () => _clavesCambiadas.value++,
       ),
     ];
 

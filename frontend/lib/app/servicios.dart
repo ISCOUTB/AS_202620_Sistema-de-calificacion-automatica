@@ -8,6 +8,7 @@ import '../features/carga/data/tomar_foto.dart' as foto;
 import '../features/carga/data/servicio_examenes.dart' as examenes;
 import '../features/carga/data/servicio_carga.dart' as carga;
 import '../features/carga/data/servicio_resultados.dart' as resultados;
+import '../features/pauta/data/servicio_clave.dart' as clave;
 import '../features/pauta/data/servicio_distractores.dart' as distractores;
 import '../features/revision/data/servicio_revision.dart' as revision;
 import 'sesion_actual.dart';
@@ -34,6 +35,9 @@ class ServiciosApp {
     this.guardarRevision,
     this.urlDelRecorte,
     this.encabezadosDelRecorte,
+    this.consultarClave,
+    this.guardarClave,
+    this.habilitarClave,
     this.tomarFoto,
   });
 
@@ -68,6 +72,10 @@ class ServiciosApp {
       encabezadosDelRecorte: () => {
         if (sesion.token case final token?) 'Authorization': 'Bearer $token',
       },
+      consultarClave: (examenId) => clave.consultarClave(examenId, cliente: cliente),
+      guardarClave: (examenId, respuestas) =>
+          clave.guardarClave(examenId, respuestas, cliente: cliente),
+      habilitarClave: (examenId) => clave.habilitarClave(examenId, cliente: cliente),
     );
   }
 
@@ -107,4 +115,11 @@ class ServiciosApp {
   /// Los encabezados con que se pide cada recorte: el token de la sesión. Sin él, la imagen se
   /// pide sin encabezados.
   final Map<String, String> Function()? encabezadosDelRecorte;
+
+  /// La clave de un examen (A-04, ADR-0026): pedirla, guardarla y habilitarla. Opcionales: sin
+  /// ellos, la pantalla de pauta no ofrece registrar la clave.
+  final Future<clave.ClaveDelExamen?> Function(String examenId)? consultarClave;
+  final Future<clave.ClaveDelExamen> Function(String examenId, List<String> respuestas)?
+      guardarClave;
+  final Future<clave.ClaveDelExamen> Function(String examenId)? habilitarClave;
 }

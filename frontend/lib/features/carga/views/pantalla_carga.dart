@@ -36,6 +36,7 @@ class PantallaCarga extends StatefulWidget {
     required this.estadoApi,
     this.consultarResultados,
     this.listarExamenes,
+    this.clavesCambiadas,
     this.alRecibirHojas,
     this.alRevisar,
     this.revisionesGuardadas,
@@ -54,6 +55,10 @@ class PantallaCarga extends StatefulWidget {
 
   /// Los exámenes con clave, para elegir el de la carga en una lista. Sin él, se escribe.
   final Future<List<ExamenConClave>> Function()? listarExamenes;
+
+  /// Avisa que se guardó o se habilitó una clave en Pauta: la lista de exámenes se vuelve a
+  /// pedir para que aparezca el nuevo, o su clave habilitada.
+  final Listenable? clavesCambiadas;
 
   /// Recibe el nombre de archivo de cada hoja aceptada, por `hoja_id`: la revisión los muestra.
   final void Function(Map<String, String> nombres)? alRecibirHojas;
@@ -136,6 +141,7 @@ class _PantallaCargaState extends State<PantallaCarga> {
     _examen.addListener(_alCambiarElExamen);
     widget.estadoApi.addListener(_alCambiarLaConexion);
     widget.revisionesGuardadas?.addListener(_consultarUnaVez);
+    widget.clavesCambiadas?.addListener(_pedirExamenesOtraVez);
     if (widget.listarExamenes != null) {
       _cargandoExamenes = true;
       _pedirExamenes();
@@ -147,6 +153,7 @@ class _PantallaCargaState extends State<PantallaCarga> {
     _consulta?.cancel();
     widget.estadoApi.removeListener(_alCambiarLaConexion);
     widget.revisionesGuardadas?.removeListener(_consultarUnaVez);
+    widget.clavesCambiadas?.removeListener(_pedirExamenesOtraVez);
     _examen.dispose();
     super.dispose();
   }
@@ -162,6 +169,10 @@ class _PantallaCargaState extends State<PantallaCarga> {
     } else {
       setState(() {});
     }
+  }
+
+  void _pedirExamenesOtraVez() {
+    if (widget.listarExamenes != null) _pedirExamenes();
   }
 
   Future<void> _pedirExamenes() async {

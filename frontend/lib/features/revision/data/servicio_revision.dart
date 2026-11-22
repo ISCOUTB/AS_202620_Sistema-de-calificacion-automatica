@@ -148,12 +148,13 @@ const _meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', '
 
 /// «Subida el 16 nov, 14:32», en la hora del navegador del docente. Sin el paquete `intl`, como
 /// las cifras del panel.
-String llegadaLegible(DateTime instante) => 'Subida el ${_fechaLegible(instante)}';
+String llegadaLegible(DateTime instante) => 'Subida el ${fechaLegible(instante)}';
 
 /// «Editada el 19 nov, 14:40»: cuándo guardó el profesor por última vez en la hoja.
-String edicionLegible(DateTime instante) => 'Editada el ${_fechaLegible(instante)}';
+String edicionLegible(DateTime instante) => 'Editada el ${fechaLegible(instante)}';
 
-String _fechaLegible(DateTime instante) {
+/// «16 nov, 14:32», en la hora del navegador del docente.
+String fechaLegible(DateTime instante) {
   final local = instante.toLocal();
   final hora = local.hour.toString().padLeft(2, '0');
   final minuto = local.minute.toString().padLeft(2, '0');
