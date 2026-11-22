@@ -1,9 +1,9 @@
 """Los exámenes que el docente puede elegir al subir las hojas: los que tienen una clave registrada.
 
-Es una vista de la clave **sin las respuestas**. La ruta que la publica es pública hasta A-05
-(AM-02), y para elegir el examen el docente solo necesita su identificador y saber si la clave ya
-está habilitada: sin habilitar, las hojas se leen pero no reciben nota (RF-07). Vive aquí porque
-`autoria` es la dueña de la clave (ADR-0007), aunque hasta A-04 la clave se escriba a mano.
+Es una vista de la clave **sin las respuestas**: para elegir el examen al subir las hojas, el
+docente solo necesita su identificador y saber si la clave ya está habilitada; sin habilitar, las
+hojas se leen pero no reciben nota (RF-07). Vive aquí porque `autoria` es la dueña de la clave
+(ADR-0007), que desde ADR-0026 se registra desde la aplicación (`registro_de_claves.py`).
 """
 
 from dataclasses import dataclass

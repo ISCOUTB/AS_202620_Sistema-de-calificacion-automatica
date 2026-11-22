@@ -13,11 +13,15 @@ aplica `calificacion`; si el adaptador filtrara, un cambio de medio podría perd
 ninguna prueba del dominio lo notara.
 
 **Un adaptador que relee no es un segundo dueño** (ADR-0007, punto 5): `ClavesEnDisco` devuelve
-los campos que se escribieron, sin corregir ni completar ninguno. Escribir claves es de `autoria`
-y llega con A-04; hasta entonces, la clave de un examen sintético se escribe a mano.
+los campos que se escribieron, sin corregir ni completar ninguno. Escribir claves es de `autoria`:
+desde ADR-0026 las registra y las habilita desde la aplicación, y el adaptador guarda lo que recibe,
+en la misma forma en que la lee.
 """
 
 import json
+import os
+import uuid
+from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Protocol
@@ -28,6 +32,7 @@ from infraestructura.modelo import ClaveDeRespuestas, Habilitacion, PreguntaDeLa
 __all__ = [
     "CatalogoDeClaves",
     "FuenteDeClaves",
+    "RegistroDeClaves",
     "ClavesEnDisco",
     "ClaveMalEscrita",
     "RUTA_CLAVES_POR_OMISION",
@@ -58,6 +63,15 @@ class CatalogoDeClaves(Protocol):
 
     def claves_registradas(self) -> tuple[ClaveDeRespuestas, ...]:
         """Las claves que `clave_del_examen` devolvería, habilitadas o no."""
+        ...
+
+
+class RegistroDeClaves(Protocol):
+    """El puerto con que `autoria` guarda una clave (ADR-0026). Aparte de los dos de arriba porque
+    solo la API escribe claves: el worker y la pantalla de carga solo las leen."""
+
+    def guardar(self, clave: ClaveDeRespuestas) -> None:
+        """Guarda la clave del examen, reemplazando la que hubiera, completa o nada."""
         ...
 
 
@@ -97,6 +111,26 @@ class ClavesEnDisco:
         except json.JSONDecodeError as error:
             raise ClaveMalEscrita(f"La clave de {examen_id} no es JSON válido: {error}") from error
         return _clave_desde(datos, examen_id)
+
+    def guardar(self, clave: ClaveDeRespuestas) -> None:
+        """Escribe la clave en un temporal del mismo directorio y lo pone en su lugar con
+        `os.replace`, que es atómico: el worker lee la clave vieja o la nueva, nunca una a medias.
+        Si algo falla, el temporal se borra y la clave anterior queda como estaba."""
+        self.directorio.mkdir(parents=True, exist_ok=True)
+        destino = self.directorio / f"{directorio_del_examen(clave.examen_id)}.json"
+        temporal = self.directorio / f".{destino.name}.{uuid.uuid4().hex}.tmp"
+        datos = {
+            "examen_id": clave.examen_id,
+            "preguntas": [asdict(pregunta) for pregunta in clave.preguntas],
+            "habilitacion": None
+            if clave.habilitacion is None
+            else {"por": clave.habilitacion.por, "en": clave.habilitacion.en.isoformat()},
+        }
+        try:
+            temporal.write_text(json.dumps(datos, ensure_ascii=False, indent=2), encoding="utf-8")
+            os.replace(temporal, destino)
+        finally:
+            temporal.unlink(missing_ok=True)
 
     def claves_registradas(self) -> tuple[ClaveDeRespuestas, ...]:
         """Cada clave del directorio que `clave_del_examen` encontraría con su propio `examen_id`.

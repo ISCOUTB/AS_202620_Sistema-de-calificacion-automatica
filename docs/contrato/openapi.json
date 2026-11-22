@@ -73,6 +73,62 @@
         "title": "BurbujaEnRespuesta",
         "type": "object"
       },
+      "ClaveEnRespuesta": {
+        "description": "La clave de un examen, para el docente que la registra (ADR-0026). Las rutas de la clave\npiden sesion; la revision y la lista de examenes siguen sin las respuestas.",
+        "properties": {
+          "examen_id": {
+            "title": "Examen Id",
+            "type": "string"
+          },
+          "habilitada_en": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Cuando se habilito, en UTC.",
+            "title": "Habilitada En"
+          },
+          "habilitada_por": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "El correo del docente que la habilito; nulo mientras no este habilitada.",
+            "title": "Habilitada Por"
+          },
+          "respuestas": {
+            "description": "La respuesta correcta de cada pregunta, desde la 1.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Respuestas",
+            "type": "array"
+          },
+          "se_puede_cambiar": {
+            "description": "Falso si ya hay hojas del examen calificadas con ella (409 al cambiarla).",
+            "title": "Se Puede Cambiar",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "examen_id",
+          "respuestas",
+          "habilitada_por",
+          "habilitada_en",
+          "se_puede_cambiar"
+        ],
+        "title": "ClaveEnRespuesta",
+        "type": "object"
+      },
       "DescartadoEnRespuesta": {
         "description": "Una propuesta del modelo que no llego al profesor, con el motivo.",
         "properties": {
@@ -892,6 +948,24 @@
         "title": "SesionEnRespuesta",
         "type": "object"
       },
+      "SolicitudDeClave": {
+        "description": "Las respuestas correctas del examen, la de la pregunta 1 primero. Que quepan en la hoja (de 1\na 40, cada una entre A y D) lo decide `autoria`, con un mensaje para el docente.",
+        "properties": {
+          "respuestas": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Respuestas",
+            "type": "array"
+          }
+        },
+        "required": [
+          "respuestas"
+        ],
+        "title": "SolicitudDeClave",
+        "type": "object"
+      },
       "SolicitudDeDistractores": {
         "description": "Lo que el profesor envia para pedir distractores diagnosticos (RF-11).\n\nSon los mismos tres campos de `PreguntaParaDistractores` y ninguno mas: es lo unico que puede\nllegar al proveedor de LLM, y por eso RNF-13 se cumple desde la puerta. Los limites de largo\nacotan lo que cuesta cada solicitud en tokens.",
         "properties": {
@@ -1025,7 +1099,7 @@
   "info": {
     "description": "Interfaz HTTP de QuantIA, sistema de calificación de exámenes de opción múltiple. Hoy cubre el aspecto A-01 (carga de hojas escaneadas para calificación) y el A-06 (propuesta opcional de distractores diagnósticos), con el presupuesto que protege la cuota del proveedor de LLM y su métrica en `GET /metricas` (EC-09). Desde la S13, un presupuesto de carga limita las hojas por lote y los bytes por día (ADR-0022). Desde ADR-0025, todas las rutas salvo `/health`, `/metricas` y `POST /sesion` piden el token de una sesión en `Authorization: Bearer`.",
     "title": "QuantIA",
-    "version": "2.0.0"
+    "version": "2.1.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -1121,6 +1195,160 @@
           }
         ],
         "summary": "Exámenes con clave registrada"
+      }
+    },
+    "/examenes/{examen_id}/clave": {
+      "get": {
+        "description": "La clave de un examen para el docente que la registra (A-04, ADR-0026). Pide sesión: es la\núnica ruta que publica las respuestas correctas, y solo a quien entró.",
+        "operationId": "clave_examenes__examen_id__clave_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "examen_id",
+            "required": true,
+            "schema": {
+              "title": "Examen Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaveEnRespuesta"
+                }
+              }
+            },
+            "description": "Las respuestas, quién la habilitó y si todavía se puede cambiar."
+          },
+          "401": {
+            "description": "Sin sesión, o con un token vencido o que ya no vale (ADR-0025)."
+          },
+          "404": {
+            "description": "El examen no tiene una clave registrada."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "La clave de un examen"
+      },
+      "put": {
+        "description": "Guarda las respuestas correctas del examen (A-04, ADR-0026), de 1 a 40, cada una entre A y\nD, todas con peso 1. Queda **sin habilitar**, también si reemplaza a una habilitada: la\nhabilitación certifica unas respuestas concretas (RF-07).\n\nSe puede cambiar mientras ninguna hoja del examen tenga nota. Después responde 409: las notas\nno se recalculan solas, y quedarían hojas calificadas con dos claves distintas.",
+        "operationId": "registrar_la_clave_examenes__examen_id__clave_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "examen_id",
+            "required": true,
+            "schema": {
+              "title": "Examen Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SolicitudDeClave"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaveEnRespuesta"
+                }
+              }
+            },
+            "description": "La clave guardada, sin habilitar."
+          },
+          "401": {
+            "description": "Sin sesión, o con un token vencido o que ya no vale (ADR-0025)."
+          },
+          "409": {
+            "description": "Ya hay hojas del examen calificadas con la clave: no se cambia."
+          },
+          "422": {
+            "description": "La clave no cabe en la hoja o el identificador no sirve."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Registrar la clave de un examen"
+      }
+    },
+    "/examenes/{examen_id}/clave/habilitacion": {
+      "post": {
+        "description": "Habilita la clave a nombre del docente de la sesión y con la hora (RF-07, ADR-0026). Desde\nahí, las hojas que se lean del examen reciben nota; las que se leyeron antes, no. Si ya estaba\nhabilitada, queda como estaba.",
+        "operationId": "habilitar_la_clave_examenes__examen_id__clave_habilitacion_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "examen_id",
+            "required": true,
+            "schema": {
+              "title": "Examen Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaveEnRespuesta"
+                }
+              }
+            },
+            "description": "La clave habilitada, con quién y cuándo."
+          },
+          "401": {
+            "description": "Sin sesión, o con un token vencido o que ya no vale (ADR-0025)."
+          },
+          "404": {
+            "description": "El examen no tiene una clave registrada."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Habilitar la clave de un examen"
       }
     },
     "/examenes/{examen_id}/hojas": {

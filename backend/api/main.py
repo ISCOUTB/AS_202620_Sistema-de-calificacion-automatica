@@ -37,7 +37,9 @@ from api.esquemas import (
     ResultadoDeHojaEnRespuesta,
     ResultadosDelExamenEnRespuesta,
     RevisionDelExamenEnRespuesta,
+    ClaveEnRespuesta,
     SesionEnRespuesta,
+    SolicitudDeClave,
     SolicitudDeDistractores,
     SolicitudDeRevision,
     SolicitudDeSesion,
@@ -66,6 +68,9 @@ from api.settings import (
 from autoria import (
     HUELLA_DE_LAS_INSTRUCCIONES,
     CacheDePropuestas,
+    ClaveInvalida,
+    ClaveYaUsada,
+    ExamenSinClave,
     GeneradorCompatibleConOpenAI,
     GeneradorConCache,
     GeneradorConPresupuesto,
@@ -74,8 +79,11 @@ from autoria import (
     PresupuestoAgotado,
     PresupuestoDeSolicitudes,
     ProveedorNoDisponible,
+    clave_se_puede_cambiar,
     examenes_con_clave,
+    habilitar_clave,
     proponer_distractores,
+    registrar_clave,
 )
 from calificacion import HojaSinNotaQueRevisar, resolver_preguntas
 from dashboard import referencia_del_recorte, resultados_del_examen, revision_del_examen
@@ -88,7 +96,8 @@ from identidad import (
 )
 from infraestructura.almacen import AlmacenDeImagenes, AlmacenEnDisco
 from infraestructura.bitacora import BitacoraDeRecepcion, BitacoraEnDisco, LectorDeRecepciones
-from infraestructura.claves import CatalogoDeClaves, ClavesEnDisco
+from infraestructura.claves import CatalogoDeClaves, ClaveMalEscrita, ClavesEnDisco
+from infraestructura.modelo import ClaveDeRespuestas
 from infraestructura.cola import ESPERA_AL_PUBLICAR_SEGUNDOS, cliente_redis
 from infraestructura.modelo import PENDIENTE_DE_ENCOLAR, ArchivoCargado
 from infraestructura.registro import configurar_registro
@@ -172,6 +181,12 @@ def obtener_revisiones() -> RevisionesDelProfesor:
 def obtener_catalogo_de_claves() -> CatalogoDeClaves:
     """Dependencia del catálogo de claves, el mismo directorio que lee el worker. Por petición y
     sustituible, como el almacén y la bitácora."""
+    return ClavesEnDisco(Path(RUTA_CLAVES))
+
+
+def obtener_registro_de_claves() -> ClavesEnDisco:
+    """Las claves para leerlas y escribirlas desde la aplicación (ADR-0026): el mismo directorio que
+    lee el worker. Por petición y sustituible, como las demás."""
     return ClavesEnDisco(Path(RUTA_CLAVES))
 
 
@@ -838,6 +853,114 @@ def recorte(
         media_type="image/png",
         headers={"Cache-Control": "private, max-age=300"},
     )
+
+
+def _clave_en_respuesta(clave: ClaveDeRespuestas, se_puede_cambiar: bool) -> ClaveEnRespuesta:
+    habilitacion = clave.habilitacion
+    return ClaveEnRespuesta(
+        examen_id=clave.examen_id,
+        respuestas=[p.correcta for p in sorted(clave.preguntas, key=lambda p: p.numero)],
+        habilitada_por=None if habilitacion is None else habilitacion.por,
+        habilitada_en=None if habilitacion is None else habilitacion.en,
+        se_puede_cambiar=se_puede_cambiar,
+    )
+
+
+def _clave_guardada(examen_id: str, claves: ClavesEnDisco) -> ClaveDeRespuestas:
+    try:
+        clave = claves.clave_del_examen(examen_id)
+    except ClaveMalEscrita as error:
+        raise HTTPException(
+            status_code=404,
+            detail="La clave guardada no se puede leer: vuelva a registrarla.",
+        ) from error
+    if clave is None:
+        raise HTTPException(status_code=404, detail=f"{examen_id} no tiene una clave registrada.")
+    return clave
+
+
+@app.get(
+    "/examenes/{examen_id}/clave",
+    summary="La clave de un examen",
+    response_description="Las respuestas, quién la habilitó y si todavía se puede cambiar.",
+    dependencies=[Depends(docente_de_la_sesion)],
+    responses={**_PIDE_SESION, 404: {"description": "El examen no tiene una clave registrada."}},
+)
+def clave(
+    examen_id: str,
+    claves: ClavesEnDisco = Depends(obtener_registro_de_claves),
+    lector: LectorDeResultados = Depends(obtener_lector_de_resultados),
+) -> ClaveEnRespuesta:
+    """La clave de un examen para el docente que la registra (A-04, ADR-0026). Pide sesión: es la
+    única ruta que publica las respuestas correctas, y solo a quien entró."""
+    return _clave_en_respuesta(
+        _clave_guardada(examen_id, claves), clave_se_puede_cambiar(examen_id, lector)
+    )
+
+
+@app.put(
+    "/examenes/{examen_id}/clave",
+    summary="Registrar la clave de un examen",
+    response_description="La clave guardada, sin habilitar.",
+    dependencies=[Depends(docente_de_la_sesion)],
+    responses={
+        **_PIDE_SESION,
+        409: {"description": "Ya hay hojas del examen calificadas con la clave: no se cambia."},
+        422: {"description": "La clave no cabe en la hoja o el identificador no sirve."},
+    },
+)
+def registrar_la_clave(
+    examen_id: str,
+    solicitud: SolicitudDeClave,
+    claves: ClavesEnDisco = Depends(obtener_registro_de_claves),
+    lector: LectorDeResultados = Depends(obtener_lector_de_resultados),
+) -> ClaveEnRespuesta:
+    """Guarda las respuestas correctas del examen (A-04, ADR-0026), de 1 a 40, cada una entre A y
+    D, todas con peso 1. Queda **sin habilitar**, también si reemplaza a una habilitada: la
+    habilitación certifica unas respuestas concretas (RF-07).
+
+    Se puede cambiar mientras ninguna hoja del examen tenga nota. Después responde 409: las notas
+    no se recalculan solas, y quedarían hojas calificadas con dos claves distintas."""
+    try:
+        guardada = registrar_clave(examen_id, solicitud.respuestas, claves, lector)
+    except ClaveInvalida as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    except ClaveYaUsada as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    logger.info(
+        "Clave registrada",
+        extra={
+            "evento": "clave_registrada",
+            "examen": examen_id,
+            "preguntas": len(guardada.preguntas),
+        },
+    )
+    return _clave_en_respuesta(guardada, se_puede_cambiar=True)
+
+
+@app.post(
+    "/examenes/{examen_id}/clave/habilitacion",
+    summary="Habilitar la clave de un examen",
+    response_description="La clave habilitada, con quién y cuándo.",
+    responses={**_PIDE_SESION, 404: {"description": "El examen no tiene una clave registrada."}},
+)
+def habilitar_la_clave(
+    examen_id: str,
+    docente: str = Depends(docente_de_la_sesion),
+    claves: ClavesEnDisco = Depends(obtener_registro_de_claves),
+    lector: LectorDeResultados = Depends(obtener_lector_de_resultados),
+) -> ClaveEnRespuesta:
+    """Habilita la clave a nombre del docente de la sesión y con la hora (RF-07, ADR-0026). Desde
+    ahí, las hojas que se lean del examen reciben nota; las que se leyeron antes, no. Si ya estaba
+    habilitada, queda como estaba."""
+    _clave_guardada(examen_id, claves)
+    try:
+        habilitada = habilitar_clave(examen_id, docente, datetime.now(timezone.utc), claves)
+    except ExamenSinClave as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    # Sin el correo de quien la habilitó: queda en la clave, no en el log.
+    logger.info("Clave habilitada", extra={"evento": "clave_habilitada", "examen": examen_id})
+    return _clave_en_respuesta(habilitada, clave_se_puede_cambiar(examen_id, lector))
 
 
 @app.get(

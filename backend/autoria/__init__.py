@@ -29,18 +29,31 @@ from autoria.presupuesto import (
     PresupuestoDeSolicitudes,
 )
 from autoria.proveedor_llm import HUELLA_DE_LAS_INSTRUCCIONES, GeneradorCompatibleConOpenAI
+from autoria.registro_de_claves import (
+    MAXIMO_DE_PREGUNTAS,
+    ClaveInvalida,
+    ClaveYaUsada,
+    ExamenSinClave,
+    clave_se_puede_cambiar,
+    habilitar_clave,
+    registrar_clave,
+)
 
 # Interfaz pública del módulo, como en `ingesta`: quien use `autoria` importa de aquí y no de
 # sus archivos internos. La línea `Posee:` de arriba nombra las entidades cuyo contenido decide
 # este módulo, con la regla de dueño único de arc42 §8.3.
 __all__ = [
     "CacheDePropuestas",
+    "ClaveInvalida",
+    "ClaveYaUsada",
     "DistractorPropuesto",
     "EstadoDeLaCache",
     "GeneradorConCache",
     "HUELLA_DE_LAS_INSTRUCCIONES",
+    "MAXIMO_DE_PREGUNTAS",
     "EstadoDelPresupuesto",
     "ExamenConClave",
+    "ExamenSinClave",
     "GeneradorCompatibleConOpenAI",
     "GeneradorConPresupuesto",
     "GeneradorDeDistractores",
@@ -50,8 +63,11 @@ __all__ = [
     "PropuestaDescartada",
     "ProveedorNoDisponible",
     "ResultadoDePropuesta",
+    "clave_se_puede_cambiar",
     "examenes_con_clave",
+    "habilitar_clave",
     "proponer_distractores",
+    "registrar_clave",
     "SOLICITUDES_POR_DIA",
     "SOLICITUDES_POR_MINUTO",
 ]

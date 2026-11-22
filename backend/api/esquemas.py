@@ -66,7 +66,10 @@ from infraestructura.modelo import (
 # salvo `/health`, `/metricas` y la de entrar lo piden en `Authorization: Bearer`. Sube la mayor
 # porque un cliente de 1.8.0 recibe 401 donde antes recibia 200. La solicitud de revision ya no
 # lleva `por`: quien resuelve es el docente de la sesion, y un `por` que llegue se ignora.
-VERSION_DEL_CONTRATO = "2.0.0"
+#
+# 2.1.0 agrega la clave de un examen (A-04, ADR-0026): leerla, registrarla y habilitarla. Solo
+# agrega rutas, asi que sube la menor.
+VERSION_DEL_CONTRATO = "2.1.0"
 
 EstadoDeHoja = Literal["encolada", "pendiente_de_encolar"]
 
@@ -523,3 +526,25 @@ class SesionEnRespuesta(BaseModel):
     token: str
     correo: str = Field(description="El correo con el que quedo la sesion, en minusculas.")
     vence: datetime = Field(description="Desde este momento, en UTC, el token deja de valer.")
+
+
+class SolicitudDeClave(BaseModel):
+    """Las respuestas correctas del examen, la de la pregunta 1 primero. Que quepan en la hoja (de 1
+    a 40, cada una entre A y D) lo decide `autoria`, con un mensaje para el docente."""
+
+    respuestas: list[str] = Field(max_length=100)
+
+
+class ClaveEnRespuesta(BaseModel):
+    """La clave de un examen, para el docente que la registra (ADR-0026). Las rutas de la clave
+    piden sesion; la revision y la lista de examenes siguen sin las respuestas."""
+
+    examen_id: str
+    respuestas: list[str] = Field(description="La respuesta correcta de cada pregunta, desde la 1.")
+    habilitada_por: str | None = Field(
+        description="El correo del docente que la habilito; nulo mientras no este habilitada."
+    )
+    habilitada_en: datetime | None = Field(description="Cuando se habilito, en UTC.")
+    se_puede_cambiar: bool = Field(
+        description="Falso si ya hay hojas del examen calificadas con ella (409 al cambiarla)."
+    )

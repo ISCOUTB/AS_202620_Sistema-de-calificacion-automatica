@@ -56,6 +56,8 @@ RUTA_REVISION = "/examenes/{examen_id}/revision"
 RUTA_RESOLVER = "/examenes/{examen_id}/hojas/{hoja_id}/revision"
 RUTA_RECORTE = "/examenes/{examen_id}/hojas/{hoja_id}/preguntas/{numero}/recorte"
 RUTA_SESION = "/sesion"
+RUTA_CLAVE = "/examenes/{examen_id}/clave"
+RUTA_HABILITACION = "/examenes/{examen_id}/clave/habilitacion"
 
 
 @pytest.fixture(scope="module")
@@ -157,7 +159,7 @@ def test_la_version_del_contrato_es_la_declarada_en_el_codigo(contrato_publicado
     assert contrato_publicado["info"]["version"] == VERSION_DEL_CONTRATO
 
 
-def test_el_contrato_declara_las_diez_rutas_que_la_api_expone(contrato_publicado):
+def test_el_contrato_declara_las_doce_rutas_que_la_api_expone(contrato_publicado):
     """Las rutas son lo primero que un consumidor busca; que desaparezca una es el cambio
     incompatible mas obvio que existe.
 
@@ -165,13 +167,15 @@ def test_el_contrato_declara_las_diez_rutas_que_la_api_expone(contrato_publicado
     ADR-0013 promete cuando el proveedor de LLM falla, y un cliente que no sepa que existe la
     trataria como un error inesperado. Desde 1.2.0 se exige tambien su 429, el corte del
     presupuesto de ADR-0015, y la ruta `GET /metricas` que lo publica. Desde 2.0.0, la ruta de
-    entrar (ADR-0025)."""
+    entrar (ADR-0025), y desde 2.1.0, las dos de la clave (ADR-0026)."""
     rutas = contrato_publicado["paths"]
 
     assert set(rutas) == {
         "/health", RUTA_CARGA, RUTA_DISTRACTORES, RUTA_METRICAS, RUTA_RESULTADOS, RUTA_EXAMENES,
-        RUTA_REVISION, RUTA_RESOLVER, RUTA_RECORTE, RUTA_SESION,
+        RUTA_REVISION, RUTA_RESOLVER, RUTA_RECORTE, RUTA_SESION, RUTA_CLAVE, RUTA_HABILITACION,
     }
+    assert {"get", "put"} <= set(rutas[RUTA_CLAVE])
+    assert "post" in rutas[RUTA_HABILITACION]
     assert "get" in rutas[RUTA_REVISION]
     assert "post" in rutas[RUTA_RESOLVER]
     assert "image/png" in rutas[RUTA_RECORTE]["get"]["responses"]["200"]["content"]
