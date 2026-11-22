@@ -30,10 +30,22 @@ enum Seccion {
 /// destinos lejos entre sí. Las cuatro pantallas viven en un [IndexedStack], así que cambiar de
 /// sección no pierde lo que el docente estaba escribiendo o el reporte de la última carga.
 class MarcoApp extends StatefulWidget {
-  const MarcoApp({super.key, required this.servicios, this.seccionInicial = Seccion.panel});
+  const MarcoApp({
+    super.key,
+    required this.servicios,
+    this.seccionInicial = Seccion.panel,
+    this.correo,
+    this.alSalir,
+  });
 
   final ServiciosApp servicios;
   final Seccion seccionInicial;
+
+  /// El correo de la sesión, para la barra superior (ADR-0025).
+  final String? correo;
+
+  /// Cierra la sesión; sin él, la barra no ofrece salir.
+  final VoidCallback? alSalir;
 
   @override
   State<MarcoApp> createState() => _MarcoAppState();
@@ -41,6 +53,16 @@ class MarcoApp extends StatefulWidget {
 
 class _MarcoAppState extends State<MarcoApp> {
   final _estadoApi = ValueNotifier<EstadoApi>(EstadoApi.verificando);
+
+  /// Lo que comparten la carga y la revisión: el nombre de archivo de cada hoja subida, el
+  /// examen que la carga pide revisar y un aviso cada vez que se guarda una revisión.
+  final _nombresDeHojas = ValueNotifier<Map<String, String>>(const {});
+  final _examenParaRevisar = ValueNotifier<String?>(null);
+  final _revisionesGuardadas = ValueNotifier<int>(0);
+
+  /// Avisa cada vez que Revisión vuelve a la vista: la pantalla sigue viva mientras se mira otra
+  /// sección, y lo subido en Carga no aparecía hasta recargar la página.
+  final _revisionALaVista = ValueNotifier<int>(0);
   late Seccion _seccion = widget.seccionInicial;
 
   @override
@@ -52,6 +74,10 @@ class _MarcoAppState extends State<MarcoApp> {
   @override
   void dispose() {
     _estadoApi.dispose();
+    _nombresDeHojas.dispose();
+    _examenParaRevisar.dispose();
+    _revisionesGuardadas.dispose();
+    _revisionALaVista.dispose();
     super.dispose();
   }
 
@@ -62,7 +88,23 @@ class _MarcoAppState extends State<MarcoApp> {
     _estadoApi.value = conectada ? EstadoApi.conectada : EstadoApi.sinConexion;
   }
 
-  void _ir(int indice) => setState(() => _seccion = Seccion.values[indice]);
+  void _ir(int indice) => _mostrar(Seccion.values[indice]);
+
+  void _mostrar(Seccion seccion) {
+    if (seccion == Seccion.revision && _seccion != Seccion.revision) _revisionALaVista.value++;
+    setState(() => _seccion = seccion);
+  }
+
+  /// El examen va antes que el aviso: si es otro, la revisión lo pide una sola vez.
+  void _irARevisar(String examenId) {
+    // Se pasa por null para que avise aunque se pida el mismo examen que la vez anterior: en
+    // Revisión pudieron elegir otro desde entonces.
+    _examenParaRevisar.value = null;
+    _examenParaRevisar.value = examenId;
+    _mostrar(Seccion.revision);
+  }
+
+  final _claveContenido = GlobalKey();
 
   @override
   Widget build(BuildContext context) {
@@ -71,10 +113,27 @@ class _MarcoAppState extends State<MarcoApp> {
       const PantallaPanel(),
       PantallaCarga(
         seleccionarArchivos: servicios.seleccionarArchivos,
+        tomarFoto: servicios.tomarFoto,
         subirHojas: servicios.subirHojas,
+        consultarResultados: servicios.consultarResultados,
+        listarExamenes: servicios.listarExamenes,
+        alRecibirHojas: (nombres) =>
+            _nombresDeHojas.value = {..._nombresDeHojas.value, ...nombres},
+        alRevisar: _irARevisar,
+        revisionesGuardadas: _revisionesGuardadas,
         estadoApi: _estadoApi,
       ),
-      const PantallaRevision(),
+      PantallaRevision(
+        listarExamenes: servicios.listarExamenes,
+        consultarRevision: servicios.consultarRevision,
+        guardarRevision: servicios.guardarRevision,
+        urlDelRecorte: servicios.urlDelRecorte,
+        encabezadosDelRecorte: servicios.encabezadosDelRecorte,
+        nombresDeHojas: _nombresDeHojas,
+        examenPedido: _examenParaRevisar,
+        alMostrarse: _revisionALaVista,
+        alGuardar: () => _revisionesGuardadas.value++,
+      ),
       PantallaPauta(
         proponerDistractores: servicios.proponerDistractores,
         estadoApi: _estadoApi,
@@ -83,7 +142,12 @@ class _MarcoAppState extends State<MarcoApp> {
 
     // `StackFit.expand`: cada pantalla recibe el área completa, así que su desplazamiento ocupa
     // el alto entero y una pantalla corta queda arriba, no centrada en el espacio que sobra.
+    //
+    // La llave global lo mantiene vivo cuando cambia de lugar: en una ventana ancha va dentro de
+    // una fila junto al riel, y en una angosta va directo en el cuerpo. Sin ella, cruzar ese ancho
+    // creaba las pantallas de nuevo y el docente perdía el examen y las fotos que ya había elegido.
     final contenido = IndexedStack(
+      key: _claveContenido,
       index: _seccion.index,
       sizing: StackFit.expand,
       children: pantallas,
@@ -91,7 +155,12 @@ class _MarcoAppState extends State<MarcoApp> {
     final ancha = MediaQuery.sizeOf(context).width >= QAnchos.riel;
 
     return Scaffold(
-      appBar: BarraSuperior(estado: _estadoApi, alReintentar: _comprobarApi),
+      appBar: BarraSuperior(
+        estado: _estadoApi,
+        alReintentar: _comprobarApi,
+        correo: widget.correo,
+        alSalir: widget.alSalir,
+      ),
       body: ancha
           ? Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
