@@ -1,6 +1,3 @@
-import 'package:http/http.dart' as http;
-
-import '../common/api/cliente_con_sesion.dart';
 import '../common/api/servicio_salud.dart' as salud;
 import '../features/carga/data/camara.dart' as camara;
 import '../features/carga/data/selector_archivos.dart' as selector;
@@ -10,10 +7,6 @@ import '../features/carga/data/servicio_carga.dart' as carga;
 import '../features/carga/data/servicio_resultados.dart' as resultados;
 import '../features/pauta/data/servicio_distractores.dart' as distractores;
 import '../features/revision/data/servicio_revision.dart' as revision;
-<<<<<<< HEAD
-import 'sesion_actual.dart';
-=======
->>>>>>> 88090461e81adc5d38504d646046fa218be33615
 
 /// Las operaciones que la interfaz necesita del mundo exterior (la API y el navegador),
 /// reunidas para inyectarlas.
@@ -36,48 +29,11 @@ class ServiciosApp {
     this.consultarRevision,
     this.guardarRevision,
     this.urlDelRecorte,
-<<<<<<< HEAD
-    this.encabezadosDelRecorte,
-=======
->>>>>>> 88090461e81adc5d38504d646046fa218be33615
     this.tomarFoto,
   });
 
   /// Las implementaciones reales: HTTP contra `BACKEND_URL` y el diálogo del navegador. La cámara
   /// solo en una pantalla táctil.
-<<<<<<< HEAD
-  ///
-  /// Todo lo que va a la API pasa por un mismo [ClienteConSesion] (ADR-0025): manda el token de
-  /// [sesion] y, si la API responde 401, la cierra para volver a la entrada. `/health` no lo usa,
-  /// porque la sonda de vida no pide sesión. [interno] existe para las pruebas.
-  factory ServiciosApp.reales(SesionActual sesion, {http.Client? interno}) {
-    final cliente = ClienteConSesion(
-      token: () => sesion.token,
-      alVencer: sesion.vencer,
-      interno: interno,
-    );
-    return ServiciosApp(
-      tomarFoto: camara.esPantallaTactil() ? foto.tomarFoto : null,
-      verificarSalud: salud.verificarSalud,
-      seleccionarArchivos: selector.seleccionarArchivos,
-      subirHojas: (examenId, archivos) => carga.subirHojas(examenId, archivos, cliente: cliente),
-      proponerDistractores: (solicitud) =>
-          distractores.proponerDistractores(solicitud, cliente: cliente),
-      consultarResultados: (examenId) =>
-          resultados.consultarResultados(examenId, cliente: cliente),
-      listarExamenes: () => examenes.listarExamenes(cliente: cliente),
-      consultarRevision: (examenId) => revision.consultarRevision(examenId, cliente: cliente),
-      guardarRevision: (examenId, hojaId, opciones) =>
-          revision.guardarRevision(examenId, hojaId, opciones, cliente: cliente),
-      urlDelRecorte: revision.urlDelRecorte,
-      // El recorte lo pide `Image.network`, que no pasa por el cliente: en web baja la imagen sin
-      // credenciales, así que el token va como encabezado de la imagen.
-      encabezadosDelRecorte: () => {
-        if (sesion.token case final token?) 'Authorization': 'Bearer $token',
-      },
-    );
-  }
-=======
   factory ServiciosApp.reales() => ServiciosApp(
         tomarFoto: camara.esPantallaTactil() ? foto.tomarFoto : null,
         verificarSalud: salud.verificarSalud,
@@ -90,7 +46,6 @@ class ServiciosApp {
         guardarRevision: revision.guardarRevision,
         urlDelRecorte: revision.urlDelRecorte,
       );
->>>>>>> 88090461e81adc5d38504d646046fa218be33615
 
   final Future<bool> Function() verificarSalud;
 
@@ -115,28 +70,13 @@ class ServiciosApp {
   final Future<List<examenes.ExamenConClave>> Function()? listarExamenes;
 
   /// La revisión manual (RF-08): lo que espera al docente, guardar lo que resolvió y dónde está
-<<<<<<< HEAD
-  /// el recorte de cada pregunta. Opcionales: sin ellos, la pantalla de revisión queda vacía. Quién
-  /// guarda no viaja: es el docente de la sesión (ADR-0025).
-=======
   /// el recorte de cada pregunta. Opcionales: sin ellos, la pantalla de revisión queda vacía.
->>>>>>> 88090461e81adc5d38504d646046fa218be33615
   final Future<revision.RevisionDelExamen> Function(String examenId)? consultarRevision;
   final Future<resultados.ResultadoDeHoja> Function(
     String examenId,
     String hojaId,
-<<<<<<< HEAD
-    Map<int, String?> opciones,
-  )? guardarRevision;
-  final String Function(String examenId, String hojaId, int numero)? urlDelRecorte;
-
-  /// Los encabezados con que se pide cada recorte: el token de la sesión. Sin él, la imagen se
-  /// pide sin encabezados.
-  final Map<String, String> Function()? encabezadosDelRecorte;
-=======
     String por,
     Map<int, String?> opciones,
   )? guardarRevision;
   final String Function(String examenId, String hojaId, int numero)? urlDelRecorte;
->>>>>>> 88090461e81adc5d38504d646046fa218be33615
 }

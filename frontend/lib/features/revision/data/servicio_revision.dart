@@ -93,10 +93,6 @@ class HojaEnRevision {
     required this.preguntas,
     this.nombreArchivo,
     this.recibidaEn,
-<<<<<<< HEAD
-    this.codigo,
-=======
->>>>>>> 88090461e81adc5d38504d646046fa218be33615
   });
 
   final String hojaId;
@@ -112,13 +108,6 @@ class HojaEnRevision {
   /// otro (`hoja1.jpg`), y la hora es lo que las distingue.
   final DateTime? recibidaEn;
 
-<<<<<<< HEAD
-  /// El código del estudiante tal como se leyó, con `?` en los dígitos que no se leyeron. Nulo si
-  /// la lectura no lo trae. Es como el profesor sabe de quién es la hoja.
-  final String? codigo;
-
-=======
->>>>>>> 88090461e81adc5d38504d646046fa218be33615
   int get pendientes => preguntas.where((p) => !p.resuelta).length;
 
   /// La última vez que el profesor guardó algo en la hoja; nula si todavía no guardó nada.
@@ -145,10 +134,6 @@ class HojaEnRevision {
       ],
       nombreArchivo: nombre == null || nombre.trim().isEmpty ? null : nombre,
       recibidaEn: recibida == null ? null : DateTime.tryParse(recibida),
-<<<<<<< HEAD
-      codigo: json['codigo'] as String?,
-=======
->>>>>>> 88090461e81adc5d38504d646046fa218be33615
     );
   }
 }
@@ -246,28 +231,17 @@ Future<RevisionDelExamen> consultarRevision(String examenId, {http.Client? clien
 }
 
 /// Guarda lo que el profesor vio marcado en cada pregunta (nulo si ninguna opción vale) y devuelve
-<<<<<<< HEAD
-/// la hoja con la nota recalculada. Quién lo resolvió no viaja: la API registra al docente de la
-/// sesión (ADR-0025).
-Future<ResultadoDeHoja> guardarRevision(
-  String examenId,
-  String hojaId,
-=======
 /// la hoja con la nota recalculada. [por] queda registrado con cada decisión.
 Future<ResultadoDeHoja> guardarRevision(
   String examenId,
   String hojaId,
   String por,
->>>>>>> 88090461e81adc5d38504d646046fa218be33615
   Map<int, String?> opciones, {
   http.Client? cliente,
 }) async {
   final uri = Uri.parse('${_ruta(examenId)}/hojas/${Uri.encodeComponent(hojaId)}/revision');
   final cuerpo = jsonEncode({
-<<<<<<< HEAD
-=======
     'por': por,
->>>>>>> 88090461e81adc5d38504d646046fa218be33615
     'resoluciones': [
       for (final MapEntry(key: numero, value: opcion) in opciones.entries)
         {'numero': numero, 'opcion': opcion},

@@ -30,22 +30,10 @@ enum Seccion {
 /// destinos lejos entre sí. Las cuatro pantallas viven en un [IndexedStack], así que cambiar de
 /// sección no pierde lo que el docente estaba escribiendo o el reporte de la última carga.
 class MarcoApp extends StatefulWidget {
-  const MarcoApp({
-    super.key,
-    required this.servicios,
-    this.seccionInicial = Seccion.panel,
-    this.correo,
-    this.alSalir,
-  });
+  const MarcoApp({super.key, required this.servicios, this.seccionInicial = Seccion.panel});
 
   final ServiciosApp servicios;
   final Seccion seccionInicial;
-
-  /// El correo de la sesión, para la barra superior (ADR-0025).
-  final String? correo;
-
-  /// Cierra la sesión; sin él, la barra no ofrece salir.
-  final VoidCallback? alSalir;
 
   @override
   State<MarcoApp> createState() => _MarcoAppState();
@@ -128,10 +116,6 @@ class _MarcoAppState extends State<MarcoApp> {
         consultarRevision: servicios.consultarRevision,
         guardarRevision: servicios.guardarRevision,
         urlDelRecorte: servicios.urlDelRecorte,
-<<<<<<< HEAD
-        encabezadosDelRecorte: servicios.encabezadosDelRecorte,
-=======
->>>>>>> 88090461e81adc5d38504d646046fa218be33615
         nombresDeHojas: _nombresDeHojas,
         examenPedido: _examenParaRevisar,
         alMostrarse: _revisionALaVista,
@@ -158,12 +142,7 @@ class _MarcoAppState extends State<MarcoApp> {
     final ancha = MediaQuery.sizeOf(context).width >= QAnchos.riel;
 
     return Scaffold(
-      appBar: BarraSuperior(
-        estado: _estadoApi,
-        alReintentar: _comprobarApi,
-        correo: widget.correo,
-        alSalir: widget.alSalir,
-      ),
+      appBar: BarraSuperior(estado: _estadoApi, alReintentar: _comprobarApi),
       body: ancha
           ? Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
