@@ -192,10 +192,9 @@ void main() {
       );
     });
 
-    final hoja = await guardarRevision('P2', 'h-1', 'Docente', {7: 'C', 9: null}, cliente: cliente);
+    final hoja = await guardarRevision('P2', 'h-1', {7: 'C', 9: null}, cliente: cliente);
 
     expect(enviado, {
-      'por': 'Docente',
       'resoluciones': [
         {'numero': 7, 'opcion': 'C'},
         {'numero': 9, 'opcion': null},
@@ -214,7 +213,7 @@ void main() {
     );
 
     await expectLater(
-      guardarRevision('P2', 'h-1', 'Docente', {8: 'A'}, cliente: cliente),
+      guardarRevision('P2', 'h-1', {8: 'A'}, cliente: cliente),
       throwsA(isA<ExcepcionDeRevision>().having(
         (e) => e.mensaje,
         'mensaje',

@@ -4,16 +4,30 @@ import 'package:flutter/material.dart';
 import '../common/api/servicio_salud.dart';
 import '../common/tema/tokens.dart';
 
-/// Barra superior institucional: la marca y el estado real de la conexión con la API.
+/// Barra superior institucional: la marca, el estado real de la conexión con la API y, con una
+/// sesión abierta, quién entró y el botón para salir.
 ///
-/// El diseño original mostraba notificaciones y el perfil de un profesor. No están: el sistema
-/// todavía no tiene cuentas (A-05) ni notificaciones, y una campana o un nombre inventados se
-/// leerían como funciones que existen. Lo que sí es real, y útil, es saber si la API responde.
+/// El diseño original mostraba notificaciones y el perfil de un profesor. Las notificaciones no
+/// están: el sistema no las tiene, y una campana inventada se leería como una función que existe.
+/// Del perfil queda lo que es real desde ADR-0025: el correo con que se entró. En un teléfono se
+/// esconde y queda solo el botón de salir, para no quitarle espacio al estado de la API.
 class BarraSuperior extends StatelessWidget implements PreferredSizeWidget {
-  const BarraSuperior({super.key, required this.estado, required this.alReintentar});
+  const BarraSuperior({
+    super.key,
+    required this.estado,
+    required this.alReintentar,
+    this.correo,
+    this.alSalir,
+  });
 
   final ValueListenable<EstadoApi> estado;
   final VoidCallback alReintentar;
+
+  /// El correo de la sesión abierta; sin él no se muestra.
+  final String? correo;
+
+  /// Cierra la sesión, después de confirmarlo en un cuadro; sin él no hay botón para salir.
+  final VoidCallback? alSalir;
 
   @override
   Size get preferredSize => const Size.fromHeight(64);
@@ -69,6 +83,28 @@ class BarraSuperior extends StatelessWidget implements PreferredSizeWidget {
                     alReintentar: alReintentar,
                   ),
                 ),
+                if (correo case final correo? when !angosta) ...[
+                  const SizedBox(width: QEspacios.md),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 220),
+                    child: Text(
+                      correo,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: textos.bodySmall?.copyWith(color: QColores.textoSobreNavySuave),
+                    ),
+                  ),
+                ],
+                if (alSalir case final alSalir?) ...[
+                  const SizedBox(width: QEspacios.xs),
+                  IconButton(
+                    tooltip: 'Cerrar sesión',
+                    onPressed: () async {
+                      if (await _confirmarCierre(context)) alSalir();
+                    },
+                    icon: const Icon(Icons.logout, color: QColores.textoSobreNavy),
+                  ),
+                ],
               ],
             ),
           ),
@@ -76,6 +112,33 @@ class BarraSuperior extends StatelessWidget implements PreferredSizeWidget {
       ),
     );
   }
+}
+
+/// Pregunta antes de cerrar la sesión: el botón está junto al estado de la API, y un toque por
+/// error sacaba al docente y le hacía perder lo que no había guardado. Cancelar o tocar fuera del
+/// cuadro lo deja como estaba.
+Future<bool> _confirmarCierre(BuildContext context) async {
+  final confirmado = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('¿Cerrar sesión?'),
+      content: const Text(
+        'Tendrá que volver a entrar con su correo y su contraseña. Lo que no se haya guardado, '
+        'como las fotos elegidas en Carga o lo elegido en Revisión, se pierde.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('Cerrar sesión'),
+        ),
+      ],
+    ),
+  );
+  return confirmado ?? false;
 }
 
 class _Marca extends StatelessWidget {

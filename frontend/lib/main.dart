@@ -1,13 +1,20 @@
 import 'package:flutter/material.dart';
 
+import 'app/almacen_de_sesion.dart';
 import 'app/app.dart';
 import 'app/marco_app.dart';
 import 'app/servicios.dart';
+import 'app/sesion_actual.dart';
+import 'common/api/sesion.dart';
 
 void main() {
+  // Una sola sesión para toda la aplicación: la entrada la abre y los servicios mandan su token.
+  final sesion = SesionActual(almacen: almacenDelNavegador());
   runApp(QuantiaApp(
-    servicios: ServiciosApp.reales(),
+    servicios: ServiciosApp.reales(sesion),
     seccionInicial: seccionDesdeUrl(Uri.base),
+    sesion: sesion,
+    iniciarSesion: iniciarSesion,
   ));
 }
 

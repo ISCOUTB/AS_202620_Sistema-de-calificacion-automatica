@@ -237,17 +237,16 @@ Future<RevisionDelExamen> consultarRevision(String examenId, {http.Client? clien
 }
 
 /// Guarda lo que el profesor vio marcado en cada pregunta (nulo si ninguna opción vale) y devuelve
-/// la hoja con la nota recalculada. [por] queda registrado con cada decisión.
+/// la hoja con la nota recalculada. Quién lo resolvió no viaja: la API registra al docente de la
+/// sesión (ADR-0025).
 Future<ResultadoDeHoja> guardarRevision(
   String examenId,
   String hojaId,
-  String por,
   Map<int, String?> opciones, {
   http.Client? cliente,
 }) async {
   final uri = Uri.parse('${_ruta(examenId)}/hojas/${Uri.encodeComponent(hojaId)}/revision');
   final cuerpo = jsonEncode({
-    'por': por,
     'resoluciones': [
       for (final MapEntry(key: numero, value: opcion) in opciones.entries)
         {'numero': numero, 'opcion': opcion},

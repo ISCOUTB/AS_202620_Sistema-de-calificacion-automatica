@@ -20,8 +20,8 @@ import '../data/servicio_revision.dart';
 /// estudiante. El sistema decide con la clave si es correcto y recalcula la nota.
 ///
 /// La pantalla no recibe la clave. Sí recibe el código del estudiante, que es como el docente sabe
-/// de quién es cada hoja: hasta A-05 la ruta es pública, y por eso solo se cargan hojas sintéticas.
-/// El nombre que escribe el docente queda con cada decisión (RF-10), sin verificar hasta entonces.
+/// de quién es cada hoja. Quién decide no se escribe: la API registra al docente de la sesión con
+/// cada decisión (RF-10, ADR-0025).
 class PantallaRevision extends StatefulWidget {
   const PantallaRevision({
     super.key,
@@ -29,6 +29,7 @@ class PantallaRevision extends StatefulWidget {
     this.consultarRevision,
     this.guardarRevision,
     this.urlDelRecorte,
+    this.encabezadosDelRecorte,
     this.nombresDeHojas,
     this.examenPedido,
     this.alMostrarse,
@@ -40,12 +41,14 @@ class PantallaRevision extends StatefulWidget {
   final Future<ResultadoDeHoja> Function(
     String examenId,
     String hojaId,
-    String por,
     Map<int, String?> opciones,
   )? guardarRevision;
 
   /// Dónde pedir el recorte de una pregunta. Sin él, la pregunta se muestra sin imagen.
   final String Function(String examenId, String hojaId, int numero)? urlDelRecorte;
+
+  /// Con qué encabezados pedirlo: el token de la sesión, porque la ruta del recorte lo pide.
+  final Map<String, String> Function()? encabezadosDelRecorte;
 
   /// El nombre de archivo de cada hoja subida en esta sesión, por `hoja_id`.
   final ValueListenable<Map<String, String>>? nombresDeHojas;
@@ -69,7 +72,6 @@ const _ninguna = '-';
 
 class _PantallaRevisionState extends State<PantallaRevision> {
   final _examen = TextEditingController();
-  final _nombre = TextEditingController();
 
   List<ExamenConClave>? _examenes;
   bool _cargandoExamenes = false;
@@ -98,7 +100,6 @@ class _PantallaRevisionState extends State<PantallaRevision> {
     final pedido = widget.examenPedido?.value;
     if (pedido != null) _examen.text = pedido;
     _examen.addListener(_alCambiarElExamen);
-    _nombre.addListener(_redibujar);
     widget.examenPedido?.addListener(_alPedirExamen);
     widget.alMostrarse?.addListener(_alMostrarse);
     widget.nombresDeHojas?.addListener(_redibujar);
@@ -117,7 +118,6 @@ class _PantallaRevisionState extends State<PantallaRevision> {
     widget.alMostrarse?.removeListener(_alMostrarse);
     widget.nombresDeHojas?.removeListener(_redibujar);
     _examen.dispose();
-    _nombre.dispose();
     super.dispose();
   }
 
@@ -293,7 +293,7 @@ class _PantallaRevisionState extends State<PantallaRevision> {
     if (guardar == null || examen == null || cambios.isEmpty) return;
     setState(() => _guardando = true);
     try {
-      final resultado = await guardar(examen, hoja.hojaId, _nombre.text.trim(), cambios);
+      final resultado = await guardar(examen, hoja.hojaId, cambios);
       if (!mounted) return;
       final nota = resultado.notaEnDecimas == null ? '' : notaLegible(resultado.notaEnDecimas!);
       _avisar(resultado.provisional ? 'Guardado. Nota provisional $nota.' : 'Guardado. Nota $nota.');
@@ -347,31 +347,15 @@ class _PantallaRevisionState extends State<PantallaRevision> {
               cargando: _cargandoExamenes,
               alReintentar: _fallaExamenes ? _volverAPedirExamenes : null,
             );
-            final nombre = QTarjeta(
-              padding: EdgeInsets.all(ancha ? QEspacios.lg : QEspacios.md),
-              child: TextField(
-                controller: _nombre,
-                enabled: !_guardando,
-                textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(
-                  labelText: 'Su nombre',
-                  helperText: 'Queda registrado con cada decisión.',
-                  prefixIcon: Icon(Icons.person_outline),
-                ),
-              ),
-            );
-            if (!ancha) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [examen, const SizedBox(height: QEspacios.md), nombre],
-              );
-            }
+            if (!ancha) return examen;
+            // En ancho conserva la mitad de la fila, la que tenía junto al nombre que ya no se
+            // pide: a todo el ancho, una lista de exámenes se vuelve una franja difícil de leer.
             return Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(child: examen),
                 const SizedBox(width: QEspacios.lg),
-                Expanded(child: nombre),
+                const Spacer(),
               ],
             );
           },
@@ -457,15 +441,12 @@ class _PantallaRevisionState extends State<PantallaRevision> {
     final textos = Theme.of(context).textTheme;
     final elegidas = _eleccionesDe(hoja);
     final cambios = _cambios(hoja);
-    final sinNombre = _nombre.text.trim().isEmpty;
-    final puedeGuardar = !_guardando && cambios.isNotEmpty && !sinNombre;
+    final puedeGuardar = !_guardando && cambios.isNotEmpty;
     final String indicacion;
     if (_guardando) {
       indicacion = 'Guardando…';
     } else if (cambios.isEmpty) {
       indicacion = 'Elija lo que marcó el estudiante.';
-    } else if (sinNombre) {
-      indicacion = 'Escriba su nombre para guardar.';
     } else {
       indicacion = cambios.length == 1
           ? 'Se guardará 1 pregunta.'
@@ -520,6 +501,7 @@ class _PantallaRevisionState extends State<PantallaRevision> {
             recorte: pregunta.conRecorte && widget.urlDelRecorte != null && _examenVisto != null
                 ? widget.urlDelRecorte!(_examenVisto!, hoja.hojaId, pregunta.numero)
                 : null,
+            encabezados: widget.encabezadosDelRecorte?.call(),
             habilitada: !_guardando,
             alElegir: (opcion) => setState(() => elegidas[pregunta.numero] = opcion),
           ),
@@ -741,11 +723,13 @@ class _TarjetaPregunta extends StatelessWidget {
     required this.recorte,
     required this.habilitada,
     required this.alElegir,
+    this.encabezados,
   });
 
   final PreguntaEnRevision pregunta;
   final String? elegida;
   final String? recorte;
+  final Map<String, String>? encabezados;
   final bool habilitada;
   final ValueChanged<String> alElegir;
 
@@ -781,6 +765,7 @@ class _TarjetaPregunta extends StatelessWidget {
                 constraints: const BoxConstraints(maxHeight: 96),
                 child: Image.network(
                   recorte,
+                  headers: encabezados,
                   fit: BoxFit.contain,
                   alignment: Alignment.centerLeft,
                   semanticLabel: 'La fila de la pregunta ${pregunta.numero} en la hoja',

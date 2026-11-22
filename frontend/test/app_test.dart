@@ -6,6 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/app/app.dart';
 import 'package:frontend/app/marco_app.dart';
 import 'package:frontend/app/servicios.dart';
+import 'package:frontend/app/sesion_actual.dart';
+import 'package:frontend/common/api/sesion.dart';
 import 'package:frontend/features/carga/data/servicio_carga.dart';
 import 'package:frontend/features/carga/data/servicio_examenes.dart';
 import 'package:frontend/features/pauta/data/servicio_distractores.dart';
@@ -181,5 +183,124 @@ void main() {
     expect(seccionDesdeUrl(Uri.parse('https://x/?seccion=pauta')), Seccion.pauta);
     expect(seccionDesdeUrl(Uri.parse('https://x/?seccion=otra')), Seccion.panel);
     expect(seccionDesdeUrl(Uri.parse('https://x/')), Seccion.panel);
+  });
+
+  group('La puerta de la sesión', () {
+    final sesionDePrueba = Sesion(
+      token: 'v1.abc.def',
+      correo: 'profe@utb.edu.co',
+      vence: DateTime.utc(2026, 11, 22, 6),
+    );
+
+    Future<SesionActual> montarConSesion(
+      WidgetTester tester, {
+      Size tamano = const Size(1280, 900),
+      Sesion? guardada,
+      Future<Sesion> Function(String correo, String contrasena)? iniciarSesion,
+    }) async {
+      tester.view.physicalSize = tamano;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final almacen = AlmacenEnMemoria();
+      if (guardada != null) almacen.guardar(guardada, recordar: true);
+      final sesion = SesionActual(almacen: almacen, reloj: () => DateTime.utc(2026, 11, 21, 18));
+      await tester.pumpWidget(QuantiaApp(
+        servicios: _servicios(),
+        sesion: sesion,
+        iniciarSesion: iniciarSesion ?? (correo, contrasena) async => sesionDePrueba,
+      ));
+      await tester.pumpAndSettle();
+      return sesion;
+    }
+
+    testWidgets('Sin sesión abre la entrada y no las secciones', (tester) async {
+      await montarConSesion(tester);
+
+      expect(find.text('Bienvenido a QuantIA'), findsOneWidget);
+      expect(find.byType(NavigationRail), findsNothing);
+    });
+
+    testWidgets('Al entrar muestra las secciones y el correo en la barra', (tester) async {
+      final pedidas = <(String, String)>[];
+      final sesion = await montarConSesion(tester, iniciarSesion: (correo, contrasena) async {
+        pedidas.add((correo, contrasena));
+        return sesionDePrueba;
+      });
+
+      await tester.enterText(find.widgetWithText(TextField, 'Correo institucional'), 'profe@utb.edu.co');
+      await tester.enterText(find.widgetWithText(TextField, 'Contraseña del docente'), 'calculo-diferencial');
+      await tester.tap(find.text('Iniciar sesión'));
+      await tester.pumpAndSettle();
+
+      expect(pedidas, [('profe@utb.edu.co', 'calculo-diferencial')]);
+      expect(sesion.sesion, sesionDePrueba);
+      expect(find.byType(NavigationRail), findsOneWidget);
+      expect(find.text('profe@utb.edu.co'), findsOneWidget);
+    });
+
+    testWidgets('Con una sesión guardada que todavía vale entra directo', (tester) async {
+      await montarConSesion(tester, guardada: sesionDePrueba);
+
+      expect(find.byType(NavigationRail), findsOneWidget);
+    });
+
+    testWidgets('Cerrar sesión pide confirmación, y cancelar no la cierra', (tester) async {
+      final sesion = await montarConSesion(tester, guardada: sesionDePrueba);
+
+      await tester.tap(find.byTooltip('Cerrar sesión'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('¿Cerrar sesión?'), findsOneWidget);
+      await tester.tap(find.text('Cancelar'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('¿Cerrar sesión?'), findsNothing);
+      expect(sesion.sesion, sesionDePrueba);
+      expect(find.byType(NavigationRail), findsOneWidget);
+    });
+
+    testWidgets('Tocar fuera del cuadro tampoco cierra la sesión', (tester) async {
+      final sesion = await montarConSesion(tester, guardada: sesionDePrueba);
+
+      await tester.tap(find.byTooltip('Cerrar sesión'));
+      await tester.pumpAndSettle();
+      await tester.tapAt(const Offset(10, 890));
+      await tester.pumpAndSettle();
+
+      expect(find.text('¿Cerrar sesión?'), findsNothing);
+      expect(sesion.sesion, sesionDePrueba);
+    });
+
+    testWidgets('Al confirmar, cierra la sesión y vuelve a la entrada', (tester) async {
+      final sesion = await montarConSesion(tester, guardada: sesionDePrueba);
+
+      await tester.tap(find.byTooltip('Cerrar sesión'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Cerrar sesión'));
+      await tester.pumpAndSettle();
+
+      expect(sesion.sesion, isNull);
+      expect(find.text('Bienvenido a QuantIA'), findsOneWidget);
+      expect(find.textContaining('terminó'), findsNothing);
+    });
+
+    testWidgets('Si la API dice que la sesión ya no vale, vuelve a la entrada y lo explica',
+        (tester) async {
+      final sesion = await montarConSesion(tester, guardada: sesionDePrueba);
+
+      sesion.vencer();
+      await tester.pumpAndSettle();
+
+      expect(find.text('Su sesión terminó. Vuelva a entrar.'), findsOneWidget);
+    });
+
+    testWidgets('En teléfono, la barra deja el botón de cerrar sesión y esconde el correo',
+        (tester) async {
+      await montarConSesion(tester, tamano: const Size(390, 844), guardada: sesionDePrueba);
+
+      expect(find.byTooltip('Cerrar sesión'), findsOneWidget);
+      expect(find.text('profe@utb.edu.co'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
   });
 }
