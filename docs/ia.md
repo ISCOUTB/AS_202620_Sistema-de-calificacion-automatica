@@ -6,11 +6,11 @@ Este documento registra el uso de herramientas de IA durante el desarrollo del p
 
 Este registro documenta IA como herramienta de construcción (apoyo para redactar, diseñar y documentar). El modelo de lenguaje que el sistema usa para proponer distractores diagnósticos (RF-11, función opcional que no interviene en la calificación) es IA como componente del sistema: se documenta en el aspecto A-06 y en su evaluación (`docs/evidencia/evaluacion-distractores.md`), no aquí.
 
-**La entrada más reciente es la [22](#entrada-22), la medición de la S14** (2026-11-08): EC-01 a EC-04 repetidos tres veces cada uno y contrastados con su umbral, el entorno declarado, y la sección 11 del arc42 con la revisión entre pares, que no se hizo porque el profesor estuvo incapacitado y no hubo clases, construidos con Claude. **Lo rechazado, con su motivo técnico:** suplir la revisión entre pares con una revisión propia, porque la ficha pide lo que señalaron los pares y presentarla como tal sería inventarla; y medir en el servidor desplegado, porque desde la máquina de trabajo no se alcanza y la clave del examen se copia a mano (R-35). **Lo corregido al medir:** el primer limitador de CPU dejaba que los dos hilos de OpenCV pasaran el tope del worker; y la memoria residente parecía pasar los 96 MiB porque cuenta las páginas de las bibliotecas. **Lo aceptado:** las tres corridas como línea base, «en local» en cada cifra de EC-03 y EC-04, y R-37.
+**La entrada más reciente es la [24](#entrada-24), el inicio de sesión y la clave desde la aplicación** (2026-11-21 y 2026-11-22): A-05 en parte con [ADR-0025](adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md), la entrada con correo y contraseña de una lista cifrada en el servidor y el token en todas las rutas salvo la sonda de vida y las métricas, y A-04 en parte con [ADR-0026](adr/0026-registrar-y-habilitar-la-clave-desde-la-aplicacion.md), la clave registrada y habilitada desde la pantalla de pauta, construidos con Claude a partir de un diseño hecho en Stitch. **Lo rechazado, con su motivo técnico:** del diseño, entrar con Microsoft 365 o SAVIO y recuperar la contraseña, que el sistema no hace, y un pie que afirmaba autenticación federada y cumplimiento legal sin que nadie lo verificara; una «pasarela» simulada, que pedía credenciales con aspecto de Microsoft o dejaba entrar sin contraseña; una cookie, porque en Flutter web los recortes se bajan sin credenciales; JWT, por una dependencia nueva para un token que solo lee nuestra API; y recalcular las notas al cambiar una clave, por el riesgo antes de la entrega. **Lo corregido:** la cookie la había recomendado primero la IA; un token con caracteres que no son ASCII hacía responder 500; y, a pedido de Sebastián, cerrar sesión pide confirmación. **Lo aceptado:** las cuentas en el panel, el token de 12 horas, `/metricas` abierta y la condición de AM-02 sin cambio: solo hojas sintéticas mientras no haya cursos.
 
-**La entrada anterior, la [21](#entrada-21), es la de la lectura de las hojas y su calificación** (2026-11-02 a 2026-11-06): A-02 y A-03 con la revisión manual de las preguntas dudosas (RF-08), el prototipo de R-05, las mediciones de EC-01 a EC-04 y ADR-0023, construidos con Claude. **Lo rechazado, con su motivo técnico:** detectar los círculos y ordenarlos, como traía el prompt de partida, porque uno que no se detecta corre a todos los siguientes sin aviso; un umbral para toda la hoja, porque con la sombra de una foto las burbujas vacías salían llenas; la burbuja más llena como respuesta, porque elige entre candidatas (RF-03); la hoja A4, porque impresa en carta pierde las marcas de abajo; el resultado en la bitácora, porque tendría dos escritores; y mostrar la respuesta correcta en la revisión, porque las rutas son públicas. **Lo corregido al ejecutar:** el brillo del grafito se detectaba contando puntos claros, que se perdían con un poco de desenfoque; la resolución mínima subió de 3,5 a 7,5 px/mm; y al documentar, un PNG de 120 KB mataba al worker por memoria en cada reinicio (AM-16), y se cerró con un tope por encabezado y con que la muerte del worker cuente como un intento. **Lo aceptado:** ADR-0023, aceptado por el equipo el 6-nov, las fotos preparadas en el navegador, las notas sin el código del estudiante y RF-08 antes de A-05, solo con hojas sintéticas (AM-02).
+**La entrada [21](#entrada-21) es la de la lectura de las hojas y su calificación** (2026-11-02 a 2026-11-06): A-02 y A-03 con la revisión manual de las preguntas dudosas (RF-08), el prototipo de R-05, las mediciones de EC-01 a EC-04 y ADR-0023, construidos con Claude. **Lo rechazado, con su motivo técnico:** detectar los círculos y ordenarlos, como traía el prompt de partida, porque uno que no se detecta corre a todos los siguientes sin aviso; un umbral para toda la hoja, porque con la sombra de una foto las burbujas vacías salían llenas; la burbuja más llena como respuesta, porque elige entre candidatas (RF-03); la hoja A4, porque impresa en carta pierde las marcas de abajo; el resultado en la bitácora, porque tendría dos escritores; y mostrar la respuesta correcta en la revisión, porque las rutas son públicas. **Lo corregido al ejecutar:** el brillo del grafito se detectaba contando puntos claros, que se perdían con un poco de desenfoque; la resolución mínima subió de 3,5 a 7,5 px/mm; y al documentar, un PNG de 120 KB mataba al worker por memoria en cada reinicio (AM-16), y se cerró con un tope por encabezado y con que la muerte del worker cuente como un intento. **Lo aceptado:** ADR-0023, aceptado por el equipo el 6-nov, las fotos preparadas en el navegador, las notas sin el código del estudiante y RF-08 antes de A-05, solo con hojas sintéticas (AM-02).
 
-Además de las dos más recientes, aquí van resumidas las dos que más cambiaron el proyecto. Las demás están completas en el [registro](#registro).
+Además de la más reciente, aquí van resumidas las tres que más cambiaron el proyecto: la 21, arriba, y estas dos. Las demás están completas en el [registro](#registro).
 
 **La entrada [19](#entrada-19) es la de la migración al servidor del laboratorio** (2026-10-26 a 2026-10-29): el compose del servidor, el sitio compilado en el CI, el despliegue en iscoutb.dev y su verificación, con ADR-0021, construidos con Claude. **Lo rechazado, con su motivo técnico:** GitHub Pages para el sitio, porque lo deja fuera de iscoutb.dev; compilar Flutter en el servidor, porque el manual lo pide y ocupa uno de los 2 turnos de compilación de 23 equipos; guardar el sitio compilado en `master`, porque son unas 200 000 líneas generadas; un solo nombre con la API bajo `/api`, porque cambia la ruta raíz de la API; y Postgres ya como quinto contenedor, porque nada lo usa. **Lo corregido al ejecutar:** los límites de memoria medidos con `docker stats`, que se salta los picos (91 MiB donde había 174), con lo que la API pasó de 256 a 384 MB; un compose que no levantaba en limpio desde `master`, y el comodín con que se resolvió, que SonarCloud marcó como vulnerabilidad (`docker:S6470`); y `seguir_trabajo.py`, que no leía el registro del panel y cuyo primer arreglo falló en el CI con un reintento. **Lo aceptado:** ADR-0021, que reemplaza a ADR-0009 a ADR-0012, cierra R-13, R-15, R-16 y, en ese entorno, R-28, y abre R-30 a R-32.
 
@@ -579,3 +579,98 @@ Fecha, actividad realizada, herramienta utilizada, respuesta obtenida (resumen),
 - **Justificación:** dos lecciones.
   - **Un tope imitado se compara con el original antes de creerle.** El primer limitador daba números mejores que Docker, y la diferencia era el limitador, no el sistema.
   - **Un número sin su entorno dice menos de lo que parece.** 1,22 s en local es evidencia de la lógica y del tope de CPU, no de la latencia que vería un profesor por la red del servidor compartido; por eso cada cifra dice dónde se midió.
+
+### Entrada 23
+
+- **Fecha:** 2026-11-19 y 2026-11-20
+- **Actividad realizada:** dos cambios del proyecto final, pedidos por Sebastián al usar el sistema.
+  - **La cámara:** el botón «Tomar foto» en la pantalla de carga, solo en pantallas táctiles, porque en el celular el selector de archivos solo ofrecía la galería. Ya está en `master`.
+  - **La preselección ([ADR-0024](adr/0024-preseleccionar-en-la-revision-la-unica-intencion.md)):** una burbuja con 40 o más de confianza cuenta como intención; la pregunta en revisión con una sola intención llega con esa opción elegida, y la columna del código con una sola intención da su dígito. La pantalla de revisión pone primero las confusas, y la lista de hojas, primero las que faltan por revisar, con la hora de la última edición y dos filtros.
+  - **La medición:** la preselección en las fotos del prototipo y en las hojas sintéticas de EC-01 y EC-02, y una herramienta nueva para el código del estudiante (`medir_codigo.py`), con la [evidencia](evidencia/preseleccion-omr.md).
+- **Herramienta utilizada:** Claude (Anthropic) en Claude Code, en el computador de Sebastián, con el clon del repositorio, Flutter para el sitio y un contenedor con la imagen del backend para las pruebas, Redis y `mypy`. Para la revisión final del cambio, una sesión aparte de Claude que no había escrito el código.
+- **Prompt utilizado (resumen):** que una sola marca en la fila, aunque sea tenue o incompleta (una X, un chulo, un círculo a medio llenar), cuente como la respuesta del estudiante, y que solo vayan a revisión manual las filas con más de una candidata; que el código del estudiante sea más permisivo; que la lista de hojas ponga arriba las más nuevas y diga cuándo se editó cada una; y que el celular pueda tomar la foto desde la aplicación.
+- **Respuesta obtenida (resumen):**
+  - Las fotos del prototipo medidas burbuja por burbuja: todo lo borrado entre 2 y 35 de confianza y toda marca real en 50 o más.
+  - Una propuesta distinta de la pedida: que esas preguntas sigan yendo a revisión, pero con la opción ya elegida, y el corte en 40.
+  - El diseño escrito, revisado antes de construirlo, un plan de nueve tareas, el código con sus pruebas, la medición y una revisión independiente del cambio completo.
+- **Quién hizo qué con lo generado:** Sebastián decidió el diseño (el corte, que la preselección se vea igual que una elección y sin botón de confirmar, el código más permisivo y la lista), lo probó en local con las fotos del prototipo y subió el código. María escribió ADR-0024 y el arc42; Susana, la evidencia y esta entrada; Josué, `aspectos.md` y el README. El PR lo revisan Susana, el código, y Josué, los documentos.
+- **Qué se aceptó:**
+  - **Preseleccionar en vez de aceptar sola la marca:** la nota no cambia hasta que el docente guarda, así que una sugerencia equivocada todavía pasa por él.
+  - **El corte en 40**, configurable de 31 a 50: 5 puntos sobre el borrón real más fuerte y 10 bajo la marca real más débil.
+  - **Cero como condición en el código**, donde no hay docente que confirme: si la medición aceptaba un solo dígito mal, en el código dejaba de contar la burbuja que la lectura deja en 50 por no verla bien. Dio cero y no hizo falta.
+  - **No tocar la generación de las hojas de EC-01 y EC-02:** la medición nueva cuenta sobre las mismas hojas, y lo publicado da igual.
+- **Qué se rechazó y se corrigió:**
+  - **Aceptar sola la única marca**, como pedía el planteamiento inicial: el sistema decidiría lo dudoso sin el docente (RF-03), y una sugerencia equivocada sería una nota equivocada sin aviso (QG-3).
+  - **Una preselección distinta de una elección, con un botón de confirmar por pregunta:** es un toque más por pregunta, que es lo que se quería ahorrar. Lo decidió Sebastián.
+  - **Calcular la sugerencia en `dashboard`:** no puede importar `omr` (`test_fronteras.py`) y repetiría la regla fuera de donde se decide la pregunta.
+  - **Una cámara propia con `getUserMedia`:** toma cuadros de video, con menos resolución que la foto de la cámara del celular, y la lectura rechaza las hojas por debajo de 7,5 px/mm.
+  - **Corregido en la revisión independiente:** la medición del código solo tenía borrones de menos de 10 de confianza, y en las fotos lo borrado llegó a 35, justo bajo el corte. Se agregaron borrones fuertes calibrados a ese tramo (dieron de 29 a 38) y se volvió a medir: cero dígitos mal en 7 200 columnas. También el aviso de la lista vacía, que con un solo filtro pedía marcar el que ya estaba marcado.
+  - **Corregido al probar en local:** con el examen ya elegido en Revisión, subir hojas y tocar «Revisar» mostraba la revisión de antes, porque la pantalla solo la pedía al cambiar de examen; y la lista, ordenada solo por hora, dejaba revisadas entre hojas pendientes. Ahora la pide al volver, y van primero las pendientes.
+  - **Corregido al documentar:** las frecuencias de los casos del código salieron de los pesos del programa sin normalizar (suman 1,2), y se corrigieron a las reales.
+- **Justificación:** dos lecciones.
+  - **Lo que pide el usuario y lo que necesita pueden ser distintos.** El pedido era que la marca sola contara; lo que hacía falta era no elegir a mano lo que ya se veía. La preselección da lo segundo sin romper la regla de no decidir lo dudoso.
+  - **Una medición que no llega al caso difícil no dice nada de él.** Los borrones de la medición original nunca se acercaban al corte, así que el cero no probaba la regla nueva. Lo vio quien no la había escrito.
+
+### Entrada 24
+
+- **Fecha:** 2026-11-21 y 2026-11-22
+- **Actividad realizada:** el inicio de sesión ([ADR-0025](adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md)): la entrada con correo y
+  contraseña, el token en todas las rutas salvo la sonda de vida y las métricas, y la revisión a
+  nombre del docente de la sesión, con el código del estudiante a la vista. Y la clave de cada examen
+  ([ADR-0026](adr/0026-registrar-y-habilitar-la-clave-desde-la-aplicacion.md)): registrarla y habilitarla desde la pantalla de pauta, que hasta ahora se
+  escribía a mano y se copiaba al volumen por consola.
+- **Herramienta utilizada:** Claude (Anthropic) en Claude Code, en el computador de Sebastián, con un
+  clon desechable del repositorio, Flutter para el sitio y un contenedor con la imagen del backend
+  para las pruebas y para correr la API con uvicorn. Stitch, para el diseño de la pantalla de entrada
+  que trajo el equipo.
+- **Prompt utilizado (resumen):** construir el inicio de sesión a partir de un diseño en HTML hecho
+  con Stitch, con las cuentas de los docentes en una lista del servidor, y dejarlo listo para que el
+  equipo haga los commits. Después, que la clave de los exámenes se pueda subir desde la aplicación.
+- **Respuesta obtenida (resumen):**
+  - Lo que el diseño prometía y el sistema no cumple: entrar con SAVIO o Microsoft 365, recuperar la
+    contraseña, un pie con autenticación federada, TLS 1.3 y la Ley 1581, y un carrusel con fotos
+    generadas del campus.
+  - El módulo `identidad` con scrypt y un token firmado de la biblioteca estándar, la sesión en cada
+    ruta y la pantalla de entrada, con sus pruebas y una verificación contra uvicorn.
+  - Tres commits (identidad, API y sitio), cada uno con sus pruebas en verde.
+  - Para la clave, la recomendación de ponerla en la misma rama, después del inicio de sesión, y
+    dos commits más (API y sitio).
+- **Quién hizo qué con lo generado:** Sebastián eligió las cuentas en una lista de Dokploy y qué
+  quitar del diseño, pidió la confirmación al cerrar sesión y quitar una ayuda redundante, y lo probó
+  en local. Para la clave decidió cuándo se puede cambiar, la cuadrícula con el campo para pegar y el
+  cuadro que confirma lo pegado. Susana subió `identidad`, Sebastián la API y la clave, y Josué el
+  sitio. María escribió ADR-0025 y el
+  arc42; Susana, esta entrada y el modelo de amenazas; Josué, `aspectos.md`, el C4 y el README. El PR
+  lo revisan María, el código, y Susana, los documentos.
+- **Qué se aceptó:**
+  - **Las cuentas en una variable del servidor**, cifradas con scrypt, en vez de una tabla en
+    Postgres, que sigue sin uso (R-06).
+  - **El token en `Authorization: Bearer`**, que lleva también cada recorte.
+  - **Un formato propio con la biblioteca estándar** en vez de JWT: ninguna dependencia nueva.
+  - **`/metricas` abierta:** solo publica cuentas de los presupuestos y la caché.
+  - **La clave se cambia mientras ninguna hoja tenga nota,** y cambiarla la deja sin habilitar.
+- **Qué se rechazó y se corrigió:**
+  - **Una «pasarela» que simulara entrar con Microsoft 365:** o pedía credenciales en una pantalla
+    con aspecto de Microsoft, o dejaba entrar sin contraseña. Se quitaron ese botón y la recuperación
+    de la contraseña. Lo decidió Sebastián.
+  - **El pie de autenticación federada, TLS 1.3 y la Ley 1581**, porque nadie lo verificó, y el
+    carrusel, porque sus fotos eran generadas y no de la UTB.
+  - **Una cookie para la sesión, que la IA había recomendado primero:** en Flutter web las imágenes
+    se bajan por XHR sin credenciales, así que los recortes se habrían quedado sin imagen. Se vio en
+    el código del SDK (`_network_image_web.dart`) antes de construir.
+  - **JWT con PyJWT:** una dependencia más para un token que solo lee nuestra API.
+  - **Recalcular las notas al cambiar una clave:** toca el registro de resultados y las revisiones ya
+    resueltas, demasiado riesgo antes de la entrega.
+  - **Una tercera rama para la clave:** sumaba un ciclo de PR, revisión y merge el último día.
+  - **Corregido al construir:** un token con caracteres que no son ASCII hacía fallar la comparación
+    de la firma, y la API respondía 500 en vez de 401; y a 320 px el encabezado de la entrada se
+    desbordaba. En la clave, una tarjeta con el mismo nombre que otra de la pantalla de pauta, y la
+    lista de exámenes de la carga, que no veía una clave nueva hasta recargar la página.
+  - **Corregido a pedido de Sebastián:** cerrar sesión con un toque y sin confirmar, y la ayuda «El
+    correo con el que le dieron acceso a QuantIA», que explicaba lo obvio.
+- **Justificación:** dos lecciones.
+  - **Un diseño generado trae promesas que el sistema no cumple.** El de Stitch ofrecía entrar con la
+    cuenta de la universidad y afirmaba cumplir una ley. Ante un jurado, un botón que no hace nada o
+    una afirmación sin verificar cuesta más que no tenerlos.
+  - **Una recomendación se comprueba en el código de quien la va a ejecutar.** La cookie parecía la
+    opción más segura, y en Flutter web habría dejado la revisión sin recortes.
