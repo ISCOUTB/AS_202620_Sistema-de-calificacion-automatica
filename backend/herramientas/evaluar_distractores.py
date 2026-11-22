@@ -74,11 +74,12 @@ from typing import Any
 import httpx
 from fastapi.testclient import TestClient
 
-from api.main import app, obtener_generador, obtener_presupuesto
+from api.main import app, docente_de_la_sesion, obtener_generador, obtener_presupuesto
 from api.settings import LLM_API_KEY, LLM_MODELO, LLM_URL_BASE
 from autoria import GeneradorCompatibleConOpenAI, PresupuestoDeSolicitudes
 from autoria.distractores import normalizar
 from autoria.proveedor_llm import TIEMPO_DE_ESPERA_SEGUNDOS
+from herramientas.sesion import DOCENTE_DE_MEDICION
 
 UMBRAL_M2_P95_SEGUNDOS = 15.0
 UMBRAL_M3_SEGUNDOS = TIEMPO_DE_ESPERA_SEGUNDOS + 1.0
@@ -224,6 +225,8 @@ def medir_normal(pasadas: int, pausa: float) -> dict[str, Any]:
     app.dependency_overrides[obtener_presupuesto] = lambda: PresupuestoDeSolicitudes(
         por_minuto=SIN_TOPE, por_dia=SIN_TOPE
     )
+    # Se mide el proveedor, no la entrada: se habla como un docente que ya entró (ADR-0025).
+    app.dependency_overrides[docente_de_la_sesion] = lambda: DOCENTE_DE_MEDICION
     with _capturar_eventos() as captura, TestClient(app) as cliente:
         for pasada in range(1, pasadas + 1):
             for pregunta in preguntas:
@@ -299,6 +302,7 @@ def _medir_degradado(url_base: str, muestras: int) -> list[dict[str, Any]]:
     app.dependency_overrides[obtener_presupuesto] = lambda: PresupuestoDeSolicitudes(
         por_minuto=SIN_TOPE, por_dia=SIN_TOPE
     )
+    app.dependency_overrides[docente_de_la_sesion] = lambda: DOCENTE_DE_MEDICION
     resultados = []
     try:
         with TestClient(app) as cliente:

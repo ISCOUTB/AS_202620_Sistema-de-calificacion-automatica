@@ -7,12 +7,13 @@ import functools
 import logging
 import time
 from collections.abc import Iterator
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, HTTPException, Response, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from api.esquemas import (
     VERSION_DEL_CONTRATO,
@@ -36,14 +37,17 @@ from api.esquemas import (
     ResultadoDeHojaEnRespuesta,
     ResultadosDelExamenEnRespuesta,
     RevisionDelExamenEnRespuesta,
+    SesionEnRespuesta,
     SolicitudDeDistractores,
     SolicitudDeRevision,
+    SolicitudDeSesion,
 )
 from api.limite_del_cuerpo import LimiteDelCuerpo
 from api.settings import (
     ALLOWED_ORIGIN,
     CARGA_HOJAS_POR_LOTE,
     CARGA_MB_POR_DIA,
+    DOCENTES,
     LLM_API_KEY,
     LLM_MODELO,
     LLM_SOLICITUDES_POR_DIA,
@@ -56,6 +60,8 @@ from api.settings import (
     RUTA_CLAVES,
     RUTA_RESULTADOS,
     RUTA_REVISIONES,
+    SESION_HORAS,
+    SESION_SECRETO,
 )
 from autoria import (
     HUELLA_DE_LAS_INSTRUCCIONES,
@@ -73,6 +79,13 @@ from autoria import (
 )
 from calificacion import HojaSinNotaQueRevisar, resolver_preguntas
 from dashboard import referencia_del_recorte, resultados_del_examen, revision_del_examen
+from identidad import (
+    ConfiguracionDeDocentesInvalida,
+    autenticar,
+    emitir_sesion,
+    leer_docentes,
+    leer_sesion,
+)
 from infraestructura.almacen import AlmacenDeImagenes, AlmacenEnDisco
 from infraestructura.bitacora import BitacoraDeRecepcion, BitacoraEnDisco, LectorDeRecepciones
 from infraestructura.claves import CatalogoDeClaves, ClavesEnDisco
@@ -103,7 +116,9 @@ app = FastAPI(
         "Hoy cubre el aspecto A-01 (carga de hojas escaneadas para calificación) y el A-06 "
         "(propuesta opcional de distractores diagnósticos), con el presupuesto que protege la "
         "cuota del proveedor de LLM y su métrica en `GET /metricas` (EC-09). Desde la S13, un "
-        "presupuesto de carga limita las hojas por lote y los bytes por día (ADR-0022)."
+        "presupuesto de carga limita las hojas por lote y los bytes por día (ADR-0022). Desde "
+        "ADR-0025, todas las rutas salvo `/health`, `/metricas` y `POST /sesion` piden el token "
+        "de una sesión en `Authorization: Bearer`."
     ),
 )
 
@@ -248,6 +263,63 @@ def obtener_generador() -> GeneradorDeDistractores | None:
     return GeneradorCompatibleConOpenAI(LLM_URL_BASE, LLM_MODELO, LLM_API_KEY)
 
 
+def obtener_secreto_de_sesion() -> str:
+    """El secreto que firma los tokens (ADR-0025). Sustituible, para que las pruebas usen uno
+    propio; vacío, nadie entra."""
+    return SESION_SECRETO
+
+
+@functools.lru_cache(maxsize=1)
+def _docentes_de(texto: str) -> dict[str, str]:
+    """La lista leída una sola vez por texto. Mal escrita, queda vacía, y el motivo va al registro
+    (sin correos ni cifradas): nadie entra hasta corregirla, en vez de entrar solo una parte."""
+    try:
+        return leer_docentes(texto)
+    except ConfiguracionDeDocentesInvalida as error:
+        logger.error(
+            "La lista de docentes está mal escrita",
+            extra={"evento": "docentes_mal_escritos", "motivo": str(error)},
+        )
+        return {}
+
+
+def obtener_docentes() -> dict[str, str]:
+    """Quién puede entrar, de la variable `DOCENTES` (ADR-0025). Sustituible, como las otras."""
+    return _docentes_de(DOCENTES)
+
+
+_PORTADOR = HTTPBearer(auto_error=False, description="El token que devuelve `POST /sesion`.")
+
+# Lo que responde una ruta protegida sin sesión, para que el contrato lo publique en cada una.
+_PIDE_SESION: dict[int | str, dict] = {
+    401: {"description": "Sin sesión, o con un token vencido o que ya no vale (ADR-0025)."}
+}
+
+
+def docente_de_la_sesion(
+    credenciales: HTTPAuthorizationCredentials | None = Depends(_PORTADOR),
+    secreto: str = Depends(obtener_secreto_de_sesion),
+    docentes: dict[str, str] = Depends(obtener_docentes),
+) -> str:
+    """El correo del docente que hace la petición, o 401 (A-05, ADR-0025).
+
+    Pide un token bien firmado, sin vencer y de un correo que **siga** en la lista: el token no se
+    puede revocar, pero quitar a alguien de `DOCENTES` y desplegar le cierra la puerta en la
+    siguiente petición. No dice por qué no vale: vencido, alterado o sin token se ven igual."""
+    sesion = (
+        None
+        if credenciales is None
+        else leer_sesion(credenciales.credentials, datetime.now(timezone.utc), secreto)
+    )
+    if sesion is None or sesion.correo not in docentes:
+        raise HTTPException(
+            status_code=401,
+            detail="Inicia sesión para continuar.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return sesion.correo
+
+
 @app.get("/health", summary="Sonda de vida", response_description="La API responde.")
 def salud() -> RespuestaDeSalud:
     return RespuestaDeSalud(status="ok")
@@ -261,6 +333,49 @@ def salud() -> RespuestaDeSalud:
 @app.head("/health", include_in_schema=False)
 def salud_para_monitores() -> Response:
     return Response(status_code=200)
+
+
+@app.post(
+    "/sesion",
+    summary="Entrar con correo y contraseña",
+    response_description="El token de la sesión y hasta cuándo vale.",
+    responses={
+        401: {"description": "El correo o la contraseña no coinciden. No dice cuál de los dos."},
+        503: {
+            "description": (
+                "El servidor no tiene configurado el inicio de sesión: falta el secreto o la "
+                "lista de docentes. Nadie puede entrar hasta configurarlo."
+            )
+        },
+    },
+)
+def iniciar_sesion(
+    solicitud: SolicitudDeSesion,
+    secreto: str = Depends(obtener_secreto_de_sesion),
+    docentes: dict[str, str] = Depends(obtener_docentes),
+) -> SesionEnRespuesta:
+    """Abre una sesión para un docente de la lista (A-05, ADR-0025). El token que devuelve va en
+    `Authorization: Bearer` en todas las demás rutas, salvo `/health` y `/metricas`.
+
+    Un correo sin cuenta y una contraseña equivocada responden igual y tardan lo mismo, para que
+    la respuesta no diga quién tiene cuenta. Es una ruta `def` y no `async def`: verificar la
+    contraseña con scrypt bloquea unos 50 ms, y así no detiene a las demás peticiones."""
+    if not secreto or not docentes:
+        raise HTTPException(
+            status_code=503, detail="El inicio de sesión no está configurado en este servidor."
+        )
+    correo = autenticar(solicitud.correo, solicitud.contrasena, docentes)
+    if correo is None:
+        # Sin el correo que se intentó: el registro lo lee cualquiera con acceso al panel.
+        logger.warning("Entrada rechazada", extra={"evento": "entrada_rechazada"})
+        raise HTTPException(status_code=401, detail="Correo o contraseña incorrectos.")
+    token, sesion = emitir_sesion(
+        correo, datetime.now(timezone.utc), timedelta(hours=SESION_HORAS), secreto
+    )
+    logger.info(
+        "Sesión iniciada", extra={"evento": "sesion_iniciada", "vence": sesion.vence.isoformat()}
+    )
+    return SesionEnRespuesta(token=token, correo=sesion.correo, vence=sesion.vence)
 
 
 def _registrar_lote_fuera_de_presupuesto(
@@ -285,7 +400,9 @@ def _registrar_lote_fuera_de_presupuesto(
     "/examenes/{examen_id}/hojas",
     summary="Cargar hojas escaneadas de un examen",
     response_description="Qué entró y qué no, archivo por archivo.",
+    dependencies=[Depends(docente_de_la_sesion)],
     responses={
+        **_PIDE_SESION,
         413: {
             "model": LoteFueraDePresupuestoEnRespuesta,
             "description": (
@@ -326,9 +443,10 @@ async def cargar_hojas(
 
     **El `examen_id` todavía no se verifica contra nada, y es un hueco conocido, no un olvido.**
     El módulo `autoria` es el que registrará los exámenes, y esa parte (aspecto A-04) aún no
-    existe; `identidad` (A-05) es el que comprobará que el docente puede cargar en ese curso, y
-    tampoco. La ruta ya tiene la forma definitiva para que cuando esas partes lleguen solo
-    haya que sumar la comprobación, sin migrar el frontend.
+    existe; `identidad` ya pide una sesión (ADR-0025), pero todavía no sabe de cursos (EC-06), así
+    que no comprueba que el docente pueda cargar en ese examen. La ruta ya tiene la forma
+    definitiva para que cuando esas partes lleguen solo haya que sumar la comprobación, sin migrar
+    el frontend.
 
     **Un lote que no cabe en el presupuesto de carga no entra entero** (ADR-0022). Responde 413
     si trae más hojas de las que admite un lote o pesa más que el cupo de un día, y 429 con
@@ -434,7 +552,9 @@ async def cargar_hojas(
     "/distractores",
     summary="Proponer distractores diagnósticos para una pregunta",
     response_description="Las propuestas que pasaron la regla y las que no, con su motivo.",
+    dependencies=[Depends(docente_de_la_sesion)],
     responses={
+        **_PIDE_SESION,
         429: {
             "model": PresupuestoAgotadoEnRespuesta,
             "description": (
@@ -544,6 +664,8 @@ def proponer_distractores_para_una_pregunta(
     "/examenes",
     summary="Exámenes con clave registrada",
     response_description="Cada examen con clave, sin sus respuestas, ordenados por identificador.",
+    dependencies=[Depends(docente_de_la_sesion)],
+    responses=_PIDE_SESION,
 )
 def examenes(
     catalogo: CatalogoDeClaves = Depends(obtener_catalogo_de_claves),
@@ -552,8 +674,9 @@ def examenes(
     una lista y el docente no tenga que escribir el identificador de memoria: una letra mal
     escrita mandaba las hojas a un examen sin clave, y nadie lo notaba hasta ver «Sin nota».
 
-    **No devuelve las respuestas de la clave**: la ruta es pública hasta A-05 (AM-02). Una clave
-    mal escrita no aparece, y una sin habilitar sí, marcada, porque sus hojas se leen sin nota."""
+    **No devuelve las respuestas de la clave**: para elegir el examen basta con su identificador.
+    Una clave mal escrita no aparece, y una sin habilitar sí, marcada, porque sus hojas se leen sin
+    nota."""
     return ExamenesEnRespuesta(
         examenes=[
             ExamenEnRespuesta.model_validate(examen) for examen in examenes_con_clave(catalogo)
@@ -565,6 +688,8 @@ def examenes(
     "/examenes/{examen_id}/resultados",
     summary="Cómo quedó cada hoja leída de un examen",
     response_description="El último resultado de cada hoja leída, sin el código del estudiante.",
+    dependencies=[Depends(docente_de_la_sesion)],
+    responses=_PIDE_SESION,
 )
 def resultados(
     examen_id: str,
@@ -576,9 +701,8 @@ def resultados(
     une cada resultado con su archivo por el `hoja_id`.
 
     Una hoja recibida que todavía no aparece sigue en la cola o leyéndose. **No devuelve el código
-    del estudiante**: la ruta es pública hasta A-05, y el riesgo se aceptó solo mientras no entren
-    hojas reales (AM-02). Lee el registro en disco en un hilo aparte, para no frenar a las demás
-    peticiones mientras recorre el archivo."""
+    del estudiante**: la pantalla de carga no lo necesita. Lee el registro en disco en un hilo
+    aparte, para no frenar a las demás peticiones mientras recorre el archivo."""
     proyeccion = resultados_del_examen(examen_id, lector, revisiones)
     return ResultadosDelExamenEnRespuesta(
         examen_id=proyeccion.examen_id,
@@ -590,6 +714,8 @@ def resultados(
     "/examenes/{examen_id}/revision",
     summary="Las preguntas que esperan al profesor en un examen",
     response_description="Cada hoja en revisión, con el código del estudiante y sin la clave.",
+    dependencies=[Depends(docente_de_la_sesion)],
+    responses=_PIDE_SESION,
 )
 def revision(
     examen_id: str,
@@ -602,10 +728,10 @@ def revision(
     resuelta, para poder cambiar una decisión. Cada hoja lleva el nombre con que se subió y la hora
     en que llegó, para que el profesor sepa cuál es.
 
-    **No lleva la respuesta correcta**: la ruta es pública hasta A-05 (AM-02). El profesor dice qué
-    marcó el estudiante y el sistema decide si es correcto. **Sí lleva el código del estudiante**,
-    para que el profesor sepa de quién es la hoja, y el nombre del archivo, que puede ser el del
-    estudiante: el riesgo se acepta solo mientras no entren hojas reales, como el resto de la ruta."""
+    **No lleva la respuesta correcta**: el profesor dice qué marcó el estudiante y el sistema decide
+    si es correcto. **Sí lleva el código del estudiante**, para que el profesor sepa de quién es la
+    hoja, y el nombre del archivo, que puede ser el del estudiante. La ruta pide sesión
+    (ADR-0025), pero sin cursos todavía cualquier docente con cuenta ve todas las hojas (EC-06)."""
     proyeccion = revision_del_examen(examen_id, lector, revisiones, recepciones)
     return RevisionDelExamenEnRespuesta(
         examen_id=proyeccion.examen_id,
@@ -618,14 +744,16 @@ def revision(
     summary="Guardar lo que el profesor resolvió en una hoja",
     response_description="El resultado de la hoja con la nota recalculada.",
     responses={
+        **_PIDE_SESION,
         404: {"description": "La hoja no está en el examen o no tiene una nota que revisar."},
-        422: {"description": "Una pregunta no estaba en revisión, viene dos veces o falta el nombre."},
+        422: {"description": "Una pregunta no estaba en revisión o viene dos veces."},
     },
 )
 def resolver_revision(
     examen_id: str,
     hoja_id: str,
     solicitud: SolicitudDeRevision,
+    docente: str = Depends(docente_de_la_sesion),
     lector: LectorDeResultados = Depends(obtener_lector_de_resultados),
     revisiones: RevisionesDelProfesor = Depends(obtener_revisiones),
 ) -> ResultadoDeHojaEnRespuesta:
@@ -633,8 +761,8 @@ def resolver_revision(
     RF-10), y devuelve la hoja con la nota recalculada. La nota automática no se borra: queda en
     el registro de resultados, y esta solo se agrega encima (ADR-0018).
 
-    El nombre es el que escribe el profesor, **sin verificar** hasta A-05. Si algo no cuadra (una
-    pregunta que no estaba en revisión, por ejemplo), no se guarda nada."""
+    Quien resolvió es el docente de la sesión (ADR-0025), no un nombre escrito a mano. Si algo no
+    cuadra (una pregunta que no estaba en revisión, por ejemplo), no se guarda nada."""
     opciones: dict[int, str | None] = {}
     for resolucion in solicitud.resoluciones:
         if resolucion.numero in opciones:
@@ -647,7 +775,7 @@ def resolver_revision(
             examen_id,
             hoja_id,
             opciones,
-            solicitud.por,
+            docente,
             datetime.now(timezone.utc),
             lector,
             revisiones,
@@ -662,7 +790,7 @@ def resolver_revision(
         for hoja in resultados_del_examen(examen_id, lector, revisiones).hojas
         if hoja.hoja_id == hoja_id
     )
-    # Sin el nombre de quien resolvió: queda en el registro de revisiones, no en el log.
+    # Sin el correo de quien resolvió: queda en el registro de revisiones, no en el log.
     logger.info(
         "Revisión guardada",
         extra={
@@ -681,7 +809,9 @@ def resolver_revision(
     "/examenes/{examen_id}/hojas/{hoja_id}/preguntas/{numero}/recorte",
     summary="El recorte de una pregunta en revisión",
     response_class=Response,
+    dependencies=[Depends(docente_de_la_sesion)],
     responses={
+        **_PIDE_SESION,
         200: {"content": {"image/png": {}}, "description": "La fila de burbujas, en PNG."},
         404: {"description": "La pregunta no tiene recorte."},
     },

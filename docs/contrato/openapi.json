@@ -271,7 +271,7 @@
         "type": "object"
       },
       "ExamenEnRespuesta": {
-        "description": "Un examen con clave registrada. **No lleva las respuestas**: la ruta es publica hasta A-05,\ny para elegir el examen basta con su identificador.",
+        "description": "Un examen con clave registrada. **No lleva las respuestas**: para elegir el examen basta con\nsu identificador, y la clave no sale del servidor.",
         "properties": {
           "examen_id": {
             "title": "Examen Id",
@@ -382,7 +382,7 @@
                 "type": "null"
               }
             ],
-            "description": "El codigo del estudiante tal como se leyo: la T y ocho digitos, con ? en los que no se leyeron. Nulo si la lectura no lo trae. Es un dato personal: la ruta es publica hasta A-05, y por eso solo se cargan hojas sinteticas (AM-02).",
+            "description": "El codigo del estudiante tal como se leyo: la T y ocho digitos, con ? en los que no se leyeron. Nulo si la lectura no lo trae. Es un dato personal: la ruta pide sesion (ADR-0025), pero sin cursos todavia cualquier docente con cuenta ve todas las hojas (EC-06).",
             "title": "Codigo"
           },
           "codigo_completo": {
@@ -541,7 +541,7 @@
                 "type": "null"
               }
             ],
-            "description": "El nombre que escribio quien la resolvio. Sin verificar hasta A-05.",
+            "description": "Quien la resolvio: el correo de su sesion desde ADR-0025; en las resueltas antes, el nombre que escribio a mano, sin verificar.",
             "title": "Resuelta Por"
           }
         },
@@ -726,7 +726,7 @@
         "type": "object"
       },
       "ResultadoDeHojaEnRespuesta": {
-        "description": "Como quedo una hoja despues de leerla y calificarla.\n\n**No lleva el codigo del estudiante.** La API no tiene inicio de sesion hasta A-05, y esta\nruta es tan publica como las demas; el codigo queda en el registro del servidor (AM-02).",
+        "description": "Como quedo una hoja despues de leerla y calificarla.\n\n**No lleva el codigo del estudiante.** La pantalla de carga no lo necesita: queda en el\nregistro del servidor y en la revision, que es donde el profesor lo usa.",
         "properties": {
           "codigo_completo": {
             "anyOf": [
@@ -865,6 +865,33 @@
         "title": "RevisionDelExamenEnRespuesta",
         "type": "object"
       },
+      "SesionEnRespuesta": {
+        "description": "Una sesion abierta: el token que va en `Authorization: Bearer` y hasta cuando vale.",
+        "properties": {
+          "correo": {
+            "description": "El correo con el que quedo la sesion, en minusculas.",
+            "title": "Correo",
+            "type": "string"
+          },
+          "token": {
+            "title": "Token",
+            "type": "string"
+          },
+          "vence": {
+            "description": "Desde este momento, en UTC, el token deja de valer.",
+            "format": "date-time",
+            "title": "Vence",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "correo",
+          "vence"
+        ],
+        "title": "SesionEnRespuesta",
+        "type": "object"
+      },
       "SolicitudDeDistractores": {
         "description": "Lo que el profesor envia para pedir distractores diagnosticos (RF-11).\n\nSon los mismos tres campos de `PreguntaParaDistractores` y ninguno mas: es lo unico que puede\nllegar al proveedor de LLM, y por eso RNF-13 se cumple desde la puerta. Los limites de largo\nacotan lo que cuesta cada solicitud en tokens.",
         "properties": {
@@ -905,14 +932,8 @@
         "type": "object"
       },
       "SolicitudDeRevision": {
-        "description": "Lo que el profesor resolvio en una hoja, todo junto. `por` queda registrado con cada\nresolucion (RF-10); es un nombre escrito a mano hasta A-05.",
+        "description": "Lo que el profesor resolvio en una hoja, todo junto. Quien lo resolvio no viaja aqui: es el\ndocente de la sesion, y queda registrado con cada resolucion (RF-10, ADR-0025).",
         "properties": {
-          "por": {
-            "maxLength": 80,
-            "minLength": 1,
-            "title": "Por",
-            "type": "string"
-          },
           "resoluciones": {
             "items": {
               "$ref": "#/components/schemas/ResolucionEnSolicitud"
@@ -924,10 +945,32 @@
           }
         },
         "required": [
-          "por",
           "resoluciones"
         ],
         "title": "SolicitudDeRevision",
+        "type": "object"
+      },
+      "SolicitudDeSesion": {
+        "description": "El correo y la contrasena de un docente de la lista (ADR-0025).",
+        "properties": {
+          "contrasena": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Contrasena",
+            "type": "string"
+          },
+          "correo": {
+            "maxLength": 254,
+            "minLength": 3,
+            "title": "Correo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "correo",
+          "contrasena"
+        ],
+        "title": "SolicitudDeSesion",
         "type": "object"
       },
       "ValidationError": {
@@ -970,12 +1013,19 @@
         "title": "ValidationError",
         "type": "object"
       }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "description": "El token que devuelve `POST /sesion`.",
+        "scheme": "bearer",
+        "type": "http"
+      }
     }
   },
   "info": {
-    "description": "Interfaz HTTP de QuantIA, sistema de calificación de exámenes de opción múltiple. Hoy cubre el aspecto A-01 (carga de hojas escaneadas para calificación) y el A-06 (propuesta opcional de distractores diagnósticos), con el presupuesto que protege la cuota del proveedor de LLM y su métrica en `GET /metricas` (EC-09). Desde la S13, un presupuesto de carga limita las hojas por lote y los bytes por día (ADR-0022).",
+    "description": "Interfaz HTTP de QuantIA, sistema de calificación de exámenes de opción múltiple. Hoy cubre el aspecto A-01 (carga de hojas escaneadas para calificación) y el A-06 (propuesta opcional de distractores diagnósticos), con el presupuesto que protege la cuota del proveedor de LLM y su métrica en `GET /metricas` (EC-09). Desde la S13, un presupuesto de carga limita las hojas por lote y los bytes por día (ADR-0022). Desde ADR-0025, todas las rutas salvo `/health`, `/metricas` y `POST /sesion` piden el token de una sesión en `Authorization: Bearer`.",
     "title": "QuantIA",
-    "version": "1.8.0"
+    "version": "2.0.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -1003,6 +1053,9 @@
               }
             },
             "description": "Las propuestas que pasaron la regla y las que no, con su motivo."
+          },
+          "401": {
+            "description": "Sin sesión, o con un token vencido o que ya no vale (ADR-0025)."
           },
           "422": {
             "content": {
@@ -1035,12 +1088,17 @@
             "description": "El proveedor de LLM no está configurado, no respondió a tiempo o falló. El profesor puede volver a pedirlo o escribir los distractores a mano."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Proponer distractores diagnósticos para una pregunta"
       }
     },
     "/examenes": {
       "get": {
-        "description": "Los exámenes que tienen una clave registrada, para que la pantalla de carga los ofrezca en\nuna lista y el docente no tenga que escribir el identificador de memoria: una letra mal\nescrita mandaba las hojas a un examen sin clave, y nadie lo notaba hasta ver «Sin nota».\n\n**No devuelve las respuestas de la clave**: la ruta es pública hasta A-05 (AM-02). Una clave\nmal escrita no aparece, y una sin habilitar sí, marcada, porque sus hojas se leen sin nota.",
+        "description": "Los exámenes que tienen una clave registrada, para que la pantalla de carga los ofrezca en\nuna lista y el docente no tenga que escribir el identificador de memoria: una letra mal\nescrita mandaba las hojas a un examen sin clave, y nadie lo notaba hasta ver «Sin nota».\n\n**No devuelve las respuestas de la clave**: para elegir el examen basta con su identificador.\nUna clave mal escrita no aparece, y una sin habilitar sí, marcada, porque sus hojas se leen sin\nnota.",
         "operationId": "examenes_examenes_get",
         "responses": {
           "200": {
@@ -1052,14 +1110,22 @@
               }
             },
             "description": "Cada examen con clave, sin sus respuestas, ordenados por identificador."
+          },
+          "401": {
+            "description": "Sin sesión, o con un token vencido o que ya no vale (ADR-0025)."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Exámenes con clave registrada"
       }
     },
     "/examenes/{examen_id}/hojas": {
       "post": {
-        "description": "Recibe una o varias hojas escaneadas de un examen y confirma qué entró y qué no (RF-01).\n\n**Responde 200 aunque haya archivos rechazados, y eso es deliberado.** La petición se\natendió por completo: el 200 confirma que el sistema procesó el lote entero, y el cuerpo\ndice archivo por archivo qué pasó. Devolver un error por un rechazo obligaría al cliente a\nreenviar el lote completo, que es justo lo que EC-07 quiere evitar.\n\n**Una hoja puede volver como aceptada y todavía pendiente de encolar.** Desde ADR-0006 el\ncampo `estado` de cada aceptada vale `encolada` o `pendiente_de_encolar`: la segunda es una\nhoja almacenada y registrada en la bitácora cuyo trabajo no llegó a la cola. Se reporta en\nvez de omitirse porque EC-07 exige que ningún archivo cargado desaparezca sin traza, y\nreintentarla es asunto del sistema, no del docente: el archivo ya está adentro.\n\n**El `examen_id` todavía no se verifica contra nada, y es un hueco conocido, no un olvido.**\nEl módulo `autoria` es el que registrará los exámenes, y esa parte (aspecto A-04) aún no\nexiste; `identidad` (A-05) es el que comprobará que el docente puede cargar en ese curso, y\ntampoco. La ruta ya tiene la forma definitiva para que cuando esas partes lleguen solo\nhaya que sumar la comprobación, sin migrar el frontend.\n\n**Un lote que no cabe en el presupuesto de carga no entra entero** (ADR-0022). Responde 413\nsi trae más hojas de las que admite un lote o pesa más que el cupo de un día, y 429 con\n`Retry-After` si ya no cabe en lo que queda del cupo de las últimas 24 horas. En los dos\ncasos no se lee ninguna hoja, así que no hay nada que revisar antes de volver a subirlo.",
+        "description": "Recibe una o varias hojas escaneadas de un examen y confirma qué entró y qué no (RF-01).\n\n**Responde 200 aunque haya archivos rechazados, y eso es deliberado.** La petición se\natendió por completo: el 200 confirma que el sistema procesó el lote entero, y el cuerpo\ndice archivo por archivo qué pasó. Devolver un error por un rechazo obligaría al cliente a\nreenviar el lote completo, que es justo lo que EC-07 quiere evitar.\n\n**Una hoja puede volver como aceptada y todavía pendiente de encolar.** Desde ADR-0006 el\ncampo `estado` de cada aceptada vale `encolada` o `pendiente_de_encolar`: la segunda es una\nhoja almacenada y registrada en la bitácora cuyo trabajo no llegó a la cola. Se reporta en\nvez de omitirse porque EC-07 exige que ningún archivo cargado desaparezca sin traza, y\nreintentarla es asunto del sistema, no del docente: el archivo ya está adentro.\n\n**El `examen_id` todavía no se verifica contra nada, y es un hueco conocido, no un olvido.**\nEl módulo `autoria` es el que registrará los exámenes, y esa parte (aspecto A-04) aún no\nexiste; `identidad` ya pide una sesión (ADR-0025), pero todavía no sabe de cursos (EC-06), así\nque no comprueba que el docente pueda cargar en ese examen. La ruta ya tiene la forma\ndefinitiva para que cuando esas partes lleguen solo haya que sumar la comprobación, sin migrar\nel frontend.\n\n**Un lote que no cabe en el presupuesto de carga no entra entero** (ADR-0022). Responde 413\nsi trae más hojas de las que admite un lote o pesa más que el cupo de un día, y 429 con\n`Retry-After` si ya no cabe en lo que queda del cupo de las últimas 24 horas. En los dos\ncasos no se lee ninguna hoja, así que no hay nada que revisar antes de volver a subirlo.",
         "operationId": "cargar_hojas_examenes__examen_id__hojas_post",
         "parameters": [
           {
@@ -1093,6 +1159,9 @@
             },
             "description": "Qué entró y qué no, archivo por archivo."
           },
+          "401": {
+            "description": "Sin sesión, o con un token vencido o que ya no vale (ADR-0025)."
+          },
           "413": {
             "content": {
               "application/json": {
@@ -1124,6 +1193,11 @@
             "description": "El lote no cabe en lo que queda del cupo de bytes de las últimas 24 horas (ADR-0022). No entró ninguna hoja. La cabecera `Retry-After` dice en cuántos segundos cabrá."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Cargar hojas escaneadas de un examen"
       }
     },
@@ -1167,6 +1241,9 @@
             },
             "description": "La fila de burbujas, en PNG."
           },
+          "401": {
+            "description": "Sin sesión, o con un token vencido o que ya no vale (ADR-0025)."
+          },
           "404": {
             "description": "La pregunta no tiene recorte."
           },
@@ -1181,12 +1258,17 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "El recorte de una pregunta en revisión"
       }
     },
     "/examenes/{examen_id}/hojas/{hoja_id}/revision": {
       "post": {
-        "description": "Registra lo que el profesor vio marcado en cada pregunta, con su nombre y la hora (RF-08,\nRF-10), y devuelve la hoja con la nota recalculada. La nota automática no se borra: queda en\nel registro de resultados, y esta solo se agrega encima (ADR-0018).\n\nEl nombre es el que escribe el profesor, **sin verificar** hasta A-05. Si algo no cuadra (una\npregunta que no estaba en revisión, por ejemplo), no se guarda nada.",
+        "description": "Registra lo que el profesor vio marcado en cada pregunta, con su nombre y la hora (RF-08,\nRF-10), y devuelve la hoja con la nota recalculada. La nota automática no se borra: queda en\nel registro de resultados, y esta solo se agrega encima (ADR-0018).\n\nQuien resolvió es el docente de la sesión (ADR-0025), no un nombre escrito a mano. Si algo no\ncuadra (una pregunta que no estaba en revisión, por ejemplo), no se guarda nada.",
         "operationId": "resolver_revision_examenes__examen_id__hojas__hoja_id__revision_post",
         "parameters": [
           {
@@ -1229,19 +1311,27 @@
             },
             "description": "El resultado de la hoja con la nota recalculada."
           },
+          "401": {
+            "description": "Sin sesión, o con un token vencido o que ya no vale (ADR-0025)."
+          },
           "404": {
             "description": "La hoja no está en el examen o no tiene una nota que revisar."
           },
           "422": {
-            "description": "Una pregunta no estaba en revisión, viene dos veces o falta el nombre."
+            "description": "Una pregunta no estaba en revisión o viene dos veces."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Guardar lo que el profesor resolvió en una hoja"
       }
     },
     "/examenes/{examen_id}/resultados": {
       "get": {
-        "description": "Las hojas del examen que el worker ya leyó, con su estado, su nota y las preguntas que\nesperan al profesor (A-02 y A-03). La pantalla de carga la consulta después de subir un lote y\nune cada resultado con su archivo por el `hoja_id`.\n\nUna hoja recibida que todavía no aparece sigue en la cola o leyéndose. **No devuelve el código\ndel estudiante**: la ruta es pública hasta A-05, y el riesgo se aceptó solo mientras no entren\nhojas reales (AM-02). Lee el registro en disco en un hilo aparte, para no frenar a las demás\npeticiones mientras recorre el archivo.",
+        "description": "Las hojas del examen que el worker ya leyó, con su estado, su nota y las preguntas que\nesperan al profesor (A-02 y A-03). La pantalla de carga la consulta después de subir un lote y\nune cada resultado con su archivo por el `hoja_id`.\n\nUna hoja recibida que todavía no aparece sigue en la cola o leyéndose. **No devuelve el código\ndel estudiante**: la pantalla de carga no lo necesita. Lee el registro en disco en un hilo\naparte, para no frenar a las demás peticiones mientras recorre el archivo.",
         "operationId": "resultados_examenes__examen_id__resultados_get",
         "parameters": [
           {
@@ -1265,6 +1355,9 @@
             },
             "description": "El último resultado de cada hoja leída, sin el código del estudiante."
           },
+          "401": {
+            "description": "Sin sesión, o con un token vencido o que ya no vale (ADR-0025)."
+          },
           "422": {
             "content": {
               "application/json": {
@@ -1276,12 +1369,17 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Cómo quedó cada hoja leída de un examen"
       }
     },
     "/examenes/{examen_id}/revision": {
       "get": {
-        "description": "Las hojas con preguntas que la lectura no pudo decidir, y en cada pregunta lo que se midió\nen sus burbujas y lo que el profesor ya resolvió (RF-08). Una hoja sigue apareciendo después de\nresuelta, para poder cambiar una decisión. Cada hoja lleva el nombre con que se subió y la hora\nen que llegó, para que el profesor sepa cuál es.\n\n**No lleva la respuesta correcta**: la ruta es pública hasta A-05 (AM-02). El profesor dice qué\nmarcó el estudiante y el sistema decide si es correcto. **Sí lleva el código del estudiante**,\npara que el profesor sepa de quién es la hoja, y el nombre del archivo, que puede ser el del\nestudiante: el riesgo se acepta solo mientras no entren hojas reales, como el resto de la ruta.",
+        "description": "Las hojas con preguntas que la lectura no pudo decidir, y en cada pregunta lo que se midió\nen sus burbujas y lo que el profesor ya resolvió (RF-08). Una hoja sigue apareciendo después de\nresuelta, para poder cambiar una decisión. Cada hoja lleva el nombre con que se subió y la hora\nen que llegó, para que el profesor sepa cuál es.\n\n**No lleva la respuesta correcta**: el profesor dice qué marcó el estudiante y el sistema decide\nsi es correcto. **Sí lleva el código del estudiante**, para que el profesor sepa de quién es la\nhoja, y el nombre del archivo, que puede ser el del estudiante. La ruta pide sesión\n(ADR-0025), pero sin cursos todavía cualquier docente con cuenta ve todas las hojas (EC-06).",
         "operationId": "revision_examenes__examen_id__revision_get",
         "parameters": [
           {
@@ -1305,6 +1403,9 @@
             },
             "description": "Cada hoja en revisión, con el código del estudiante y sin la clave."
           },
+          "401": {
+            "description": "Sin sesión, o con un token vencido o que ya no vale (ADR-0025)."
+          },
           "422": {
             "content": {
               "application/json": {
@@ -1316,6 +1417,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Las preguntas que esperan al profesor en un examen"
       }
     },
@@ -1354,6 +1460,51 @@
           }
         },
         "summary": "Estado de los presupuestos del proveedor de LLM y de carga, y de la caché"
+      }
+    },
+    "/sesion": {
+      "post": {
+        "description": "Abre una sesión para un docente de la lista (A-05, ADR-0025). El token que devuelve va en\n`Authorization: Bearer` en todas las demás rutas, salvo `/health` y `/metricas`.\n\nUn correo sin cuenta y una contraseña equivocada responden igual y tardan lo mismo, para que\nla respuesta no diga quién tiene cuenta. Es una ruta `def` y no `async def`: verificar la\ncontraseña con scrypt bloquea unos 50 ms, y así no detiene a las demás peticiones.",
+        "operationId": "iniciar_sesion_sesion_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SolicitudDeSesion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SesionEnRespuesta"
+                }
+              }
+            },
+            "description": "El token de la sesión y hasta cuándo vale."
+          },
+          "401": {
+            "description": "El correo o la contraseña no coinciden. No dice cuál de los dos."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "description": "El servidor no tiene configurado el inicio de sesión: falta el secreto o la lista de docentes. Nadie puede entrar hasta configurarlo."
+          }
+        },
+        "summary": "Entrar con correo y contraseña"
       }
     }
   }

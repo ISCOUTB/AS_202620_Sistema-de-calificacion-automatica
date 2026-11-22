@@ -67,6 +67,8 @@ from typing import Any
 
 import httpx
 
+from herramientas.sesion import encabezados_de_sesion
+
 UMBRAL_EC07_SEGUNDOS = 10.0
 ESPERA_DE_LA_PANTALLA_SEGUNDOS = 5.0
 APAGADO_DE_RENDER_MINUTOS = 15
@@ -253,8 +255,8 @@ def main(argv: list[str] | None = None) -> int:
     ruta_del_informe = _ruta_del_informe(args.json) if args.json else None
 
     inicio = _ahora()
-    with httpx.Client(timeout=httpx.Timeout(180.0),
-                      headers={"User-Agent": "quantia-medir-arranque-en-frio/1.0"}) as cliente:
+    encabezados = {"User-Agent": "quantia-medir-arranque-en-frio/1.0", **encabezados_de_sesion()}
+    with httpx.Client(timeout=httpx.Timeout(180.0), headers=encabezados) as cliente:
         frio = medir_en_frio(cliente, url, args.frio_salud, args.frio_lote, args.espera_min,
                              args.lote_hojas, args.kb)
         caliente = medir_en_caliente(cliente, url, args.caliente, args.caliente_lotes,

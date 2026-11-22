@@ -38,6 +38,7 @@ from infraestructura.modelo import (
 from infraestructura.resultados import SIN_CLAVE, ResultadosEnDisco
 from infraestructura.revisiones import RevisionesEnDisco
 from omr import leer_hoja_con_recortes
+from tests.sesion_de_prueba import DOCENTE_DE_PRUEBA
 
 EXAMEN = "CALC-2026-02"
 CODIGO = "20261105"
@@ -47,7 +48,8 @@ CLAVE = ClaveDeRespuestas(
     tuple(PreguntaDeLaClave(n, letra) for n, letra in CORRECTAS.items()),
     Habilitacion(por="Docente de prueba", en=datetime(2026, 11, 5, tzinfo=timezone.utc)),
 )
-DOCENTE = "Docente de prueba"
+# Quien resuelve es el docente de la sesión (ADR-0025), el que pone `conftest.py`.
+DOCENTE = DOCENTE_DE_PRUEBA
 NOMBRE = "foto inclinada.jpg"
 
 
@@ -88,13 +90,10 @@ def cliente(tmp_path, leida, revisiones) -> Iterator[TestClient]:
     app.dependency_overrides.clear()
 
 
-def _resolver(cliente, *resoluciones, hoja="h-1", por=DOCENTE):
+def _resolver(cliente, *resoluciones, hoja="h-1"):
     return cliente.post(
         f"/examenes/{EXAMEN}/hojas/{hoja}/revision",
-        json={
-            "por": por,
-            "resoluciones": [{"numero": n, "opcion": opcion} for n, opcion in resoluciones],
-        },
+        json={"resoluciones": [{"numero": n, "opcion": opcion} for n, opcion in resoluciones]},
     )
 
 
@@ -292,22 +291,35 @@ def test_sin_resolver_la_hoja_sigue_en_revision(cliente):
 
 
 @pytest.mark.parametrize(
-    ("hoja", "resoluciones", "por", "codigo"),
+    ("hoja", "resoluciones", "codigo"),
     [
-        ("h-1", [(8, "A")], DOCENTE, 422),
-        ("h-1", [(7, "C"), (7, "B")], DOCENTE, 422),
-        ("h-1", [(7, "C")], "   ", 422),
-        ("h-1", [(7, "E")], DOCENTE, 422),
-        ("h-9", [(7, "C")], DOCENTE, 404),
-        ("h-2", [(7, "C")], DOCENTE, 404),
+        ("h-1", [(8, "A")], 422),
+        ("h-1", [(7, "C"), (7, "B")], 422),
+        ("h-1", [(7, "E")], 422),
+        ("h-9", [(7, "C")], 404),
+        ("h-2", [(7, "C")], 404),
     ],
-    ids=["no-esta-en-revision", "repetida", "sin-nombre", "opcion-inexistente", "otra-hoja",
-         "sin-nota"],
+    ids=["no-esta-en-revision", "repetida", "opcion-inexistente", "otra-hoja", "sin-nota"],
 )
 def test_lo_que_no_cuadra_se_rechaza_sin_escribir_nada(
-    cliente, revisiones, hoja, resoluciones, por, codigo
+    cliente, revisiones, hoja, resoluciones, codigo
 ):
-    respuesta = _resolver(cliente, *resoluciones, hoja=hoja, por=por)
+    respuesta = _resolver(cliente, *resoluciones, hoja=hoja)
 
     assert respuesta.status_code == codigo
     assert revisiones.resoluciones_del_examen(EXAMEN) == {}
+
+
+def test_quien_resuelve_es_el_docente_de_la_sesion_aunque_la_solicitud_diga_otro(
+    cliente, revisiones
+):
+    """El nombre ya no se escribe a mano (AM-02, ADR-0025): un `por` que llegue, de un cliente
+    viejo o de alguien que quiere firmar por otro, se ignora."""
+    respuesta = cliente.post(
+        f"/examenes/{EXAMEN}/hojas/h-1/revision",
+        json={"por": "Otro docente", "resoluciones": [{"numero": 7, "opcion": "C"}]},
+    )
+
+    assert respuesta.status_code == 200
+    [resolucion] = revisiones.resoluciones_del_examen(EXAMEN)["h-1"]
+    assert resolucion.por == DOCENTE_DE_PRUEBA

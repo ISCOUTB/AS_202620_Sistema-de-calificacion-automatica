@@ -46,6 +46,15 @@ import redis.exceptions
 from fastapi.testclient import TestClient
 
 from api.main import app, obtener_almacen, obtener_cliente_cola
+
+try:  # pragma: no cover - la rama que se toma depende del estado del repositorio
+    from api.main import docente_de_la_sesion
+    from herramientas.sesion import DOCENTE_DE_MEDICION
+
+    HAY_SESION = True
+except ImportError:
+    # Estado anterior a ADR-0025: las rutas no piden sesión.
+    HAY_SESION = False
 from infraestructura.almacen import AlmacenEnDisco
 
 try:  # pragma: no cover - la rama que se toma depende del estado del repositorio
@@ -118,6 +127,9 @@ def _hojas(cantidad: int, kilobytes: int) -> list[tuple[str, tuple[str, bytes, s
 def _cliente(raiz: Path, cola: ColaEnMemoria, propagar: bool) -> TestClient:
     app.dependency_overrides[obtener_almacen] = lambda: AlmacenEnDisco(raiz)
     app.dependency_overrides[obtener_cliente_cola] = lambda: cola
+    # Se mide la recepción del lote, no la entrada: la medición habla como un docente que ya entró.
+    if HAY_SESION:
+        app.dependency_overrides[docente_de_la_sesion] = lambda: DOCENTE_DE_MEDICION
     if HAY_BITACORA:
         app.dependency_overrides[obtener_bitacora] = lambda: BitacoraEnDisco(
             raiz / "bitacora-de-recepcion.jsonl"

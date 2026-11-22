@@ -52,6 +52,7 @@ import numpy as np
 from herramientas.hojas_sinteticas import Foto, patron
 from herramientas.medir_lectura import generar_hoja
 from herramientas.rutas import ruta_en_el_repositorio, url_de_la_api
+from herramientas.sesion import encabezados_de_sesion
 
 ESCANEO = Foto(escala=0.72, ruido=2.0, calidad_jpeg=80)  # 8,5 px/mm, como 200 DPI
 UMBRAL_EC03_MS = 5000
@@ -79,7 +80,7 @@ def cargar(url: str, examen_id: str, hojas: list[bytes], pausa_s: float | None) 
     respuestas de la API."""
     respuestas = []
     lotes = [[hoja] for hoja in hojas] if pausa_s is not None else [hojas]
-    with httpx.Client(base_url=url, timeout=120) as cliente:
+    with httpx.Client(base_url=url, timeout=120, headers=encabezados_de_sesion()) as cliente:
         for numero, lote in enumerate(lotes):
             archivos = [
                 ("archivos", (f"hoja-{numero:03d}-{i:03d}.jpg", contenido, "image/jpeg"))

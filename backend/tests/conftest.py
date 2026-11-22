@@ -5,6 +5,18 @@ import pytest
 import redis
 
 from infraestructura.cola import cliente_redis
+from tests.sesion_de_prueba import DOCENTE_DE_PRUEBA
+
+
+@pytest.fixture(autouse=True)
+def docente_con_sesion() -> Iterator[None]:
+    """Las pruebas de las rutas hablan con la API como un docente que ya entró (ADR-0025). La
+    sesión en sí se prueba en `test_sesion.py`, que quita esta sustitución."""
+    from api.main import app, docente_de_la_sesion
+
+    app.dependency_overrides[docente_de_la_sesion] = lambda: DOCENTE_DE_PRUEBA
+    yield
+    app.dependency_overrides.pop(docente_de_la_sesion, None)
 
 
 @pytest.fixture

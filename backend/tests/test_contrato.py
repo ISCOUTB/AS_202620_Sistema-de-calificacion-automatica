@@ -55,6 +55,7 @@ RUTA_EXAMENES = "/examenes"
 RUTA_REVISION = "/examenes/{examen_id}/revision"
 RUTA_RESOLVER = "/examenes/{examen_id}/hojas/{hoja_id}/revision"
 RUTA_RECORTE = "/examenes/{examen_id}/hojas/{hoja_id}/preguntas/{numero}/recorte"
+RUTA_SESION = "/sesion"
 
 
 @pytest.fixture(scope="module")
@@ -156,19 +157,20 @@ def test_la_version_del_contrato_es_la_declarada_en_el_codigo(contrato_publicado
     assert contrato_publicado["info"]["version"] == VERSION_DEL_CONTRATO
 
 
-def test_el_contrato_declara_las_nueve_rutas_que_la_api_expone(contrato_publicado):
+def test_el_contrato_declara_las_diez_rutas_que_la_api_expone(contrato_publicado):
     """Las rutas son lo primero que un consumidor busca; que desaparezca una es el cambio
     incompatible mas obvio que existe.
 
     De la ruta de distractores se exige ademas que publique su 503: es la degradacion que
     ADR-0013 promete cuando el proveedor de LLM falla, y un cliente que no sepa que existe la
     trataria como un error inesperado. Desde 1.2.0 se exige tambien su 429, el corte del
-    presupuesto de ADR-0015, y la ruta `GET /metricas` que lo publica."""
+    presupuesto de ADR-0015, y la ruta `GET /metricas` que lo publica. Desde 2.0.0, la ruta de
+    entrar (ADR-0025)."""
     rutas = contrato_publicado["paths"]
 
     assert set(rutas) == {
         "/health", RUTA_CARGA, RUTA_DISTRACTORES, RUTA_METRICAS, RUTA_RESULTADOS, RUTA_EXAMENES,
-        RUTA_REVISION, RUTA_RESOLVER, RUTA_RECORTE,
+        RUTA_REVISION, RUTA_RESOLVER, RUTA_RECORTE, RUTA_SESION,
     }
     assert "get" in rutas[RUTA_REVISION]
     assert "post" in rutas[RUTA_RESOLVER]
@@ -278,3 +280,19 @@ def test_el_resultado_dice_si_la_nota_la_corrigio_el_profesor(contrato_publicado
     esquema = contrato_publicado["components"]["schemas"]["ResultadoDeHojaEnRespuesta"]
 
     assert "revisada" in esquema["required"]
+
+
+def test_el_contrato_dice_que_rutas_piden_sesion(contrato_publicado):
+    """Un consumidor tiene que saber, leyendo el contrato, que debe entrar antes y con qué
+    encabezado (ADR-0025). Las públicas no declaran seguridad; las demás, el token y su 401."""
+    publicas = {("/health", "get"), (RUTA_SESION, "post"), (RUTA_METRICAS, "get")}
+    assert contrato_publicado["components"]["securitySchemes"]["HTTPBearer"]["scheme"] == "bearer"
+    for ruta, operaciones in contrato_publicado["paths"].items():
+        for metodo, operacion in operaciones.items():
+            if (ruta, metodo) in publicas:
+                assert "security" not in operacion, (ruta, metodo)
+            else:
+                assert operacion["security"] == [{"HTTPBearer": []}], (ruta, metodo)
+                assert "401" in operacion["responses"], (ruta, metodo)
+    entrar = contrato_publicado["paths"][RUTA_SESION]["post"]["responses"]
+    assert {"200", "401", "503"} <= set(entrar)

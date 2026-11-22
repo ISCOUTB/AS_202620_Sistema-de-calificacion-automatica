@@ -80,6 +80,11 @@ services:
       # que está en el disco compartido del servidor. También vive en la memoria de este proceso.
       CARGA_HOJAS_POR_LOTE: ${CARGA_HOJAS_POR_LOTE:-250}
       CARGA_MB_POR_DIA: ${CARGA_MB_POR_DIA:-256}
+      # Inicio de sesión (ADR-0025). Los dos van solo en Dokploy → Environment, nunca en el
+      # repositorio. Sin alguno de ellos nadie entra: la API falla cerrada y /health sigue igual.
+      SESION_SECRETO: ${SESION_SECRETO:-}
+      DOCENTES: ${DOCENTES:-}
+      SESION_HORAS: ${SESION_HORAS:-12}
       # Traefik termina el HTTPS y reenvía la petición con X-Forwarded-For y X-Forwarded-Proto.
       # Uvicorn solo cree esas cabeceras si vienen de 127.0.0.1, y aquí vienen del contenedor de
       # Traefik: sin esta línea, una redirección de FastAPI apunta a http:// y el registro de
