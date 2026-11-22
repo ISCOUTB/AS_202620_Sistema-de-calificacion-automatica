@@ -8,8 +8,11 @@ from herramientas.medir_lectura import (
     AMBIGUAS,
     CASOS,
     CLARA,
+    DOBLE,
+    SOLO_BORRADA,
     Pregunta,
     juzgar,
+    juzgar_sugerencia,
     medir,
 )
 from infraestructura.modelo import DOBLE_MARCA, DUDOSA, SIN_MARCA, UNA_MARCA
@@ -23,6 +26,32 @@ def test_la_medicion_juzga_todas_las_preguntas_de_todas_las_hojas():
     assert juzgadas == 40 * leidas
     assert informe["errores_silenciosos"] == 0
     assert set(informe["por_caso"]) == set(CASOS)
+
+
+def test_la_medicion_cuenta_la_preseleccion_de_lo_que_va_a_revision():
+    """ADR-0024: de cada pregunta que va a revisión, si llega preseleccionada bien, confusa o con
+    una sugerencia equivocada."""
+    informe = medir(hojas=3, semilla=1)
+
+    a_revision = sum(
+        conteo.get("a_revision", 0) + (conteo.get("bien", 0) if caso in AMBIGUAS else 0)
+        for caso, conteo in informe["por_caso"].items()
+    )
+    preseleccion = informe["preseleccion_por_caso"]
+    assert sum(sum(conteo.values()) for conteo in preseleccion.values()) == a_revision
+    assert informe["corte_de_intencion"] == 40
+    assert informe["sugerencias_equivocadas"] == len(
+        informe["detalle_de_las_sugerencias_equivocadas"]
+    )
+
+
+def test_una_sugerencia_se_juzga_contra_lo_que_quiso_el_estudiante():
+    assert juzgar_sugerencia(Pregunta(CLARA, "C"), "C") == "bien"
+    assert juzgar_sugerencia(Pregunta(CLARA, "C"), None) == "confusa"
+    assert juzgar_sugerencia(Pregunta(CLARA, "C"), "A") == "equivocada"
+    # Donde no hubo intención, cualquier sugerencia es equivocada.
+    assert juzgar_sugerencia(Pregunta(SOLO_BORRADA, None), "B") == "equivocada"
+    assert juzgar_sugerencia(Pregunta(DOBLE, None), None) == "confusa"
 
 
 def test_una_marca_ambigua_asignada_es_un_error_silencioso_y_a_revision_esta_bien():

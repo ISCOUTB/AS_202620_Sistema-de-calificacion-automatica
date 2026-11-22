@@ -7,16 +7,23 @@ import 'package:frontend/app/app.dart';
 import 'package:frontend/app/marco_app.dart';
 import 'package:frontend/app/servicios.dart';
 import 'package:frontend/features/carga/data/servicio_carga.dart';
+import 'package:frontend/features/carga/data/servicio_examenes.dart';
 import 'package:frontend/features/pauta/data/servicio_distractores.dart';
+import 'package:frontend/features/revision/data/servicio_revision.dart';
 import 'package:frontend/main.dart';
 
 /// Servicios sustitutos: la aplicación entera se monta sin backend y sin diálogo de archivos.
 ServiciosApp _servicios({
   bool apiConectada = true,
   Future<ArchivoSeleccionado?> Function()? tomarFoto,
+  Future<RevisionDelExamen> Function(String)? consultarRevision,
 }) =>
     ServiciosApp(
       tomarFoto: tomarFoto,
+      listarExamenes: consultarRevision == null
+          ? null
+          : () async => const [ExamenConClave(examenId: 'PROTOTIPO-R05', habilitada: true)],
+      consultarRevision: consultarRevision,
       verificarSalud: () async => apiConectada,
       seleccionarArchivos: ({alAvanzar}) async => [
         ArchivoSeleccionado(nombre: 'hoja1.png', contenido: Uint8List.fromList(const [1, 2, 3])),
@@ -35,12 +42,19 @@ Future<void> _montar(
   required Size tamano,
   bool apiConectada = true,
   Future<ArchivoSeleccionado?> Function()? tomarFoto,
+  Future<RevisionDelExamen> Function(String)? consultarRevision,
 }) async {
   tester.view.physicalSize = tamano;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(
-    QuantiaApp(servicios: _servicios(apiConectada: apiConectada, tomarFoto: tomarFoto)),
+    QuantiaApp(
+      servicios: _servicios(
+        apiConectada: apiConectada,
+        tomarFoto: tomarFoto,
+        consultarRevision: consultarRevision,
+      ),
+    ),
   );
   await tester.pumpAndSettle();
 }
@@ -83,6 +97,35 @@ void main() {
 
     expect(find.text('hoja1.png'), findsOneWidget);
     expect(find.text('CALC-2026-02'), findsOneWidget);
+  });
+
+  testWidgets('Volver a Revisión pide otra vez la revisión del examen elegido', (tester) async {
+    // La sección queda viva mientras se mira otra: sin pedirla de nuevo, las hojas subidas en
+    // Carga no aparecían hasta recargar la página.
+    final pedidos = <String>[];
+    await _montar(
+      tester,
+      tamano: const Size(1280, 1400),
+      consultarRevision: (examen) async {
+        pedidos.add(examen);
+        return RevisionDelExamen(examenId: examen, hojas: const []);
+      },
+    );
+    await tester.tap(find.text(Seccion.revision.etiqueta).last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(DropdownMenu<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('PROTOTIPO-R05').last);
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+    expect(pedidos, ['PROTOTIPO-R05']);
+
+    await tester.tap(find.text(Seccion.carga.etiqueta).last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(Seccion.revision.etiqueta).last);
+    await tester.pumpAndSettle();
+
+    expect(pedidos, ['PROTOTIPO-R05', 'PROTOTIPO-R05']);
   });
 
   testWidgets('La barra superior muestra el nombre del sistema y que está conectado',

@@ -32,6 +32,8 @@ class PreguntaEnRevision {
     this.resuelta = false,
     this.opcionResuelta,
     this.resueltaPor,
+    this.resueltaEn,
+    this.opcionSugerida,
   });
 
   final int numero;
@@ -43,16 +45,42 @@ class PreguntaEnRevision {
   final String? opcionResuelta;
   final String? resueltaPor;
 
-  factory PreguntaEnRevision.desdeJson(Map<String, dynamic> json) => PreguntaEnRevision(
-        numero: json['numero'] as int,
-        burbujas: [
-          for (final b in json['burbujas'] as List) BurbujaLeida.desdeJson(b as Map<String, dynamic>),
-        ],
-        conRecorte: json['con_recorte'] as bool,
-        resuelta: json['resuelta'] as bool,
-        opcionResuelta: json['opcion_resuelta'] as String?,
-        resueltaPor: json['resuelta_por'] as String?,
-      );
+  /// Cuándo se guardó lo resuelto, en UTC tal como lo manda la API.
+  final DateTime? resueltaEn;
+
+  /// La única opción que la lectura vio marcada (ADR-0024). La pantalla la muestra elegida, pero
+  /// no cuenta en la nota hasta que el profesor guarda. Nula si vio dos o ninguna, o si la hoja se
+  /// leyó antes de que existiera.
+  final String? opcionSugerida;
+
+  factory PreguntaEnRevision.desdeJson(Map<String, dynamic> json) {
+    final resueltaEn = json['resuelta_en'] as String?;
+    return PreguntaEnRevision(
+      numero: json['numero'] as int,
+      burbujas: [
+        for (final b in json['burbujas'] as List) BurbujaLeida.desdeJson(b as Map<String, dynamic>),
+      ],
+      conRecorte: json['con_recorte'] as bool,
+      resuelta: json['resuelta'] as bool,
+      opcionResuelta: json['opcion_resuelta'] as String?,
+      resueltaPor: json['resuelta_por'] as String?,
+      resueltaEn: resueltaEn == null ? null : DateTime.tryParse(resueltaEn),
+      opcionSugerida: json['opcion_sugerida'] as String?,
+    );
+  }
+}
+
+/// Las preguntas de la hoja en el orden en que el profesor las mira: primero las confusas (sin
+/// resolver y sin sugerencia), después las preseleccionadas y al final las ya resueltas; dentro de
+/// cada grupo, por número. Se ordena con lo que mandó el servidor y no con lo que el profesor va
+/// eligiendo, para que las tarjetas no salten mientras elige.
+List<PreguntaEnRevision> preguntasEnOrden(HojaEnRevision hoja) {
+  int grupo(PreguntaEnRevision pregunta) =>
+      pregunta.resuelta ? 2 : (pregunta.opcionSugerida == null ? 0 : 1);
+  return [...hoja.preguntas]..sort((a, b) {
+      final porGrupo = grupo(a).compareTo(grupo(b));
+      return porGrupo != 0 ? porGrupo : a.numero.compareTo(b.numero);
+    });
 }
 
 /// Una hoja con preguntas en revisión y su nota con lo resuelto hasta ahora.
@@ -82,6 +110,16 @@ class HojaEnRevision {
 
   int get pendientes => preguntas.where((p) => !p.resuelta).length;
 
+  /// La última vez que el profesor guardó algo en la hoja; nula si todavía no guardó nada.
+  DateTime? get editadaEn {
+    DateTime? ultima;
+    for (final pregunta in preguntas) {
+      final en = pregunta.resueltaEn;
+      if (en != null && (ultima == null || en.isAfter(ultima))) ultima = en;
+    }
+    return ultima;
+  }
+
   factory HojaEnRevision.desdeJson(Map<String, dynamic> json) {
     final nombre = json['nombre_archivo'] as String?;
     final recibida = json['recibida_en'] as String?;
@@ -104,11 +142,45 @@ const _meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', '
 
 /// «Subida el 16 nov, 14:32», en la hora del navegador del docente. Sin el paquete `intl`, como
 /// las cifras del panel.
-String llegadaLegible(DateTime instante) {
+String llegadaLegible(DateTime instante) => 'Subida el ${_fechaLegible(instante)}';
+
+/// «Editada el 19 nov, 14:40»: cuándo guardó el profesor por última vez en la hoja.
+String edicionLegible(DateTime instante) => 'Editada el ${_fechaLegible(instante)}';
+
+String _fechaLegible(DateTime instante) {
   final local = instante.toLocal();
   final hora = local.hour.toString().padLeft(2, '0');
   final minuto = local.minute.toString().padLeft(2, '0');
-  return 'Subida el ${local.day} ${_meses[local.month - 1]}, $hora:$minuto';
+  return '${local.day} ${_meses[local.month - 1]}, $hora:$minuto';
+}
+
+/// Las hojas que muestra la lista con los dos filtros, cada uno por su lado: las que tienen
+/// preguntas pendientes con [porRevisar] y las ya revisadas con [revisadas]. Primero todas las por
+/// revisar y después las revisadas, para que una revisada no quede entre dos que faltan; dentro de
+/// cada grupo, de la subida más nueva a la más vieja, y las que no tienen hora al final y en el
+/// orden en que llegaron.
+List<HojaEnRevision> hojasVisibles(
+  List<HojaEnRevision> hojas, {
+  required bool porRevisar,
+  required bool revisadas,
+}) {
+  final visibles = [
+    for (final (indice, hoja) in hojas.indexed)
+      if (hoja.pendientes > 0 ? porRevisar : revisadas) (indice, hoja),
+  ];
+  visibles.sort((a, b) {
+    final (indiceA, hojaA) = a;
+    final (indiceB, hojaB) = b;
+    final (faltaA, faltaB) = (hojaA.pendientes > 0, hojaB.pendientes > 0);
+    if (faltaA != faltaB) return faltaA ? -1 : 1;
+    final (recibidaA, recibidaB) = (hojaA.recibidaEn, hojaB.recibidaEn);
+    if (recibidaA != null && recibidaB != null && recibidaA != recibidaB) {
+      return recibidaB.compareTo(recibidaA);
+    }
+    if ((recibidaA == null) != (recibidaB == null)) return recibidaA == null ? 1 : -1;
+    return indiceA.compareTo(indiceB);
+  });
+  return [for (final (_, hoja) in visibles) hoja];
 }
 
 class RevisionDelExamen {

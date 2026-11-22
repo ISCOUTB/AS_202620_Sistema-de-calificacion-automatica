@@ -49,7 +49,9 @@ class BurbujaEnRevision:
 @dataclass(frozen=True)
 class PreguntaEnRevision:
     """Una pregunta que la lectura no pudo decidir. `opcion_resuelta` es la que el profesor vio
-    marcada, o None si dijo que ninguna vale; solo tiene sentido con `resuelta`."""
+    marcada, o None si dijo que ninguna vale; solo tiene sentido con `resuelta`.
+    `opcion_sugerida` es la única intención que vio la lectura (ADR-0024), para preseleccionarla;
+    None si vio dos o ninguna, o si la hoja se leyó antes del corte."""
 
     numero: int
     burbujas: tuple[BurbujaEnRevision, ...]
@@ -58,6 +60,7 @@ class PreguntaEnRevision:
     opcion_resuelta: str | None
     resuelta_por: str | None
     resuelta_en: datetime | None
+    opcion_sugerida: str | None = None
 
 
 @dataclass(frozen=True)
@@ -119,6 +122,7 @@ def revision_del_examen(
                     opcion_resuelta=None if resolucion is None else resolucion.opcion,
                     resuelta_por=None if resolucion is None else resolucion.por,
                     resuelta_en=None if resolucion is None else resolucion.en,
+                    opcion_sugerida=filas.get(numero, {}).get("opcion_sugerida"),
                 )
             )
         llegada = llegadas.get(hoja_id)

@@ -256,6 +256,13 @@ class PreguntaEnRevisionEnRespuesta(BaseModel):
         description="El nombre que escribio quien la resolvio. Sin verificar hasta A-05."
     )
     resuelta_en: datetime | None
+    opcion_sugerida: OpcionDeRespuesta | None = Field(
+        default=None,
+        description=(
+            "La unica opcion que la lectura vio marcada, para preseleccionarla; nula si vio dos o"
+            " ninguna. No es la respuesta correcta y no cuenta en la nota hasta que se guarda."
+        ),
+    )
 
 
 class HojaEnRevisionEnRespuesta(BaseModel):

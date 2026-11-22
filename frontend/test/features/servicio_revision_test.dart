@@ -47,6 +47,109 @@ void main() {
     expect(pregunta.burbujas[1].tipo, 'tenue');
   });
 
+  test('Cada pregunta trae la opción sugerida y cuándo se resolvió', () {
+    final pregunta = PreguntaEnRevision.desdeJson({
+      'numero': 4, 'burbujas': [], 'con_recorte': false, 'resuelta': true,
+      'opcion_resuelta': 'B', 'resuelta_por': 'Docente', 'resuelta_en': '2026-11-19T19:40:00Z',
+      'opcion_sugerida': 'B',
+    });
+    // Una hoja leída antes del corte no trae la sugerencia.
+    final vieja = PreguntaEnRevision.desdeJson({
+      'numero': 5, 'burbujas': [], 'con_recorte': false, 'resuelta': false,
+      'opcion_resuelta': null, 'resuelta_por': null, 'resuelta_en': null,
+    });
+
+    expect((pregunta.opcionSugerida, pregunta.resueltaEn), ('B', DateTime.utc(2026, 11, 19, 19, 40)));
+    expect((vieja.opcionSugerida, vieja.resueltaEn), (null, null));
+  });
+
+  test('Primero las confusas, después las preseleccionadas y al final las resueltas', () {
+    const hoja = HojaEnRevision(
+      hojaId: 'h-1',
+      notaEnDecimas: 30,
+      provisional: true,
+      codigoCompleto: true,
+      preguntas: [
+        PreguntaEnRevision(
+            numero: 1, burbujas: [], conRecorte: false, resuelta: true, opcionResuelta: 'A'),
+        PreguntaEnRevision(numero: 2, burbujas: [], conRecorte: false, opcionSugerida: 'C'),
+        PreguntaEnRevision(numero: 3, burbujas: [], conRecorte: false),
+        PreguntaEnRevision(numero: 5, burbujas: [], conRecorte: false, opcionSugerida: 'D'),
+        PreguntaEnRevision(numero: 4, burbujas: [], conRecorte: false),
+      ],
+    );
+
+    expect([for (final p in preguntasEnOrden(hoja)) p.numero], [3, 4, 2, 5, 1]);
+  });
+
+  group('La lista de hojas', () {
+    PreguntaEnRevision pregunta(int numero, {DateTime? resueltaEn}) => PreguntaEnRevision(
+          numero: numero,
+          burbujas: const [],
+          conRecorte: false,
+          resuelta: resueltaEn != null,
+          resueltaEn: resueltaEn,
+        );
+    HojaEnRevision hoja(String id, {DateTime? recibida, bool revisada = false}) => HojaEnRevision(
+          hojaId: id,
+          notaEnDecimas: 30,
+          provisional: !revisada,
+          codigoCompleto: true,
+          preguntas: [pregunta(1, resueltaEn: revisada ? DateTime(2026, 11, 19) : null)],
+          recibidaEn: recibida,
+        );
+    final vieja = hoja('vieja', recibida: DateTime(2026, 11, 15), revisada: true);
+    final nueva = hoja('nueva', recibida: DateTime(2026, 11, 17));
+    final media = hoja('media', recibida: DateTime(2026, 11, 16), revisada: true);
+    final sinHora1 = hoja('sin-hora-1');
+    final sinHora2 = hoja('sin-hora-2', revisada: true);
+    final hojas = [sinHora1, vieja, nueva, sinHora2, media];
+
+    List<String> ids(List<HojaEnRevision> lista) => [for (final h in lista) h.hojaId];
+
+    test('Se edita cuando se guardó la última de sus preguntas', () {
+      final editada = HojaEnRevision(
+        hojaId: 'h',
+        notaEnDecimas: 30,
+        provisional: true,
+        codigoCompleto: true,
+        preguntas: [
+          pregunta(1, resueltaEn: DateTime.utc(2026, 11, 18, 10)),
+          pregunta(2),
+          pregunta(3, resueltaEn: DateTime.utc(2026, 11, 19, 19, 40)),
+        ],
+      );
+
+      expect(editada.editadaEn, DateTime.utc(2026, 11, 19, 19, 40));
+      expect(hoja('h').editadaEn, isNull);
+    });
+
+    test('La edición se lee en la hora del docente, como la llegada', () {
+      expect(edicionLegible(DateTime(2026, 11, 19, 14, 40)), 'Editada el 19 nov, 14:40');
+      final utc = DateTime.utc(2026, 11, 19, 19, 40);
+      expect(edicionLegible(utc), edicionLegible(utc.toLocal()));
+    });
+
+    test('Con los dos filtros, primero todas las por revisar y después las revisadas', () {
+      // Cada grupo va de la más nueva a la más vieja, con las que no tienen hora al final: una
+      // revisada nunca queda entre dos por revisar, aunque se haya subido entre ellas.
+      final porRevisarVieja = hoja('por-revisar-vieja', recibida: DateTime(2026, 11, 14));
+      expect(
+        ids(hojasVisibles([...hojas, porRevisarVieja], porRevisar: true, revisadas: true)),
+        ['nueva', 'por-revisar-vieja', 'sin-hora-1', 'media', 'vieja', 'sin-hora-2'],
+      );
+    });
+
+    test('Cada filtro deja solo las suyas, y sin ninguno no queda nada', () {
+      expect(ids(hojasVisibles(hojas, porRevisar: true, revisadas: false)), ['nueva', 'sin-hora-1']);
+      expect(
+        ids(hojasVisibles(hojas, porRevisar: false, revisadas: true)),
+        ['media', 'vieja', 'sin-hora-2'],
+      );
+      expect(hojasVisibles(hojas, porRevisar: false, revisadas: false), isEmpty);
+    });
+  });
+
   test('Si la API no manda el nombre ni la hora, la hoja queda sin ellos', () {
     final hoja = HojaEnRevision.desdeJson({
       'hoja_id': 'h-1', 'nota_en_decimas': 49, 'provisional': true,

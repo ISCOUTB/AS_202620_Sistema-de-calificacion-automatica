@@ -47,6 +47,10 @@ class _MarcoAppState extends State<MarcoApp> {
   final _nombresDeHojas = ValueNotifier<Map<String, String>>(const {});
   final _examenParaRevisar = ValueNotifier<String?>(null);
   final _revisionesGuardadas = ValueNotifier<int>(0);
+
+  /// Avisa cada vez que Revisión vuelve a la vista: la pantalla sigue viva mientras se mira otra
+  /// sección, y lo subido en Carga no aparecía hasta recargar la página.
+  final _revisionALaVista = ValueNotifier<int>(0);
   late Seccion _seccion = widget.seccionInicial;
 
   @override
@@ -61,6 +65,7 @@ class _MarcoAppState extends State<MarcoApp> {
     _nombresDeHojas.dispose();
     _examenParaRevisar.dispose();
     _revisionesGuardadas.dispose();
+    _revisionALaVista.dispose();
     super.dispose();
   }
 
@@ -71,13 +76,20 @@ class _MarcoAppState extends State<MarcoApp> {
     _estadoApi.value = conectada ? EstadoApi.conectada : EstadoApi.sinConexion;
   }
 
-  void _ir(int indice) => setState(() => _seccion = Seccion.values[indice]);
+  void _ir(int indice) => _mostrar(Seccion.values[indice]);
 
+  void _mostrar(Seccion seccion) {
+    if (seccion == Seccion.revision && _seccion != Seccion.revision) _revisionALaVista.value++;
+    setState(() => _seccion = seccion);
+  }
+
+  /// El examen va antes que el aviso: si es otro, la revisión lo pide una sola vez.
   void _irARevisar(String examenId) {
-    // Se pasa por null para que pedir otra vez el mismo examen también avise.
+    // Se pasa por null para que avise aunque se pida el mismo examen que la vez anterior: en
+    // Revisión pudieron elegir otro desde entonces.
     _examenParaRevisar.value = null;
     _examenParaRevisar.value = examenId;
-    setState(() => _seccion = Seccion.revision);
+    _mostrar(Seccion.revision);
   }
 
   final _claveContenido = GlobalKey();
@@ -106,6 +118,7 @@ class _MarcoAppState extends State<MarcoApp> {
         urlDelRecorte: servicios.urlDelRecorte,
         nombresDeHojas: _nombresDeHojas,
         examenPedido: _examenParaRevisar,
+        alMostrarse: _revisionALaVista,
         alGuardar: () => _revisionesGuardadas.value++,
       ),
       PantallaPauta(

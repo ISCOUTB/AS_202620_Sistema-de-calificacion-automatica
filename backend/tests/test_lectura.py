@@ -87,6 +87,28 @@ def test_media_burbuja_va_a_revision():
     assert _estados(lectura)[5] == (DUDOSA, None)
 
 
+def test_media_burbuja_sola_llega_sugerida_y_la_lectura_guarda_el_corte():
+    """ADR-0024: la única intención de una fila en revisión llega preseleccionada, y la lectura
+    guarda con qué corte se decidió, como guarda el umbral (R-04)."""
+    lectura = leer_hoja(
+        fotografiar(hoja_marcada({}, codigo="12345678", a_medias=((1, "C"),))), UMBRAL
+    )
+
+    [primera] = [pregunta for pregunta in lectura.preguntas if pregunta.numero == 1]
+    assert (primera.estado, primera.opcion, primera.opcion_sugerida) == (DUDOSA, None, "C")
+    assert lectura.corte_de_intencion == 40
+
+
+def test_el_corte_de_la_lectura_lo_decide_quien_llama():
+    foto = fotografiar(hoja_marcada({}, a_medias=((1, "C"),)))
+
+    lectura = leer_hoja(foto, UMBRAL, corte_de_intencion=50)
+
+    assert lectura.corte_de_intencion == 50
+    with pytest.raises(ValueError):
+        leer_hoja(foto, UMBRAL, corte_de_intencion=30)
+
+
 def test_las_filas_en_revision_salen_recortadas_y_solo_ellas():
     """Lo que mira el profesor para resolverlas (RF-08): la fila, desde su número hasta la última
     burbuja y de la altura de una fila. Las demás filas, y el código, no se recortan."""

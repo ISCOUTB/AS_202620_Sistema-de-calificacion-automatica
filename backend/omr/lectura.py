@@ -18,7 +18,9 @@ from infraestructura.modelo import (
 )
 from omr import vision
 from omr.decision import (
+    CORTE_DE_INTENCION_POR_OMISION,
     clasificar_burbuja,
+    comprobar_corte_de_intencion,
     comprobar_umbral_de_confianza,
     decidir_codigo,
     decidir_pregunta,
@@ -42,24 +44,34 @@ class _Posicion(NamedTuple):
 
 
 def leer_hoja(
-    contenido: bytes, umbral_de_confianza: int, formato: FormatoDeHoja = FORMATO_V1
+    contenido: bytes,
+    umbral_de_confianza: int,
+    formato: FormatoDeHoja = FORMATO_V1,
+    corte_de_intencion: int = CORTE_DE_INTENCION_POR_OMISION,
 ) -> LecturaDeHoja:
     """Lee el código del estudiante y todas las filas de respuestas de la hoja. Es
     `leer_hoja_con_recortes` sin los recortes."""
-    return _leer(contenido, umbral_de_confianza, formato, recortar=False)[0]
+    return _leer(contenido, umbral_de_confianza, formato, False, corte_de_intencion)[0]
 
 
 def leer_hoja_con_recortes(
-    contenido: bytes, umbral_de_confianza: int, formato: FormatoDeHoja = FORMATO_V1
+    contenido: bytes,
+    umbral_de_confianza: int,
+    formato: FormatoDeHoja = FORMATO_V1,
+    corte_de_intencion: int = CORTE_DE_INTENCION_POR_OMISION,
 ) -> tuple[LecturaDeHoja, dict[int, bytes]]:
     """Lee la hoja como `leer_hoja` y, además, recorta en PNG la fila de cada pregunta que quedó
     dudosa o con doble marca, por número: es lo que el profesor mira para resolverla (RF-08). Se
     recorta de la hoja ya rectificada, que está en memoria, así que no cuesta otra lectura."""
-    return _leer(contenido, umbral_de_confianza, formato, recortar=True)
+    return _leer(contenido, umbral_de_confianza, formato, True, corte_de_intencion)
 
 
 def _leer(
-    contenido: bytes, umbral_de_confianza: int, formato: FormatoDeHoja, recortar: bool
+    contenido: bytes,
+    umbral_de_confianza: int,
+    formato: FormatoDeHoja,
+    recortar: bool,
+    corte_de_intencion: int,
 ) -> tuple[LecturaDeHoja, dict[int, bytes]]:
     """Lee el código del estudiante y todas las filas de respuestas de la hoja.
 
@@ -68,8 +80,10 @@ def _leer(
     pregunta y el código), y mide cuánto tarda (EC-03).
 
     Lanza una subclase de `LecturaImposible` si la hoja no se puede leer, y `ValueError` si el
-    umbral no está entre 51 y 100, que es un error de configuración y no de la hoja."""
+    umbral no está entre 51 y 100 o el corte de intención entre 31 y 50, que son errores de
+    configuración y no de la hoja."""
     comprobar_umbral_de_confianza(umbral_de_confianza)
+    comprobar_corte_de_intencion(corte_de_intencion)
     inicio = time.perf_counter()
     gris = vision.decodificar(contenido)
     vision.comprobar_calidad(gris)
@@ -97,13 +111,14 @@ def _leer(
         filas.setdefault(posicion.fila, []).append(burbuja)
 
     preguntas = tuple(
-        decidir_pregunta(numero, tuple(burbujas), umbral_de_confianza)
+        decidir_pregunta(numero, tuple(burbujas), umbral_de_confianza, corte_de_intencion)
         for (grupo, numero), burbujas in filas.items()
         if grupo == _PREGUNTA
     )
     codigo = decidir_codigo(
         tuple(tuple(burbujas) for (grupo, _), burbujas in filas.items() if grupo == _CODIGO),
         umbral_de_confianza,
+        corte_de_intencion,
     )
     lectura = LecturaDeHoja(
         version_del_formato=formato.version,
@@ -111,6 +126,7 @@ def _leer(
         preguntas=preguntas,
         umbral_de_confianza=umbral_de_confianza,
         duracion_ms=round((time.perf_counter() - inicio) * 1000, 1),
+        corte_de_intencion=corte_de_intencion,
     )
     recortes: dict[int, bytes] = {}
     if recortar:
