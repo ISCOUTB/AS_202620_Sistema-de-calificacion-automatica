@@ -8,7 +8,7 @@
 | **Estado** | **Hecha** (en el código, con su prueba o su comprobación), **Pendiente** (con dueño y plazo) o **Aceptada** (con el motivo y lo que la reabre) |
 | **Lo que decidió una mitigación estructural** | [ADR-0022](../adr/0022-poner-un-presupuesto-de-carga-delante-del-almacen.md): el presupuesto de carga, para AM-01 |
 | **Dónde sigue** | La arquitectura de seguridad, la privacidad y las amenazas aceptadas, en las secciones 8 y 11 del [arc42](../arc42/arc42-template-ES.md) |
-| **Actualización** | 2026-11-06, con la lectura de las hojas, las notas y la revisión manual (A-02, A-03 y RF-08): AM-02 ampliada y AM-16 a AM-18, en la [sección 8](#8-actualización-la-lectura-las-notas-y-la-revisión-2026-11-06). Las secciones 1 a 7 son las de la S13, con dos filas que remiten a la 8 |
+| **Actualización** | 2026-11-06, con la lectura de las hojas, las notas y la revisión manual (A-02, A-03 y RF-08): AM-02 ampliada y AM-16 a AM-18, en la [sección 8](#8-actualización-la-lectura-las-notas-y-la-revisión-2026-11-06). Las secciones 1 a 7 son las de la S13, con dos filas que remiten a la 8. Y 2026-11-21, con el inicio de sesión ([ADR-0025](../adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md)): AM-02 reducida, AM-08 en parte y AM-19 a AM-21, en la [sección 9](#9-actualización-el-inicio-de-sesión-2026-11-21) |
 
 ---
 
@@ -217,7 +217,8 @@ equipo, sin datos de ninguna persona; el entorno se borra el 30-nov (R-31).
 
 **Antes de cargar la primera hoja de un estudiante real tienen que existir cuatro cosas:**
 
-1. `identidad` (A-05), para que solo el docente del curso cargue y consulte (AM-02, AM-08).
+1. Los cursos y su aislamiento (EC-06), que completan `identidad`: desde [ADR-0025](../adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md) solo entra
+   quien tiene cuenta, pero cada docente con cuenta ve todos los exámenes (AM-02, AM-08).
 2. La confirmación, con la universidad, de que su autorización cubre calificar con esta herramienta,
    y de en calidad de qué la usa el docente.
 3. La retención de RNF-14: las imágenes se borran o se anonimizan al cerrar el periodo de revisión
@@ -264,3 +265,26 @@ qué pasa si el worker muere con una hoja en la mano, se vio que el trabajo volv
 contar el intento, y se buscó qué hoja podía matarlo. Se probó en un contenedor con los mismos
 límites que el servidor. Es la misma lección de la S13: una amenaza anclada en
 un elemento concreto, con sus límites, se puede comprobar en vez de suponer.
+
+## 9. Actualización: el inicio de sesión (2026-11-21)
+
+Lo que [ADR-0025](../adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md) cambió en el Nivel 2 del C4:
+
+- **La relación 1 pide sesión:** todas las rutas salvo `/health`, `/metricas` y `POST /sesion`
+  exigen un token firmado de un docente de la lista.
+- **La aplicación web tiene un secreto más y una lista de cuentas:** `SESION_SECRETO` y `DOCENTES`,
+  en el panel, con las contraseñas cifradas con scrypt.
+- **El sitio guarda el token** en el almacenamiento del navegador.
+- **La revisión publica el código del estudiante**, detrás de la sesión.
+
+| ID | STRIDE | Elemento del C4 | Amenaza | P | I | Prioridad | Mitigación | Dueño | Estado |
+|---|---|---|---|---|---|---|---|---|---|
+| **AM-02**, reducida | Suplantación, manipulación y divulgación | Relación 1 | Lo que queda: cualquier docente con cuenta ve todos los exámenes, con el código del estudiante, y resuelve revisiones de cualquiera, porque no hay cursos | Baja | Medio | **2** | Sin cuenta, todas esas rutas responden 401, y `test_sesion.py` las recorre todas; cada resolución queda con el correo de la sesión | Equipo, con A-04 y EC-06 | **Aceptada** con la misma condición: ninguna hoja real antes de los cursos |
+| **AM-08**, en parte | Repudio | Almacén de imágenes: la bitácora y el registro de revisiones | Nadie puede probar quién cargó un lote | Alta | Bajo | **3** | Cada revisión queda con el correo del docente de la sesión, no con un nombre escrito a mano (`test_ruta_revision.py`). La carga pide sesión, pero la bitácora no guarda quién | Sebastián | **Hecha** para las revisiones; **aceptada** para la carga hasta la primera nota real |
+| **AM-19** | Suplantación | Relación 1: `POST /sesion` | Probar contraseñas hasta acertar: la entrada no limita los intentos | Baja | Alto | **3** | Las contraseñas tienen al menos 10 caracteres y se verifican con scrypt, unos 50 ms por intento; un correo sin cuenta cuesta lo mismo que una contraseña equivocada y responde igual; cada rechazo queda en el registro como `entrada_rechazada`, sin el correo | Equipo | **Aceptada** (R-38): la reabren intentos seguidos en el registro |
+| **AM-20** | Divulgación | Sitio: el token en el navegador | Un script en la página lee el token del almacenamiento del navegador y lo usa hasta que vence | Baja | Medio | **2** | El sitio no muestra HTML de terceros ni de usuarios; el token vence a las 12 horas, y quitar la cuenta o cambiar el secreto lo invalida | Equipo | **Aceptada** (R-40) |
+| **AM-17**, reducida | Manipulación | Almacén de imágenes: las claves | Lo que queda: quien llega al volumen puede cambiar el archivo de una clave | Baja | Alto | **3** | Desde [ADR-0026](../adr/0026-registrar-y-habilitar-la-clave-desde-la-aplicacion.md) la clave se registra desde la aplicación, con sesión, y no se cambia después de la primera nota; la habilitación queda con el correo de quien la hizo (`test_ruta_clave.py`) | Equipo | **Aceptada**: al volumen solo se llega desde el panel |
+| **AM-21** | Divulgación | Aplicación web: variables de entorno en el panel | Quien entra al panel ve `SESION_SECRETO` y puede firmar tokens a nombre de cualquier docente de la lista | Baja | Alto | **3** | Al panel entran el equipo y el docente con su correo institucional, como con la `LLM_API_KEY` (AM-13); cambiar el secreto cierra todas las sesiones | Equipo | **Aceptada**, como AM-13 |
+
+**Por qué AM-02 no se cierra del todo.** La sesión dice quién es el docente, no qué cursos son
+suyos, y el sistema todavía no tiene cursos (A-04). Por eso la condición sigue: ninguna hoja real.
