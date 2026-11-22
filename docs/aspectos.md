@@ -25,7 +25,9 @@ verificar y evidenciar.
 
 ## Tabla de trazabilidad
 
-**Lo último, para el final: la preselección en la revisión ([A-02](#a-02) y [A-03](#a-03)) y la cámara del celular ([A-01](#a-01)).** Con [ADR-0024](adr/0024-preseleccionar-en-la-revision-la-unica-intencion.md), una burbuja con 40 o más de confianza cuenta como intención: la pregunta en revisión con una sola llega con esa opción elegida, y la columna del código con una sola da su dígito. En las tres fotos del prototipo, 25 de las 28 preguntas en revisión llegan preseleccionadas con lo que se marcó, 3 confusas y ninguna equivocada; en 1 163 preguntas en revisión de 300 hojas sintéticas, 0 sugerencias equivocadas; y en 7 200 columnas del código, 0 dígitos mal aceptados ([evidencia](evidencia/preseleccion-omr.md)). En el celular, «Tomar foto» abre la cámara desde la pantalla de carga.
+**Lo último: la entrada con sesión ([A-05](#a-05), construido en parte).** Con [ADR-0025](adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md), el docente entra con su correo y su contraseña, de una lista cifrada en el servidor, y todas las rutas salvo `/health` y `/metricas` piden el token de la sesión: una prueba recorre las de la aplicación y exige 401 sin él. Cada revisión queda a nombre del docente que entró, y muestra el código del estudiante. Falta el aislamiento por curso (EC-06): sin cursos, todo docente con cuenta ve todos los exámenes. Y con [ADR-0026](adr/0026-registrar-y-habilitar-la-clave-desde-la-aplicacion.md), la clave de cada examen se registra y se habilita desde la pantalla de pauta ([A-04](#a-04), construido en parte): se puede cambiar mientras ninguna hoja tenga nota.
+
+**También para el final: la preselección en la revisión ([A-02](#a-02) y [A-03](#a-03)) y la cámara del celular ([A-01](#a-01)).** Con [ADR-0024](adr/0024-preseleccionar-en-la-revision-la-unica-intencion.md), una burbuja con 40 o más de confianza cuenta como intención: la pregunta en revisión con una sola llega con esa opción elegida, y la columna del código con una sola da su dígito. En las tres fotos del prototipo, 25 de las 28 preguntas en revisión llegan preseleccionadas con lo que se marcó, 3 confusas y ninguna equivocada; en 1 163 preguntas en revisión de 300 hojas sintéticas, 0 sugerencias equivocadas; y en 7 200 columnas del código, 0 dígitos mal aceptados ([evidencia](evidencia/preseleccion-omr.md)). En el celular, «Tomar foto» abre la cámara desde la pantalla de carga.
 
 **La lectura de las hojas ([A-02](#a-02)) y su calificación ([A-03](#a-03)) están construidas**, con la revisión manual de las preguntas dudosas desde la aplicación (RF-08) ([ADR-0023](adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md)). Sobre 300 hojas sintéticas: EC-01, 9 406 de 9 406 marcas claras bien leídas (100 %; pide ≥98 %); EC-02, 1 026 de 1 026 marcas ambiguas a revisión (100 %; pide ≥99 %); ninguna respuesta leída mal sin aviso, tampoco en las tres fotos del prototipo (R-05). Con el sistema completo y los límites del servidor: EC-03, p95 de 1,7 s por hoja (pide ≤5 s); EC-04, 200 hojas en 3,6 min (pide ≤10 min) ([medición](evidencia/medicion-lectura-omr.md)). Falta el conjunto escaneado de R-01, calibrar el umbral con él (R-04) y saber quién resuelve cada revisión (A-05). **En la S14 se repitió la medición** con tres corridas por escenario y dio lo mismo: EC-03, p95 de 1,22 s, y EC-04, de 3,5 a 3,6 min por lote, los dos en local ([medición de la S14](evidencia/medicion-s14.md)); medirlos en el servidor es R-37.
 
@@ -59,9 +61,9 @@ alcanzables desde la fila del aspecto que los realiza.
 |---|---|---|---|---|---|---|---|---|---|---|
 | **[A-01](#a-01)** | Carga de examen para calificación | **Construido** | RF-01 | [EC-07](arc42/arc42-template-ES.md#ec-07) | [Rel. 1](c4/doc-c4.md#relaciones): Profesor/TA → Sistema | C1: [QuantIA](c4/doc-c4.md#nivel-1--diagrama-de-contexto-del-sistema) · C2: [Aplicación web](c4/doc-c4.md#nivel-2--diagrama-de-contenedores), [Almacén de imágenes](c4/doc-c4.md#nivel-2--diagrama-de-contenedores), [Cola de trabajos](c4/doc-c4.md#nivel-2--diagrama-de-contenedores) | [0002](adr/0002-procesar-calificacion-de-forma-asincrona.md) · [0006](adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md) · [0016](adr/0016-acotar-la-espera-de-la-cola-y-hacer-idempotente-al-worker.md) · [0018](adr/0018-dar-a-la-hoja-una-identidad-propia-y-derivar-su-estado-de-la-bitacora.md) · [0020](adr/0020-entregar-los-trabajos-al-menos-una-vez-con-reintentos-y-lista-de-fallidos.md) | [`ingesta/recepcion.py`](../backend/ingesta/recepcion.py) · [`infraestructura/almacen.py`](../backend/infraestructura/almacen.py) · [`infraestructura/bitacora.py`](../backend/infraestructura/bitacora.py) · [`infraestructura/modelo.py`](../backend/infraestructura/modelo.py) · [`api/main.py`](../backend/api/main.py) · [`frontend/lib/features/carga/views/pantalla_carga.dart`](../frontend/lib/features/carga/views/pantalla_carga.dart) · la cámara, [`tomar_foto.dart`](../frontend/lib/features/carga/data/tomar_foto.dart) · [`infraestructura/cola.py`](../backend/infraestructura/cola.py) · [`worker/main.py`](../backend/worker/main.py) · [`infraestructura/consumo.py`](../backend/infraestructura/consumo.py) · contrato del mensaje: [`trabajo-v1.schema.json`](contrato/trabajo-v1.schema.json) | [`test_recepcion.py`](../backend/tests/test_recepcion.py) · [`test_durabilidad_recepcion.py`](../backend/tests/test_durabilidad_recepcion.py) · [`test_carga_hojas.py`](../backend/tests/test_carga_hojas.py) · [`carga_test.dart`](../frontend/test/features/carga_test.dart) · [`tomar_foto_test.dart`](../frontend/test/features/tomar_foto_test.dart) · [`servicio_carga_test.dart`](../frontend/test/features/servicio_carga_test.dart) · [`test_modos_de_fallo.py`](../backend/tests/test_modos_de_fallo.py) · [`test_identidad_de_la_hoja.py`](../backend/tests/test_identidad_de_la_hoja.py) · [`test_mensajeria.py`](../backend/tests/test_mensajeria.py) | [Medición de EC-07](evidencia/medicion-ec07.md): 1,744 s contra ≤10 s · 0 % de pérdida silenciosa · [captura](#a-01-evidencia) · [Modos de fallo](evidencia/modos-de-fallo.md) (S11): con la cola lenta, el lote de 200 confirma en 2,017 s (antes 10,017 s) · [Consistencia](evidencia/consistencia-y-cache.md): filas C-01 a C-05 · [Taller de mensajería](evidencia/taller-mensajeria.md): ejecución con un duplicado, un fallo recuperable y uno que termina en fallidos |
 | **[A-02](#a-02)** | Detección de marcas y nivel de confianza | **Construido** | RF-02, RF-03 | [EC-01](arc42/arc42-template-ES.md#ec-01) · [EC-02](arc42/arc42-template-ES.md#ec-02) | **Sin contexto propio** — proceso interno, no cruza la frontera del sistema (ver nota abajo) | C2: [Worker → Almacén de imágenes](c4/doc-c4.md#relaciones-1) (relación 7) · C3: [`omr`](c4/doc-c4.md#nivel-3--diagrama-de-componentes) | [0023](adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md) · [0024](adr/0024-preseleccionar-en-la-revision-la-unica-intencion.md) · [0020](adr/0020-entregar-los-trabajos-al-menos-una-vez-con-reintentos-y-lista-de-fallidos.md) | [`omr/formato.py`](../backend/omr/formato.py) · [`omr/plantilla.py`](../backend/omr/plantilla.py) · [`omr/vision.py`](../backend/omr/vision.py) · [`omr/decision.py`](../backend/omr/decision.py) · [`omr/lectura.py`](../backend/omr/lectura.py) · [`omr/errores.py`](../backend/omr/errores.py) · [`worker/main.py`](../backend/worker/main.py) (`leer_y_calificar`) · en el sitio, [`preparacion_de_hojas.dart`](../frontend/lib/features/carga/data/preparacion_de_hojas.dart) | [`test_plantilla.py`](../backend/tests/test_plantilla.py) · [`test_vision.py`](../backend/tests/test_vision.py) · [`test_decision.py`](../backend/tests/test_decision.py) · [`test_lectura.py`](../backend/tests/test_lectura.py) · [`test_lectura_fotos_r05.py`](../backend/tests/test_lectura_fotos_r05.py) · [`test_medir_lectura.py`](../backend/tests/test_medir_lectura.py) · [`test_medir_codigo.py`](../backend/tests/test_medir_codigo.py) · [`preparacion_de_hojas_test.dart`](../frontend/test/features/preparacion_de_hojas_test.dart) | [Medición de la lectura](evidencia/medicion-lectura-omr.md): EC-01, 100 % contra ≥98 % · EC-02, 100 % contra ≥99 % · 0 respuestas mal leídas sin aviso, en 300 hojas sintéticas y en las 3 fotos del prototipo (R-05) · un PNG que mataba al worker por memoria, ahora ilegible · [Medición de la S14](evidencia/medicion-s14.md#3-ec-01-y-ec-02-tres-corridas-de-300-hojas), tres corridas: EC-01, 100 % (28 127 de 28 127) contra ≥98 % · EC-02, 100 % (3 134 de 3 134) contra ≥99 % · 0 errores silenciosos en 36 000 preguntas · [Preselección](evidencia/preseleccion-omr.md) (ADR-0024): 0 sugerencias equivocadas en las 3 fotos y en 1 163 preguntas en revisión · 0 dígitos del código mal aceptados en 7 200 columnas |
-| **[A-03](#a-03)** | Calificación contra la clave y publicación | **Construido**, salvo las estadísticas del Panel (RF-05) | RF-04, RF-05, RF-08 | [EC-03](arc42/arc42-template-ES.md#ec-03) · [EC-04](arc42/arc42-template-ES.md#ec-04) | [Rel. 2](c4/doc-c4.md#relaciones): Sistema → Profesor/TA | C2: [Worker y Aplicación web → Almacén de imágenes](c4/doc-c4.md#relaciones-1) (relaciones 7 y 3) · C3: [`calificacion` y `dashboard`](c4/doc-c4.md#nivel-3--diagrama-de-componentes) | [0002](adr/0002-procesar-calificacion-de-forma-asincrona.md) · [0018](adr/0018-dar-a-la-hoja-una-identidad-propia-y-derivar-su-estado-de-la-bitacora.md) · [0023](adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md) · [0024](adr/0024-preseleccionar-en-la-revision-la-unica-intencion.md) | [`calificacion/nota.py`](../backend/calificacion/nota.py) · [`calificacion/revision.py`](../backend/calificacion/revision.py) · [`infraestructura/claves.py`](../backend/infraestructura/claves.py) · [`infraestructura/resultados.py`](../backend/infraestructura/resultados.py) · [`infraestructura/revisiones.py`](../backend/infraestructura/revisiones.py) · [`autoria/examenes.py`](../backend/autoria/examenes.py) · [`dashboard/resultados.py`](../backend/dashboard/resultados.py) · [`dashboard/revision.py`](../backend/dashboard/revision.py) · [`api/main.py`](../backend/api/main.py) (cinco rutas, contrato 1.8.0) · pantallas: [`reporte_recepcion.dart`](../frontend/lib/features/carga/views/widgets/reporte_recepcion.dart) y [`pantalla_revision.dart`](../frontend/lib/features/revision/views/pantalla_revision.dart) | [`test_calificacion.py`](../backend/tests/test_calificacion.py) · [`test_claves.py`](../backend/tests/test_claves.py) · [`test_resultados.py`](../backend/tests/test_resultados.py) · [`test_leer_y_calificar.py`](../backend/tests/test_leer_y_calificar.py) · [`test_ruta_resultados.py`](../backend/tests/test_ruta_resultados.py) · [`test_ruta_examenes.py`](../backend/tests/test_ruta_examenes.py) · [`test_revisiones.py`](../backend/tests/test_revisiones.py) · [`test_ruta_revision.py`](../backend/tests/test_ruta_revision.py) · [`test_medir_procesamiento.py`](../backend/tests/test_medir_procesamiento.py) · [`revision_test.dart`](../frontend/test/features/revision_test.dart) · [`servicio_revision_test.dart`](../frontend/test/features/servicio_revision_test.dart) · [`servicio_resultados_test.dart`](../frontend/test/features/servicio_resultados_test.dart) · [`servicio_examenes_test.dart`](../frontend/test/features/servicio_examenes_test.dart) | [Medición de la lectura](evidencia/medicion-lectura-omr.md#3-ec-03-y-ec-04-el-sistema-completo): EC-03, p95 de 1,7 s contra ≤5 s · EC-04, 200 de 200 hojas en 3,6 min contra ≤10 min · [RF-08 con las fotos del prototipo](evidencia/medicion-lectura-omr.md#4-la-revisión-manual-con-las-fotos-del-prototipo-rf-08): de 3,9 a 4,0, sin que la respuesta correcta salga de la API · [Medición de la S14](evidencia/medicion-s14.md#4-ec-03-tres-corridas-de-20-hojas-sueltas), tres corridas, en local: EC-03, p95 de 1,22 s contra ≤5 s · EC-04, 600 de 600 hojas en 3,5 a 3,6 min por lote contra ≤10 min; la CPU del servidor, sin medir (R-37) · [Preselección en la revisión](evidencia/preseleccion-omr.md#1-las-tres-fotos-del-prototipo): 25 de las 28 preguntas en revisión de las fotos llegan con la opción marcada, 3 confusas, 0 equivocadas |
-| **[A-04](#a-04)** | Registro del banco y habilitación del examen | Declarado | RF-06, RF-07 | [EC-05](arc42/arc42-template-ES.md#ec-05) | [Rel. 1](c4/doc-c4.md#relaciones): Profesor/TA → Sistema | Pendiente | [0003](adr/0003-usar-fastapi-y-flutter.md) · [0004](adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md) · [0005](adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md) | Pendiente | Pendiente | Pendiente |
-| **[A-05](#a-05)** | Identidad y aislamiento por curso | Declarado | RF-09, RF-10 | [EC-06](arc42/arc42-template-ES.md#ec-06) | [Rel. 1 y 2](c4/doc-c4.md#relaciones): transversal a ambas — condición de «docente autenticado» bajo la que operan | Pendiente | ADR de auditoría previsto (RF-10) | Pendiente | Pendiente | Pendiente |
+| **[A-03](#a-03)** | Calificación contra la clave y publicación | **Construido**, salvo las estadísticas del Panel (RF-05) | RF-04, RF-05, RF-08 | [EC-03](arc42/arc42-template-ES.md#ec-03) · [EC-04](arc42/arc42-template-ES.md#ec-04) | [Rel. 2](c4/doc-c4.md#relaciones): Sistema → Profesor/TA | C2: [Worker y Aplicación web → Almacén de imágenes](c4/doc-c4.md#relaciones-1) (relaciones 7 y 3) · C3: [`calificacion` y `dashboard`](c4/doc-c4.md#nivel-3--diagrama-de-componentes) | [0002](adr/0002-procesar-calificacion-de-forma-asincrona.md) · [0018](adr/0018-dar-a-la-hoja-una-identidad-propia-y-derivar-su-estado-de-la-bitacora.md) · [0023](adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md) · [0024](adr/0024-preseleccionar-en-la-revision-la-unica-intencion.md) | [`calificacion/nota.py`](../backend/calificacion/nota.py) · [`calificacion/revision.py`](../backend/calificacion/revision.py) · [`infraestructura/claves.py`](../backend/infraestructura/claves.py) · [`infraestructura/resultados.py`](../backend/infraestructura/resultados.py) · [`infraestructura/revisiones.py`](../backend/infraestructura/revisiones.py) · [`autoria/examenes.py`](../backend/autoria/examenes.py) · [`dashboard/resultados.py`](../backend/dashboard/resultados.py) · [`dashboard/revision.py`](../backend/dashboard/revision.py) · [`api/main.py`](../backend/api/main.py) (cinco rutas; contrato 2.0.0 desde ADR-0025) · pantallas: [`reporte_recepcion.dart`](../frontend/lib/features/carga/views/widgets/reporte_recepcion.dart) y [`pantalla_revision.dart`](../frontend/lib/features/revision/views/pantalla_revision.dart) | [`test_calificacion.py`](../backend/tests/test_calificacion.py) · [`test_claves.py`](../backend/tests/test_claves.py) · [`test_resultados.py`](../backend/tests/test_resultados.py) · [`test_leer_y_calificar.py`](../backend/tests/test_leer_y_calificar.py) · [`test_ruta_resultados.py`](../backend/tests/test_ruta_resultados.py) · [`test_ruta_examenes.py`](../backend/tests/test_ruta_examenes.py) · [`test_revisiones.py`](../backend/tests/test_revisiones.py) · [`test_ruta_revision.py`](../backend/tests/test_ruta_revision.py) · [`test_medir_procesamiento.py`](../backend/tests/test_medir_procesamiento.py) · [`revision_test.dart`](../frontend/test/features/revision_test.dart) · [`servicio_revision_test.dart`](../frontend/test/features/servicio_revision_test.dart) · [`servicio_resultados_test.dart`](../frontend/test/features/servicio_resultados_test.dart) · [`servicio_examenes_test.dart`](../frontend/test/features/servicio_examenes_test.dart) | [Medición de la lectura](evidencia/medicion-lectura-omr.md#3-ec-03-y-ec-04-el-sistema-completo): EC-03, p95 de 1,7 s contra ≤5 s · EC-04, 200 de 200 hojas en 3,6 min contra ≤10 min · [RF-08 con las fotos del prototipo](evidencia/medicion-lectura-omr.md#4-la-revisión-manual-con-las-fotos-del-prototipo-rf-08): de 3,9 a 4,0, sin que la respuesta correcta salga de la API · [Medición de la S14](evidencia/medicion-s14.md#4-ec-03-tres-corridas-de-20-hojas-sueltas), tres corridas, en local: EC-03, p95 de 1,22 s contra ≤5 s · EC-04, 600 de 600 hojas en 3,5 a 3,6 min por lote contra ≤10 min; la CPU del servidor, sin medir (R-37) · [Preselección en la revisión](evidencia/preseleccion-omr.md#1-las-tres-fotos-del-prototipo): 25 de las 28 preguntas en revisión de las fotos llegan con la opción marcada, 3 confusas, 0 equivocadas |
+| **[A-04](#a-04)** | Registro del banco y habilitación del examen | **Construido en parte**: la clave y su habilitación; falta el banco | RF-06, RF-07 | [EC-05](arc42/arc42-template-ES.md#ec-05) | [Rel. 1](c4/doc-c4.md#relaciones): Profesor/TA → Sistema | Pendiente | [0003](adr/0003-usar-fastapi-y-flutter.md) · [0004](adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md) · [0005](adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md) | Pendiente | Pendiente | Pendiente |
+| **[A-05](#a-05)** | Identidad y aislamiento por curso | **Construido en parte**: la entrada con sesión; faltan los cursos | RF-09, RF-10 | [EC-06](arc42/arc42-template-ES.md#ec-06) | [Rel. 1 y 2](c4/doc-c4.md#relaciones): transversal a ambas — condición de «docente autenticado» bajo la que operan | C3: [`identidad`](c4/doc-c4.md#nivel-3--diagrama-de-componentes) | [0025](adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md) | [`identidad/`](../backend/identidad/) · [`api/main.py`](../backend/api/main.py) (`POST /sesion` y `docente_de_la_sesion`) · [`crear_docente.py`](../backend/herramientas/crear_docente.py) · pantalla: [`pantalla_entrada.dart`](../frontend/lib/features/sesion/views/pantalla_entrada.dart) y [`cliente_con_sesion.dart`](../frontend/lib/common/api/cliente_con_sesion.dart) | [`test_identidad.py`](../backend/tests/test_identidad.py) · [`test_sesion.py`](../backend/tests/test_sesion.py) · [`test_crear_docente.py`](../backend/tests/test_crear_docente.py) · [`pantalla_entrada_test.dart`](../frontend/test/features/pantalla_entrada_test.dart) · [`sesion_test.dart`](../frontend/test/features/sesion_test.dart) · [`servicios_con_sesion_test.dart`](../frontend/test/servicios_con_sesion_test.dart) | Toda ruta salvo `/health`, `/metricas` y `POST /sesion` responde 401 sin sesión, y `test_sesion.py` las recorre todas · con uvicorn de verdad: sin token 401, con token 200, con el token alterado 401 ([ADR-0025](adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md#cómo-se-comprobó)) |
 | **[A-06](#a-06)** | Propuesta de distractores diagnósticos | **Construido** | RF-11 *(opcional)* | [EC-08](arc42/arc42-template-ES.md#ec-08) · [EC-09](arc42/arc42-template-ES.md#ec-09) | [Rel. 3](c4/doc-c4.md#relaciones): Sistema → Proveedor de LLM (opcional) | C1: [Proveedor de LLM](c4/doc-c4.md#nivel-1--diagrama-de-contexto-del-sistema) · C2: [Aplicación web → Proveedor de LLM](c4/doc-c4.md#relaciones-1) (relación 8) · C3: [`autoria`](c4/doc-c4.md#nivel-3--diagrama-de-componentes) | [0005](adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md) · [0013](adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md) · [0015](adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md) · [0017](adr/0017-no-extraer-ningun-modulo-del-monolito-todavia.md) · [0019](adr/0019-guardar-en-cache-las-propuestas-de-distractores.md) | [`autoria/distractores.py`](../backend/autoria/distractores.py) · [`autoria/proveedor_llm.py`](../backend/autoria/proveedor_llm.py) · [`autoria/presupuesto.py`](../backend/autoria/presupuesto.py) · [`autoria/cache.py`](../backend/autoria/cache.py) · [`api/main.py`](../backend/api/main.py) (`POST /distractores` y `GET /metricas`) · pantalla: [`pantalla_pauta.dart`](../frontend/lib/features/pauta/views/pantalla_pauta.dart) y [`servicio_distractores.dart`](../frontend/lib/features/pauta/data/servicio_distractores.dart) | [`test_distractores.py`](../backend/tests/test_distractores.py) · [`test_proveedor_llm.py`](../backend/tests/test_proveedor_llm.py) · [`test_ruta_distractores.py`](../backend/tests/test_ruta_distractores.py) · [`test_presupuesto.py`](../backend/tests/test_presupuesto.py) · [`pauta_test.dart`](../frontend/test/features/pauta_test.dart) · [`servicio_distractores_test.dart`](../frontend/test/features/servicio_distractores_test.dart) · [`test_modos_de_fallo.py`](../backend/tests/test_modos_de_fallo.py) · [`test_cache_de_propuestas.py`](../backend/tests/test_cache_de_propuestas.py) | [Evaluación de EC-08](evidencia/evaluacion-distractores.md): M1: 0 de 120 propuestas repiten la respuesta correcta · M2: p95 de 2,91 s contra 15 s · M3: 503 en 20,25 s contra 21 s · [la prueba falla ante el defecto](evidencia/prueba-distractores-falla.md) · [auditoría](evidencia/auditoria-s9.md) · [Experimento de EC-09](evidencia/experimento-presupuesto.md) (segundo corte): de 20 solicitudes en el proveedor y 11 cortes por cuota a 6 y 0 · [Modos de fallo MF-07 a MF-10](evidencia/modos-de-fallo.md) (S11) · [Caché de propuestas](evidencia/consistencia-y-cache.md): filas C-07 y C-08, y su política de invalidación |
 
 **Estados:** *Declarado* = pasos 1 y 3 parciales (nombre, para quién, qué resuelve, requisitos
@@ -92,10 +94,8 @@ contexto y es OMR**: la palabra «contexto» significa cosas distintas en el Niv
 mapa de contextos, y esta es la fila donde más se nota. Ver también la [sección 8.3 del arc42](arc42/arc42-template-ES.md#83-propiedad-de-datos)
 para la misma trazabilidad vista desde qué módulo y qué dato realiza cada aspecto.
 
-A-01, A-02, A-03 y A-06 son los aspectos construidos. A-04 y A-05 están declarados para fijar el
-orden de trabajo y para que cada escenario de calidad tenga un aspecto responsable; cada uno se
-especifica cuando se levanta lo que lo bloquea, que está escrito en su sección («Por qué no se
-trabaja todavía»).
+A-01, A-02, A-03 y A-06 son los aspectos construidos, y A-04 y A-05 lo están en parte: la clave sin
+el banco de preguntas, y la entrada con sesión sin los cursos.
 
 **Por qué A-01 está en «Construido».** Los pasos 5 a 7 (construir, verificar y evidenciar) están
 hechos y son comprobables: el código y las pruebas están en la fila de la tabla, y las dos cifras
@@ -123,9 +123,9 @@ salvedades, que la evidencia dice con cifras:
   además la CPU del servidor por debajo del 85 %, y eso se mide allá.
 - **De RF-05 falta el Panel**: las notas se ven por hoja en la pantalla de carga y en la de
   revisión, pero las estadísticas por pregunta y por curso siguen con datos de ejemplo.
-- **RF-08 se construyó antes de A-05.** Cada resolución queda con el nombre que escribe el docente
-  y la hora, pero el nombre no se verifica y las rutas son públicas. Vale solo con hojas
-  sintéticas, que es la condición de la amenaza AM-02.
+- **RF-08 se construyó antes de A-05.** Desde [ADR-0025](adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md) cada resolución queda con el correo
+  de la sesión, pero sin cursos cualquier docente con cuenta resuelve cualquier examen. Vale solo
+  con hojas sintéticas, que es la condición de la amenaza AM-02.
 
 **Lo que todavía es maqueta.** Carga (A-01, A-02 y A-03), Revisión (RF-08) y el generador de Pauta
 (A-06) llaman a la API. El Panel y la clave y el banco de Pauta muestran datos de ejemplo bajo un
@@ -185,8 +185,8 @@ de trabajos** (encolado del procesamiento): las relaciones 1, 3, 4 y 5 del
 [Nivel 2](c4/doc-c4.md#nivel-2--diagrama-de-contenedores), todas construidas.
 
 **Módulos afectados (ADR-0002):** `ingesta` como responsable principal, `identidad` para
-verificar que el docente puede cargar en ese curso, e `infraestructura` para el almacenamiento
-y la cola.
+verificar la sesión del docente (desde ADR-0025) y, cuando haya cursos, que puede cargar en el
+suyo, e `infraestructura` para el almacenamiento y la cola.
 
 ### 4. Decidir
 
@@ -321,8 +321,8 @@ lo corrige. El procedimiento, las dos corridas y sus límites están en
 | Pérdida silenciosa | 0 % | 100 % | 0 % |
 
 Una prueba prevista que **no** se escribió, y no por olvido: **autorización**, es decir que un
-docente no pueda cargar en un curso ajeno (RNF-05). Depende de `identidad`, el aspecto A-05, que
-está vacío.
+docente no pueda cargar en un curso ajeno (RNF-05). Depende de los cursos, que todavía no existen:
+`identidad` tiene desde ADR-0025 la sesión, no los cursos.
 
 Y una que se escribió con un alcance menor del que su nombre sugiere: la durabilidad se verifica
 releyendo la bitácora desde otro objeto sobre el mismo archivo, lo que demuestra que el estado
@@ -597,7 +597,8 @@ reales (R-01 y R-04).
 ## Aspecto A-03: Calificación contra la clave y publicación de resultados
 
 **Construido** junto con A-02, salvo las estadísticas del Panel (RF-05), con la revisión manual
-(RF-08) antes de A-05. Registro de IA en [`ia.md`](ia.md), entrada 21.
+(RF-08) antes de A-05; desde [ADR-0025](adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md), cada resolución queda a nombre del docente de la sesión.
+Registro de IA en [`ia.md`](ia.md), entrada 21.
 
 ### 1. Declarar
 
@@ -614,7 +615,7 @@ reales (R-01 y R-04).
 - **Escenarios:** [EC-03](arc42/arc42-template-ES.md#ec-03) (≤5 s por hoja, p95) y
   [EC-04](arc42/arc42-template-ES.md#ec-04) (200 hojas en ≤10 min).
 - **Restricciones que lo obligan:** RNF-15 (una nota corregida a mano se distingue de la
-  automática) y RNF-12 (el código del estudiante no sale por una ruta pública).
+  automática) y RNF-12 (el código del estudiante solo sale por una ruta con sesión).
 
 ### 3. Ubicar
 
@@ -657,8 +658,9 @@ Tres decisiones de construcción que conviene poder defender:
 2. **La nota automática no se reescribe.** Cada resolución es un hecho nuevo, la última de cada
    pregunta manda, y la nota vigente se recalcula; la automática queda como historia y la corregida
    sale marcada `revisada` (RNF-15).
-3. **Las notas se publican sin el código del estudiante**, porque las rutas son públicas hasta
-   A-05: la pantalla dice si el código se leyó completo y nada más.
+3. **Las notas se publican sin el código del estudiante**: la carga solo dice si se leyó completo.
+   La revisión sí lo muestra junto al nombre de la hoja, para saber de quién es, y pide sesión
+   ([ADR-0025](adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md)).
 
 ### 6. Verificar
 
@@ -671,9 +673,10 @@ Tres decisiones de construcción que conviene poder defender:
   que el código del estudiante no llega al log (una fuga inyectada pone la prueba en rojo).
 - [`test_ruta_resultados.py`](../backend/tests/test_ruta_resultados.py),
   [`test_ruta_examenes.py`](../backend/tests/test_ruta_examenes.py) y
-  [`test_ruta_revision.py`](../backend/tests/test_ruta_revision.py): las rutas, y que ninguna
-  respuesta trae el código del estudiante ni la respuesta correcta.
-- [`test_contrato.py`](../backend/tests/test_contrato.py): las nueve rutas del contrato 1.8.0.
+  [`test_ruta_revision.py`](../backend/tests/test_ruta_revision.py): las rutas; que ninguna trae
+  la respuesta correcta, y que solo la revisión trae el código del estudiante.
+- [`test_contrato.py`](../backend/tests/test_contrato.py): las diez rutas del contrato 2.0.0, con la
+  sesión que pide cada una.
 - En el sitio, [`revision_test.dart`](../frontend/test/features/revision_test.dart),
   [`servicio_revision_test.dart`](../frontend/test/features/servicio_revision_test.dart),
   [`servicio_resultados_test.dart`](../frontend/test/features/servicio_resultados_test.dart),
@@ -689,9 +692,8 @@ Tres decisiones de construcción que conviene poder defender:
   cuatro preguntas, sin que la respuesta correcta saliera de la API
   ([captura y detalle](evidencia/medicion-lectura-omr.md#4-la-revisión-manual-con-las-fotos-del-prototipo-rf-08)).
 
-**Lo que falta:** las estadísticas por pregunta y por curso del Panel (RF-05); saber quién resuelve
-cada revisión (A-05, AM-02); que una hoja subida dos veces no se califique dos veces (R-24); y que
-la clave se registre desde la aplicación, que hoy se copia a mano al volumen (A-04).
+**Lo que falta:** las estadísticas por pregunta y por curso del Panel (RF-05); que solo el docente del
+curso resuelva sus revisiones (EC-06, AM-02); que una hoja subida dos veces no se califique dos veces (R-24).
 
 ### Final: la revisión con la opción ya elegida ([ADR-0024](adr/0024-preseleccionar-en-la-revision-la-unica-intencion.md))
 
@@ -724,32 +726,65 @@ la clave se registre desde la aplicación, que hoy se copia a mano al volumen (A
 
 ## Aspecto A-04: Registro del banco y habilitación del examen
 
-**Declarado.**
+**Construido en parte** con [ADR-0026](adr/0026-registrar-y-habilitar-la-clave-desde-la-aplicacion.md): la clave y su habilitación desde la aplicación. Falta
+el banco de preguntas (RF-06). Registro de IA en [`ia.md`](ia.md), entrada 24.
+
+### 1. Declarar
 
 - **Para quién es:** el profesor que prepara el examen.
-- **Qué problema resuelve:** recibe el banco de preguntas y la clave que el profesor trae
-  escritos, y garantiza que ningún examen se califique sin que él lo haya habilitado
-  explícitamente, dejando registro de quién lo hizo y cuándo. Los distractores diagnósticos
-  opcionales (RF-11) se separaron en [A-06](#a-06), con su propio escenario.
-- **Requisitos:** RF-06, RF-07.
+- **Qué problema resuelve:** recibe la clave que el profesor trae escrita, y garantiza que ningún
+  examen se califique sin que él lo haya habilitado explícitamente, con registro de quién lo hizo y
+  cuándo. Los distractores diagnósticos opcionales (RF-11) están en [A-06](#a-06).
+
+### 2. Especificar
+
+- **Requisitos:** RF-07 completo; de RF-06, la clave sin el banco.
 - **Escenario:** [EC-05](arc42/arc42-template-ES.md#ec-05).
-- **Tensión que lo condicionaba:** [T-2](#t-2) — retirada; ver la nota en esa sección.
-- **Decisión que ya lo condiciona:**
-  [ADR-0004](adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md) — retira la
-  validación simbólica automática con SymPy que este aspecto tenía previsto y la reemplaza por
-  la aprobación manual del profesor. [ADR-0005](adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md) precisa además que el
-  profesor llega con sus preguntas escritas: la generación con LLM deja de ser el camino
-  principal y queda como apoyo opcional (RF-11). [ADR-0003](adr/0003-usar-fastapi-y-flutter.md) sigue
-  vigente sin cambios: la elección de FastAPI ya no depende de SymPy, pero se sostiene sobre
-  OpenCV.
-- **Por qué no se trabaja todavía:** no le falta nada técnico. El registro del banco, la clave y
-  la habilitación funcionan sin LLM; la parte que sí lo necesita, los distractores, ya se
-  construyó en [A-06](#a-06). Es una cuestión de orden de trabajo.
-- **Lo que ya dejó A-03:** la clave existe como dato, `ClaveDeRespuestas` con su `Habilitacion`
-  (quién y cuándo), de la que `autoria` es dueña, y se lee por un puerto
-  (`infraestructura/claves.py`). Hoy se escribe a mano en un JSON por examen y se copia al volumen;
-  sin habilitación, la hoja queda sin nota (RF-07). A-04 es lo que la registra y la habilita desde
-  la aplicación.
+- **Decisiones que ya lo condicionaban:**
+  [ADR-0004](adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md) (la aprobación manual
+  del profesor en vez de SymPy) y [ADR-0005](adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md)
+  (el profesor llega con sus preguntas escritas).
+
+### 3. Ubicar
+
+La relación 1 del [Nivel 1](c4/doc-c4.md#relaciones); en el
+[Nivel 3](c4/doc-c4.md#nivel-3--diagrama-de-componentes), `autoria` en la aplicación web, que escribe
+la clave por el puerto `RegistroDeClaves`, y el worker, que la lee como antes.
+
+### 4. Decidir
+
+[ADR-0026](adr/0026-registrar-y-habilitar-la-clave-desde-la-aplicacion.md): la clave se puede cambiar mientras ninguna hoja del examen tenga nota, y cambiarla
+la deja sin habilitar; la habilitación queda a nombre del docente de la sesión. Se escribe en una
+cuadrícula A-D o pegando las respuestas, que un cuadro muestra para confirmarlas.
+
+### 5. Construir
+
+| Qué | Dónde |
+|---|---|
+| Qué es una clave válida y cuándo se cambia | [`autoria/registro_de_claves.py`](../backend/autoria/registro_de_claves.py) |
+| Guardarla completa o nada | [`infraestructura/claves.py`](../backend/infraestructura/claves.py) (`ClavesEnDisco.guardar`) |
+| Las tres rutas | [`api/main.py`](../backend/api/main.py) (`/examenes/{examen_id}/clave`) |
+| La tarjeta de la pantalla de pauta | [`tarjeta_clave.dart`](../frontend/lib/features/pauta/views/widgets/tarjeta_clave.dart) y [`servicio_clave.dart`](../frontend/lib/features/pauta/data/servicio_clave.dart) |
+
+### 6. Verificar
+
+- [`test_registro_de_claves.py`](../backend/tests/test_registro_de_claves.py): la clave válida, el
+  identificador, habilitar a nombre del docente, cambiarla con y sin hojas calificadas, y la
+  escritura completa o nada.
+- [`test_ruta_clave.py`](../backend/tests/test_ruta_clave.py): las tres rutas, el 404, el 422 con su
+  motivo y el 409.
+- En el sitio, [`clave_test.dart`](../frontend/test/features/clave_test.dart) (la cuadrícula, pegar y
+  confirmar, guardar, habilitar y la clave fija), [`servicio_clave_test.dart`](../frontend/test/features/servicio_clave_test.dart)
+  y [`app_test.dart`](../frontend/test/app_test.dart) (la clave nueva aparece en la carga sin
+  recargar).
+
+### 7. Evidenciar
+
+Con uvicorn de verdad: registrar, 200 sin habilitar; una «E», 422 con su motivo; habilitar, 200 a
+nombre del docente; y la lista de la carga la muestra habilitada
+([ADR-0026, «Cómo se comprobó»](adr/0026-registrar-y-habilitar-la-clave-desde-la-aplicacion.md#cómo-se-comprobó)).
+
+**Lo que falta:** el banco de preguntas (RF-06) y los pesos distintos de 1.
 
 ---
 
@@ -920,22 +955,77 @@ sistema (un cupo del presupuesto y unos 2 s por solicitud) y lo que se lee no en
 
 ## Aspecto A-05: Identidad y aislamiento de datos por curso
 
-**Declarado.**
+**Construido en parte** con [ADR-0025](adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md): la entrada con sesión. Faltan los roles y el aislamiento por
+curso, que necesitan cursos (A-04). Registro de IA en [`ia.md`](ia.md), entrada 24.
+
+### 1. Declarar
 
 - **Para quién es:** el Comité Académico y los administradores de TI, responsables de la
   confidencialidad de las calificaciones; y el estudiante, titular de los datos.
-- **Qué problema resuelve:** garantiza que solo usuarios registrados accedan, que cada docente
-  vea únicamente sus cursos, y que toda modificación de una nota quede registrada con su autor
-  y su fecha.
-- **Requisitos:** RF-09, RF-10.
-- **Escenario:** [EC-06](arc42/arc42-template-ES.md#ec-06).
-- **Restricciones que lo obligan:** RNF-05, RNF-12 (protección de datos personales) y RNF-15
-  (trazabilidad para el derecho de revisión del estudiante).
-- **Por qué no se trabaja todavía:** es transversal a los demás aspectos y convenía
-  especificarlo cuando existieran al menos dos flujos reales sobre los que aplicarlo. **Ya
-  existen**: la carga, las notas y la revisión manual. Y es la condición para la primera hoja real
-  (AM-02): hoy cualquiera con la URL ve las notas de un examen, sin el código del estudiante, y
-  puede resolver una revisión con cualquier nombre.
+- **Qué problema resuelve:** que solo entren usuarios registrados, que cada docente vea únicamente
+  sus cursos, y que toda modificación de una nota quede registrada con su autor y su fecha.
+- **Por qué ahora:** la revisión muestra el código del estudiante, y la presentación final es ante
+  jurados que abren el sistema como clientes nuevos. Hasta ahora, cualquiera con la URL veía las
+  notas y resolvía revisiones con cualquier nombre (AM-02).
+
+### 2. Especificar
+
+- **Requisitos:** RF-09 y RF-10.
+- **Escenario:** [EC-06](arc42/arc42-template-ES.md#ec-06), en su primera mitad: que solo entre
+  quien tiene cuenta.
+- **Restricciones que lo obligan:** RNF-05, RNF-11 (ningún secreto en el repositorio), RNF-12
+  (protección de datos personales) y RNF-15 (trazabilidad para el derecho de revisión).
+
+### 3. Ubicar
+
+Las relaciones 1 y 2 del [Nivel 1](c4/doc-c4.md#relaciones), como condición de todas. En el
+[Nivel 3](c4/doc-c4.md#nivel-3--diagrama-de-componentes), el componente `identidad` de la
+aplicación web, que la API consulta en cada ruta.
+
+### 4. Decidir
+
+[ADR-0025](adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md): las cuentas en una lista cifrada en el servidor (`DOCENTES`), un token firmado que vence a
+las 12 horas en `Authorization: Bearer`, y todas las rutas lo piden salvo `/health` y `/metricas`.
+Descarta una tabla en Postgres, una cookie (los recortes no la llevarían) y entrar con la cuenta de
+la UTB, que necesita que TI de la universidad registre la aplicación.
+
+### 5. Construir
+
+| Qué | Dónde |
+|---|---|
+| Contraseñas con scrypt, el token firmado y la lista de docentes | [`identidad/`](../backend/identidad/) |
+| La entrada y la dependencia de cada ruta | [`api/main.py`](../backend/api/main.py) (`POST /sesion` y `docente_de_la_sesion`) |
+| La línea de cada docente para el panel | [`herramientas/crear_docente.py`](../backend/herramientas/crear_docente.py) |
+| La pantalla de entrada | [`pantalla_entrada.dart`](../frontend/lib/features/sesion/views/pantalla_entrada.dart) |
+| El token en cada servicio, y el 401 que vuelve a la entrada | [`cliente_con_sesion.dart`](../frontend/lib/common/api/cliente_con_sesion.dart) y [`sesion_actual.dart`](../frontend/lib/app/sesion_actual.dart) |
+
+### 6. Verificar
+
+- [`test_sesion.py`](../backend/tests/test_sesion.py): recorre todas las rutas de la aplicación y
+  exige 401 sin sesión; la entrada correcta y la equivocada, que no dice si el correo existe; la
+  configuración que falta; el preflight de CORS; y el registro sin correo ni contraseña.
+- [`test_identidad.py`](../backend/tests/test_identidad.py) y
+  [`test_crear_docente.py`](../backend/tests/test_crear_docente.py): la cifrada, el token vencido,
+  alterado o con otro secreto, y la lista mal escrita.
+- [`test_ruta_revision.py`](../backend/tests/test_ruta_revision.py): quien resuelve es el docente de
+  la sesión, aunque la solicitud diga otro.
+- En el sitio, [`sesion_test.dart`](../frontend/test/features/sesion_test.dart),
+  [`pantalla_entrada_test.dart`](../frontend/test/features/pantalla_entrada_test.dart),
+  [`servicios_con_sesion_test.dart`](../frontend/test/servicios_con_sesion_test.dart) (cada servicio
+  manda el token) y [`app_test.dart`](../frontend/test/app_test.dart) (la puerta, cerrar sesión con
+  confirmación y la sesión vencida).
+
+Una prueba prevista que **no** se escribió: la del acceso cruzado entre cursos de EC-06, porque
+todavía no hay cursos.
+
+### 7. Evidenciar
+
+Con uvicorn de verdad: sin token, 401; con la contraseña equivocada, 401 sin decir si el correo
+existe; con token, 200; con el token alterado, 401; `/health` y `/metricas`, 200; y en el registro
+no quedan el correo ni la contraseña ([ADR-0025, «Cómo se comprobó»](adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md#cómo-se-comprobó)).
+
+**Lo que falta:** los roles y el aislamiento por curso (EC-06), un límite de intentos de entrada
+(R-38), y que la carga registre quién subió cada lote (AM-08).
 
 ---
 
