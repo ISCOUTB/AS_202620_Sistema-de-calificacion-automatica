@@ -350,7 +350,7 @@ importación que declara el docstring de cada `__init__.py` y que hace cumplir
 | **ingesta** | Recepción y validación de archivos escaneados (individual o en lote) y encolado del procesamiento. | RF-01 | `infraestructura`, `identidad` | **Implementado** (`recepcion.py`): valida extensión *y* firma de bytes por archivo, no aborta el lote ante un archivo inválido ni ante un fallo de la cola (ADR-0006), y por cada hoja almacena, acuña el trabajo, registra en la bitácora y solo entonces publica. Expone `recibir_lote`, `motivo_de_rechazo` y `EXTENSIONES_ACEPTADAS` como interfaz pública vía `__all__`. Aún no verifica el `examen_id` contra nada (hueco conocido: depende de `autoria`, A-04) ni la autorización del docente (depende de `identidad`, A-05). |
 | **infraestructura** | Persistencia, almacenamiento de imágenes, bitácora de recepción y adaptador de la cola de trabajos. | Transversal | ninguno | **Parcialmente implementado.** `cola.py` (acuñar, publicar y desencolar sobre Redis, con `ColaNoDisponible` como traducción de los errores de redis-py al dominio), `almacen.py` (puerto `AlmacenDeImagenes` + adaptador `AlmacenEnDisco`), `bitacora.py` (puerto `BitacoraDeRecepcion` + adaptadores `BitacoraEnDisco` y `BitacoraEnMemoria`, ADR-0006) y `modelo.py` (el modelo de datos compartido: `ArchivoCargado`, `HojaAceptada`, `ArchivoRechazado`, `ResultadoRecepcion`, `EntradaDeBitacora`) ya tienen código. Desde A-02 y A-03, tres puertos más con sus adaptadores en disco: `claves.py` (`FuenteDeClaves` para el worker y `CatalogoDeClaves` para la lista de exámenes), `resultados.py` (`RegistroDeResultados` y `LectorDeResultados`) y `revisiones.py` (`RegistroDeRevisiones` y `LectorDeRevisiones`); y `modelo.py` declara también la clave, la lectura y la nota, que son de `autoria`, `omr` y `calificacion`. Sigue sin persistencia estructurada (Postgres sin esquema) y sin política de retención (R-06, RNF-14 abiertos). |
 | **autoria** | Bancos de preguntas y clave de respuestas, generación opcional de distractores diagnósticos con LLM, y habilitación del examen. | RF-06, RF-07, RF-11 | `infraestructura`, `identidad` | **Implementado en parte** (aspecto A-06): `distractores.py` (los tipos, el puerto `GeneradorDeDistractores` y la regla de qué propuestas llegan al profesor) y `proveedor_llm.py` (el adaptador al proveedor, [ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)), y desde el segundo corte `presupuesto.py` (el presupuesto de solicitudes al proveedor, [ADR-0015](../adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md)). Desde A-03, `examenes.py` (la lista de exámenes que tienen clave, sin las respuestas), y es la dueña de la clave y su habilitación, que hoy se escriben a mano. El banco y el registro de la clave desde la aplicación siguen sin código (aspecto A-04). |
-| **omr** | Detección de marcas y cálculo del nivel de confianza; clasificación de ambigüedad. | RF-02, RF-03 | `infraestructura`, `identidad` | **Implementado** (aspecto A-02, [ADR-0023](../adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md)): `formato.py` (la hoja v1), `plantilla.py` (la hoja imprimible), `vision.py` (el único archivo con OpenCV), `decision.py` (la confianza de cada burbuja y la regla de cada pregunta), `lectura.py` (`leer_hoja` y `leer_hoja_con_recortes`, funciones puras) y `errores.py` (los motivos de una hoja ilegible). |
+| **omr** | Detección de marcas y cálculo del nivel de confianza; clasificación de ambigüedad. | RF-02, RF-03 | `infraestructura`, `identidad` | **Implementado** (aspecto A-02, [ADR-0023](../adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md)): `formato.py` (la hoja v1), `plantilla.py` (la hoja imprimible), `vision.py` (el único archivo con OpenCV), `decision.py` (la confianza de cada burbuja, la regla de cada pregunta y, desde [ADR-0024](../adr/0024-preseleccionar-en-la-revision-la-unica-intencion.md), la única intención que se preselecciona), `lectura.py` (`leer_hoja` y `leer_hoja_con_recortes`, funciones puras) y `errores.py` (los motivos de una hoja ilegible). |
 | **calificacion** | Comparación contra la clave habilitada por el profesor y cálculo de notas; recálculo tras revisión manual. | RF-04, RF-08 | `infraestructura`, `identidad`, `omr` | **Implementado** (aspecto A-03): `nota.py` (`calificar`, el veredicto de cada resolución, `nota_vigente`) y `revision.py` (`resolver_preguntas`, el caso de uso de RF-08). Recibe la lectura como tipo de `modelo.py`, así que hoy no importa `omr`. |
 | **dashboard** | Presentación de resultados y agregaciones por curso, examen y pregunta. | RF-05 | `infraestructura`, `identidad`, `calificacion` | **Implementado en parte** (aspecto A-03): `resultados.py` (la nota vigente de cada hoja, sin el código del estudiante) y `revision.py` (las preguntas en revisión con su recorte, sin la respuesta correcta). Las agregaciones por curso y por pregunta siguen sin código. |
 | **identidad** | Autenticación, roles y aislamiento de datos por curso. | RF-09, RF-10 | `infraestructura` | Paquete vacío (aspecto A-05, declarado). |
@@ -851,11 +851,11 @@ sequenceDiagram
     API->>D: revision_del_examen
     D->>R: el último hecho de cada hoja y las revisiones
     D-->>API: las hojas con preguntas por revisar, sin la respuesta correcta
-    API-->>S: cada pregunta con lo que se ve en sus burbujas
+    API-->>S: cada pregunta con lo que se ve en sus burbujas y la opción sugerida
     S->>API: GET .../hojas/{hoja}/preguntas/{n}/recorte
     API->>D: referencia_del_recorte, sacada del registro
     API-->>S: la fila en PNG, sin el código del estudiante
-    P->>S: elige A, B, C, D o Ninguna en cada pregunta y su nombre
+    P->>S: confirma o cambia lo preseleccionado, elige en las confusas y escribe su nombre
     S->>API: POST /examenes/{id}/hojas/{hoja}/revision
     API->>C: resolver_preguntas
     C->>R: la calificación de la hoja
@@ -878,6 +878,14 @@ sequenceDiagram
    leer y la pregunta ya no está por revisar, la resolución deja de aplicarse.
 4. **Quién y cuándo (RF-10).** Cada resolución lleva el nombre que escribió el docente y la hora. El
    log dice que se guardó una revisión, pero no el nombre.
+5. **La única intención llega elegida ([ADR-0024](../adr/0024-preseleccionar-en-la-revision-la-unica-intencion.md)).** Si exactamente una
+   burbuja de una pregunta en revisión llega al corte de intención (40), la revisión la trae como
+   `opcion_sugerida` y la pantalla la muestra elegida, igual que una elección del docente; con dos
+   o con ninguna, la pregunta llega sin nada elegido. La pantalla pone primero esas confusas,
+   después las preseleccionadas y al final las resueltas, y «Guardar» envía las preseleccionadas
+   con las demás. Hasta que el docente guarda, la nota no las cuenta. La lista de hojas pone
+   primero las que faltan por revisar y después las revisadas, cada grupo de la más nueva a la
+   más vieja.
 
 **Qué no cubre.** Que el nombre sea de quien dice ser, y que solo el docente del curso pueda
 resolver: las rutas son públicas hasta A-05. Como la respuesta trae la nota recalculada, alguien
@@ -888,7 +896,9 @@ no aplica), `test_revisiones.py` (el registro, incluida una línea truncada) y `
 (las tres rutas, que la revisión no publica la clave ni el código, y que lo que no cuadra se rechaza
 sin escribir nada); en el sitio, `revision_test.dart` y `servicio_revision_test.dart`. La
 [evidencia con las fotos del prototipo](../evidencia/medicion-lectura-omr.md#4-la-revisión-manual-con-las-fotos-del-prototipo-rf-08)
-muestra una hoja que pasa de 3,9 a 4,0.
+muestra una hoja que pasa de 3,9 a 4,0, y la
+[evidencia de la preselección](../evidencia/preseleccion-omr.md) cuenta cómo llegan las 28 preguntas
+en revisión de esas fotos: 25 preseleccionadas con lo que se marcó, 3 confusas y ninguna equivocada.
 
 ---
 
@@ -952,7 +962,7 @@ flowchart TB
 |---|---|---|---|
 | `web` | [`deploy/sitio/Dockerfile`](../../deploy/sitio/Dockerfile): `nginxinc/nginx-unprivileged:alpine` con el sitio compilado | 32 MB, 0,25 | El CI compila el sitio con `BACKEND_URL=https://api-calificacion.iscoutb.dev`; si la URL cambia, hay que recompilar. En `master` la imagen sirve una página provisional, y en la rama `despliegue`, el sitio. `revision.txt` dice qué commit de `master` está desplegado. |
 | `api` | `backend/Dockerfile` | 384 MB, 0,50 | Lee `ALLOWED_ORIGIN` (el origen del sitio, el único que acepta CORS), `LLM_URL_BASE`, `LLM_MODELO` y `LLM_API_KEY` ([ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)), y el presupuesto `LLM_SOLICITUDES_POR_MINUTO` (6) y `LLM_SOLICITUDES_POR_DIA` (150), que vive en la memoria de su único proceso de uvicorn y se vacía cada vez que el contenedor se recrea ([ADR-0015](../adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md), R-18). Desde A-02 y A-03 lee también `RUTA_RESULTADOS`, `RUTA_CLAVES` y `RUTA_REVISIONES`, tres rutas del volumen que el compose fija. Su *healthcheck* en `/health` decide cuándo Traefik le manda tráfico. |
-| `worker` | La misma imagen, con `python -m worker.main` | 96 MB, 0,25 | Espera a que Redis esté sano. Abre cada imagen del volumen (ADR-0020) y, desde A-02 y A-03, la lee y la califica con OpenCV, con la clave de `RUTA_CLAVES` y el resultado en `RUTA_RESULTADOS` ([ADR-0023](../adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md)). El umbral es `OMR_UMBRAL_DE_CONFIANZA` (70 si no se fija; fuera de 51 a 100 no arranca). Medido en local con estos límites: 78 MiB de memoria de trabajo en un lote de 200 hojas, y todo su cuarto de CPU mientras procesa. |
+| `worker` | La misma imagen, con `python -m worker.main` | 96 MB, 0,25 | Espera a que Redis esté sano. Abre cada imagen del volumen (ADR-0020) y, desde A-02 y A-03, la lee y la califica con OpenCV, con la clave de `RUTA_CLAVES` y el resultado en `RUTA_RESULTADOS` ([ADR-0023](../adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md)). El umbral es `OMR_UMBRAL_DE_CONFIANZA` (70 si no se fija; fuera de 51 a 100 no arranca), y el corte de intención, `OMR_CORTE_DE_INTENCION` (40 si no se fija; fuera de 31 a 50 no arranca, [ADR-0024](../adr/0024-preseleccionar-en-la-revision-la-unica-intencion.md)). Medido en local con estos límites: 78 MiB de memoria de trabajo en un lote de 200 hojas, y todo su cuarto de CPU mientras procesa. |
 | `redis` | `redis:7-alpine` | 64 MB, 0,25 | AOF con `appendfsync everysec`, sin instantáneas RDB, `maxmemory 32mb` y `noeviction`. |
 
 Suman 576 MB de 1 GB y 4 de los 6 contenedores de la cuota. Los límites salen de medir el compose:
@@ -1237,6 +1247,8 @@ de su significado, que es lo que convierte un glosario en lenguaje ubicuo.
 | **Marca** | OMR | `LecturaDeBurbuja`, con su `tipo` (`vacia`, `tenue`, `borron`, `completa`), y `LecturaDePregunta`, con su `estado` (`una_marca`, `sin_marca`, `doble_marca`, `dudosa`) en `modelo.py` (A-02) |
 | **Nivel de confianza** | OMR | El campo `confianza` de `LecturaDeBurbuja` y de `LecturaDePregunta`, de 0 a 100: la probabilidad de que la marca sea intencional (A-02) |
 | **Umbral de confianza** | OMR | `OMR_UMBRAL_DE_CONFIANZA`, 70 por omisión, de 51 a 100; medido sobre hojas sintéticas, sin calibrar con hojas reales (R-04) |
+| **Corte de intención** | OMR | `OMR_CORTE_DE_INTENCION`, 40 por omisión, de 31 a 50: desde ahí una burbuja cuenta como intención del estudiante (ADR-0024); medido con las fotos del prototipo y hojas sintéticas, sin calibrar con hojas reales (R-04) |
+| **Opción sugerida** | OMR | El campo `opcion_sugerida` de `LecturaDePregunta`: la única intención de una pregunta en revisión, que la pantalla muestra preseleccionada; nula si hay dos o ninguna (ADR-0024) |
 | **Clave de respuestas** | Autoría | `ClaveDeRespuestas` y `PreguntaDeLaClave` en `modelo.py`; hoy se escribe a mano y se lee por un puerto (A-04) |
 | **Distractor diagnóstico** | Autoría | `DistractorPropuesto` en [`autoria/distractores.py`](../../backend/autoria/distractores.py), con la etiqueta del error en su campo `error` (A-06) |
 | **Presupuesto del proveedor** | Autoría | `PresupuestoDeSolicitudes` y `EstadoDelPresupuesto` en [`autoria/presupuesto.py`](../../backend/autoria/presupuesto.py): cuántas solicitudes pueden salir al proveedor de LLM por minuto y por día (EC-09, ADR-0015) |
@@ -1327,17 +1339,17 @@ eso se trata aparte, en [«Entidades previstas»](#entidades-previstas-sin-const
 | `ExamenConClave` | `autoria` | [`backend/autoria/examenes.py`](../../backend/autoria/examenes.py) | 15 |
 | `LecturaDeBurbuja` | `omr` | [`backend/infraestructura/modelo.py`](../../backend/infraestructura/modelo.py) | 236 |
 | `LecturaDePregunta` | `omr` | [`backend/infraestructura/modelo.py`](../../backend/infraestructura/modelo.py) | 251 |
-| `LecturaDelCodigo` | `omr` | [`backend/infraestructura/modelo.py`](../../backend/infraestructura/modelo.py) | 263 |
-| `LecturaDeHoja` | `omr` | [`backend/infraestructura/modelo.py`](../../backend/infraestructura/modelo.py) | 276 |
-| `ResultadoDePregunta` | `calificacion` | [`backend/infraestructura/modelo.py`](../../backend/infraestructura/modelo.py) | 303 |
-| `CalificacionDeHoja` | `calificacion` | [`backend/infraestructura/modelo.py`](../../backend/infraestructura/modelo.py) | 317 |
-| `ResolucionDelProfesor` | `calificacion` | [`backend/infraestructura/modelo.py`](../../backend/infraestructura/modelo.py) | 334 |
+| `LecturaDelCodigo` | `omr` | [`backend/infraestructura/modelo.py`](../../backend/infraestructura/modelo.py) | 268 |
+| `LecturaDeHoja` | `omr` | [`backend/infraestructura/modelo.py`](../../backend/infraestructura/modelo.py) | 281 |
+| `ResultadoDePregunta` | `calificacion` | [`backend/infraestructura/modelo.py`](../../backend/infraestructura/modelo.py) | 310 |
+| `CalificacionDeHoja` | `calificacion` | [`backend/infraestructura/modelo.py`](../../backend/infraestructura/modelo.py) | 324 |
+| `ResolucionDelProfesor` | `calificacion` | [`backend/infraestructura/modelo.py`](../../backend/infraestructura/modelo.py) | 341 |
 | `ResultadoDeHoja` | `dashboard` | [`backend/dashboard/resultados.py`](../../backend/dashboard/resultados.py) | 43 |
 | `ResultadosDelExamen` | `dashboard` | [`backend/dashboard/resultados.py`](../../backend/dashboard/resultados.py) | 64 |
-| `BurbujaEnRevision` | `dashboard` | [`backend/dashboard/revision.py`](../../backend/dashboard/revision.py) | 34 |
-| `PreguntaEnRevision` | `dashboard` | [`backend/dashboard/revision.py`](../../backend/dashboard/revision.py) | 43 |
-| `HojaEnRevision` | `dashboard` | [`backend/dashboard/revision.py`](../../backend/dashboard/revision.py) | 57 |
-| `RevisionDelExamen` | `dashboard` | [`backend/dashboard/revision.py`](../../backend/dashboard/revision.py) | 68 |
+| `BurbujaEnRevision` | `dashboard` | [`backend/dashboard/revision.py`](../../backend/dashboard/revision.py) | 41 |
+| `PreguntaEnRevision` | `dashboard` | [`backend/dashboard/revision.py`](../../backend/dashboard/revision.py) | 50 |
+| `HojaEnRevision` | `dashboard` | [`backend/dashboard/revision.py`](../../backend/dashboard/revision.py) | 67 |
+| `RevisionDelExamen` | `dashboard` | [`backend/dashboard/revision.py`](../../backend/dashboard/revision.py) | 81 |
 
 **Por qué el dueño de las cinco es `ingesta` y no `infraestructura`, si las cinco clases están
 declaradas en `infraestructura/modelo.py`.** La ruta y la línea son de dónde vive la
@@ -1814,20 +1826,27 @@ pantalla de carga para nombrar los archivos sin datos del estudiante.
 Desde A-02 atraviesa `omr`, `calificacion`, `dashboard`, la API y dos pantallas del sitio. La regla
 que las ordena es una: **lo que el sistema no ve con certeza no se convierte en una respuesta; se
 convierte en un estado visible que espera al docente** (RF-03, QG-3). La decisión, con sus cortes
-y lo que los fijó, es [ADR-0023](../adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md).
+y lo que los fijó, es [ADR-0023](../adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md), y la preselección de lo que va a revisión, [ADR-0024](../adr/0024-preseleccionar-en-la-revision-la-unica-intencion.md).
 
 | Dónde | Cómo viaja la incertidumbre |
 |---|---|
-| `omr` | Cada burbuja lleva una confianza de 0 a 100 (la probabilidad de que la marca sea intencional) y un tipo; cada pregunta, un estado: una marca, sin marca, doble marca o dudosa. Lo que no se ve bien (brillo, contorno tapado) queda en 50, que con cualquier umbral válido es dudoso. Una hoja que no se puede leer no tiene preguntas: queda `ILEGIBLE` con su motivo |
+| `omr` | Cada burbuja lleva una confianza de 0 a 100 (la probabilidad de que la marca sea intencional) y un tipo; cada pregunta, un estado: una marca, sin marca, doble marca o dudosa. Lo que no se ve bien (brillo, contorno tapado) queda en 50, que con cualquier umbral válido es dudoso. Una hoja que no se puede leer no tiene preguntas: queda `ILEGIBLE` con su motivo. Desde ADR-0024, una burbuja con 40 o más cuenta como intención: la única intención de una pregunta en revisión se guarda como `opcion_sugerida`, y una columna del código con una sola intención da su dígito |
 | `calificacion` | Una dudosa o una doble marca es `por_revisar`: suma 0 y deja la nota `provisional`. Un código incompleto también la deja provisional. Nunca se elige entre candidatas |
-| `dashboard` y la API | Publican el estado y la confianza de lo que se ve en cada burbuja, para que el docente decida; nunca la respuesta correcta |
-| El sitio | La pantalla de carga dice «En revisión» con las preguntas que esperan; la de revisión muestra el recorte y lo que se ve, y pide qué marcó el estudiante |
-| El docente | Resuelve; su decisión queda con su nombre y la hora, y la nota automática no se borra (RNF-15) |
+| `dashboard` y la API | Publican el estado y la confianza de lo que se ve en cada burbuja, y la opción sugerida, para que el docente decida; nunca la respuesta correcta |
+| El sitio | La pantalla de carga dice «En revisión» con las preguntas que esperan; la de revisión muestra el recorte y lo que se ve, pone primero las confusas, trae elegida la única intención y pide qué marcó el estudiante |
+| El docente | Resuelve, también lo preseleccionado, que no cuenta hasta que guarda; su decisión queda con su nombre y la hora, y la nota automática no se borra (RNF-15) |
 
 **El umbral es configuración, no una constante escondida**: `OMR_UMBRAL_DE_CONFIANZA`, de 51 a 100,
 comprobado al arrancar el worker. Con 50 o menos, una burbuja podría contar a la vez como marcada y
 como vacía. Su valor, 70, se midió sobre hojas sintéticas; calibrarlo con hojas reales es R-04, y el
 dato que haría revisarlo está en la tensión [T-1](../aspectos.md#t-1).
+
+**El corte de intención también**: `OMR_CORTE_DE_INTENCION`, de 31 a 50, comprobado al arrancar.
+Con 30 o menos contaría una burbuja que la lectura da por vacía, y con más de 50 dejaría de contar
+la que la lectura dejó en 50 por no verla bien. Su valor, 40, queda 5 puntos sobre el borrón más
+fuerte de las fotos del prototipo (35) y 10 bajo la marca real más débil (50). Se calibra junto
+con el umbral: con un umbral de 60 o menos, una segunda intención podría quedar dentro de una marca
+aceptada.
 
 ## Conceptos transversales todavía sin desarrollar
 
@@ -1897,6 +1916,7 @@ constancia en el commit y en esta sección ([0014](../adr/0014-dejar-constancia-
 | [0021](../adr/0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md) | Desplegar en el servidor del laboratorio, con el sitio compilado en el CI | **aceptado** | 2026-10-29 | [EC-07](#ec-07) |
 | [0022](../adr/0022-poner-un-presupuesto-de-carga-delante-del-almacen.md) | Poner un presupuesto de carga delante del almacén | **aceptado** | 2026-10-31 | [EC-07](#ec-07) |
 | [0023](../adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md) | Leer las hojas en posiciones fijas y mandar a revisión lo que no se ve bien | **aceptado** | 2026-11-05 | [EC-01](#ec-01), [EC-02](#ec-02), [EC-03](#ec-03), [EC-04](#ec-04) |
+| [0024](../adr/0024-preseleccionar-en-la-revision-la-unica-intencion.md) | Preseleccionar en la revisión la única intención | **aceptado** | 2026-11-19 | [EC-01](#ec-01), [EC-02](#ec-02) |
 
 **Por qué 0002 reemplaza a 0001.** La revisión de coherencia previa al corte 1 encontró que
 EC-03 y EC-04 no se pueden cumplir a la vez con procesamiento síncrono(200 hojas × 5 s son
@@ -2045,6 +2065,13 @@ la vuelta desde la lista en curso, al arrancar el worker, ahora cuenta como un i
 entrega al menos una vez, el acuse y la lista de fallidos siguen como estaban. Con él quedaron
 medidos EC-01 a EC-04 y cerrados R-05, R-07 y R-36. El equipo lo aceptó el 6-nov.
 
+**Por qué 0024 complementa a 0023 sin reemplazarlo.** Las mismas preguntas siguen yendo a
+revisión, el umbral sigue en 70 y la nota se calcula igual: 0024 cambia cómo llegan esas preguntas
+al docente. Nace de las mismas fotos del prototipo, donde 25 de las 28 preguntas en revisión tenían
+una sola marca a la vista y el docente tenía que elegirla a mano. También relaja el código del
+estudiante, que con 0023 exigía una marca segura en cada columna: ahora basta una sola intención,
+medida con cero dígitos mal aceptados en 7 200 columnas.
+
 **Decisiones previstas (aún no tomadas):**
 
 - La verificación automática de equivalencias en las propuestas de distractores, con SymPy, que
@@ -2059,7 +2086,8 @@ medidos EC-01 a EC-04 y cerrados R-05, R-07 y R-36. El equipo lo aceptó el 6-no
   quinto contenedor.
 - La calibración del umbral de confianza con hojas reales (R-04). [ADR-0023](../adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md)
   fijó 70 con hojas sintéticas y las fotos del prototipo, y dejó cada corte como una constante con
-  nombre: calibrar es cambiar un número y volver a medir.
+  nombre: calibrar es cambiar un número y volver a medir. [ADR-0024](../adr/0024-preseleccionar-en-la-revision-la-unica-intencion.md)
+  sumó el corte de intención (40), que se calibra junto con el umbral.
 - Si EC-05 necesita una medida de tiempo de revisión, y con qué valor — ver ADR-0004.
 - Si la calificación de riesgo técnico de EC-05 en el árbol de utilidad (hoy *Alto*) debe
   bajar, ahora que el riesgo dejó de ser de cómputo simbólico y pasó a ser de criterio humano.
@@ -2348,7 +2376,7 @@ priorización original.
 | **R-01** | **No existe todavía el dataset de 300 hojas escaneadas** que EC-01 usa como medida. Sin él, el objetivo de calidad más importante no es verificable. | Alto | Llegar a la semana de medición sin hojas etiquetadas. | Producir el dataset temprano: imprimir plantillas, llenarlas con marcas variadas (incluyendo casos borde deliberados) y etiquetarlas manualmente. Es trabajo de laboratorio, no de programación, y puede repartirse entre los cuatro integrantes (RNF-10). **Desde [ADR-0023](../adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md)**, EC-01 está medido sobre 300 hojas sintéticas, con un generador versionado (`herramientas/hojas_sinteticas.py`), y sobre tres fotos de una hoja real: 100 % y ningún error silencioso. Mide la lógica, no el papel arrugado ni una luz cualquiera, así que el conjunto escaneado y etiquetado sigue haciendo falta. **S14:** tres corridas más de 300 hojas sintéticas dieron otra vez el 100 % ([medición de la S14](../evidencia/medicion-s14.md)). Sigue abierto por la misma razón: son sintéticas, y la medida de EC-01 pide hojas escaneadas y etiquetadas a mano. |
 | **R-02** | **Cerrado en la S9 por [ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md):** el proveedor de LLM es Groq, con `openai/gpt-oss-120b`, consumido por HTTPS con el protocolo de chat compatible con OpenAI desde un adaptador de `autoria`. | Cerrado | Que la capa gratuita de Groq cambie o deje de alcanzar. | Cambiar de proveedor es cambiar la URL base, el modelo y la clave, no el código. |
 | **R-03** | **Dependencia de un servicio externo no controlado** si el LLM es una API alojada: cuotas, latencia variable, cambios de modelo, indisponibilidad. | Medio | Superar la cuota gratuita durante una sesión de generación intensiva. | **Mitigado en la S9** ([ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)): el adaptador espera 20 s y no reintenta, y cualquier falla del proveedor se convierte en 503 con un motivo; nada más del sistema depende de él. Medido en EC-08: con el proveedor caído, 503 en 2,2 s; lento, en 20,25 s. |
-| **R-04** | **El umbral de confianza del 70% es un valor supuesto, no medido.** Mal calibrado dispara falsos positivos (todo va a revisión manual y el sistema deja de ahorrar tiempo) o falsos negativos (errores silenciosos, se rompe QG-3). | Alto | Fijar el umbral sin evidencia y descubrirlo en producción. | Calibrar sobre el dataset de R-01 y documentar la curva de precisión frente a umbral en un ADR. **Desde [ADR-0023](../adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md)**, el 70 está medido sobre hojas sintéticas: ningún error silencioso y 0,46 preguntas por hoja a revisión sin necesitarlo. En las fotos del prototipo el brillo pesó más (12 de las 30 marcas claras de la foto inclinada fueron a revisión). Es configuración (`OMR_UMBRAL_DE_CONFIANZA`, de 51 a 100) y cada corte de la lectura es una constante con nombre. Sigue abierto hasta medirlo con el conjunto de R-01. **S14:** en tres corridas, 0 errores silenciosos y de 0,42 a 0,46 preguntas por hoja a revisión sin necesitarlo, todas por el brillo ([medición de la S14](../evidencia/medicion-s14.md)). Lo que se ignora es la proporción con exámenes reales; sigue abierto. |
+| **R-04** | **El umbral de confianza del 70% es un valor supuesto, no medido.** Mal calibrado dispara falsos positivos (todo va a revisión manual y el sistema deja de ahorrar tiempo) o falsos negativos (errores silenciosos, se rompe QG-3). | Alto | Fijar el umbral sin evidencia y descubrirlo en producción. | Calibrar sobre el dataset de R-01 y documentar la curva de precisión frente a umbral en un ADR. **Desde [ADR-0023](../adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md)**, el 70 está medido sobre hojas sintéticas: ningún error silencioso y 0,46 preguntas por hoja a revisión sin necesitarlo. En las fotos del prototipo el brillo pesó más (12 de las 30 marcas claras de la foto inclinada fueron a revisión). Es configuración (`OMR_UMBRAL_DE_CONFIANZA`, de 51 a 100) y cada corte de la lectura es una constante con nombre. Sigue abierto hasta medirlo con el conjunto de R-01. **S14:** en tres corridas, 0 errores silenciosos y de 0,42 a 0,46 preguntas por hoja a revisión sin necesitarlo, todas por el brillo ([medición de la S14](../evidencia/medicion-s14.md)). Lo que se ignora es la proporción con exámenes reales; sigue abierto. **Desde ADR-0024** hay un segundo valor supuesto, el corte de intención (40, de 31 a 50): con él se preselecciona la única marca de una pregunta en revisión y se acepta la de una columna del código. En las fotos lo borrado llegó a 35 y toda marca real a 50 o más, y en las hojas sintéticas no hubo sugerencias equivocadas ni dígitos mal aceptados ([evidencia](../evidencia/preseleccion-omr.md)). Se calibra con el umbral, sobre el mismo conjunto de R-01. |
 | **R-05** | **Cerrado con [ADR-0023](../adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md):** el prototipo se hizo con una hoja impresa, marcada a mano con diez casos difíciles y fotografiada tres veces (desde arriba, inclinada y con sombra), y lo que mostró cambió cuatro decisiones de la lectura ([evidencia](../evidencia/medicion-lectura-omr.md#1-la-hoja-del-prototipo-r-05)). Era que **el equipo no tenía experiencia previa medible con OpenCV / OMR**, la parte de mayor riesgo técnico del sistema. | Cerrado | Dejar el módulo `omr` para el final del cronograma. | Construir un prototipo desechable de detección de marcas antes de especificar A-02, aunque sea sobre una sola hoja, para convertir la incertidumbre en información. Lo que queda del riesgo técnico está en R-01 y R-04. |
 | **R-06** | **Deuda: no hay decisión de persistencia ni de almacenamiento de imágenes**, ni política de retención (RNF-14). **Dejó de bloquear la construcción** y **dejó de bloquear la medición**: A-01 se construyó con el almacenamiento detrás del puerto `AlmacenDeImagenes` y un adaptador en disco declarado provisional (ver 5.1 y 5.3), y [ADR-0006](../adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md) cubrió la parte de recepción que impedía medir [EC-07](#ec-07), con el mismo mecanismo de puerto y adaptador provisional. Las dos cifras del escenario ya están medidas ([evidencia](../evidencia/medicion-ec07.md)). Lo que sigue abierto es el medio definitivo, la persistencia estructurada y la retención, y ninguno de los tres se tomó por omisión. **Desde [ADR-0021](../adr/0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md)** las hojas y la bitácora sobreviven a los despliegues en un volumen con nombre, pero el servidor no hace copias y borra los volúmenes después del 30-nov-2026 (R-31); la base de datos cabe ahí como quinto contenedor. | **Medio** (bajó de *Alto*: ya no bloquea ni la construcción ni la medición) | Llegar al despliegue sin política de retención, o escalar la API a más de una instancia, que es el día en que `BitacoraEnDisco` deja de ser correcto. | ADR propio, que debe cubrir el ciclo de vida de los escaneos y de la bitácora, no solo el guardado. Cuando exista, lo que cambia son los adaptadores: `ingesta`, el modelo de datos y las pruebas del aspecto no se tocan. |
 | **R-07** | **Cerrado con la medición de [ADR-0023](../adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md):** una hoja cuesta de 1,0 a 1,7 s del cuarto de CPU del worker, y un solo worker procesó un lote de 200 en 3,6 min, dentro de los 10 de EC-04. El número de workers es uno, y un segundo pide antes resolver R-29. Era que **EC-04 suponía paralelismo sin número de workers fijado** ni consumo de CPU por hoja medido. | Cerrado | Que el límite de 85% de CPU se incumpla con la concurrencia elegida. | Medir el costo de una hoja en el prototipo de R-05 y derivar el número de workers de ese dato. Lo que falta medir es la CPU del servidor durante el lote, que es lo que pide EC-04. |
@@ -2445,6 +2473,7 @@ palabras que la tabla anterior. El detalle está en la
 | **Aspecto** | Corte vertical del sistema con valor propio, recorrible completo desde la necesidad hasta la evidencia. No es una capa ni un módulo. Ver [`../aspectos.md`](../aspectos.md). |
 | **Clave de respuestas** | Conjunto de opciones correctas de un examen, contra el cual se comparan las marcas detectadas. |
 | **Cola de trabajos** | Lista de tareas pendientes de procesar, que separa la carga de las hojas de su procesamiento. En este sistema es una lista de Redis: lo que garantiza que ninguna hoja recibida se pierda es la bitácora de recepción ([ADR-0006](../adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md)), no la cola. Desde el taller de mensajería la entrega es al menos una vez, con acuse, reintentos y lista de fallidos ([ADR-0020](../adr/0020-entregar-los-trabajos-al-menos-una-vez-con-reintentos-y-lista-de-fallidos.md)). En Render la lista no persistía (R-28); en el servidor del laboratorio, Redis la guarda con AOF ([ADR-0021](../adr/0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md)). |
+| **Corte de intención** | Confianza desde la cual una burbuja cuenta como marcada a propósito por el estudiante, aunque no llegue al umbral: hoy 40, configurable de 31 a 50 (`OMR_CORTE_DE_INTENCION`). Con exactamente una burbuja sobre el corte, una pregunta en revisión llega preseleccionada y una columna del código se acepta ([ADR-0024](../adr/0024-preseleccionar-en-la-revision-la-unica-intencion.md)). |
 | **Distractor** | Opción incorrecta de una pregunta de opción múltiple, diseñada para ser plausible. Un distractor equivalente a la respuesta correcta invalida la pregunta. |
 | **Escenario de calidad (EC)** | Especificación medible de un atributo de calidad en seis partes: fuente, estímulo, artefacto, entorno, respuesta y medida de respuesta. |
 | **Formato de hoja** | La hoja de respuestas como datos: tamaño del papel, posición de las marcas de registro, de cada burbuja y de cada casilla del código. La plantilla imprimible y la lectura salen de la misma definición. Hoy existe la versión 1: carta, 40 preguntas de A a D y un código `T` + 8 dígitos ([ADR-0023](../adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md)). |
@@ -2461,6 +2490,7 @@ palabras que la tabla anterior. El detalle está en la
 | **Recorte** | La imagen de la fila de una pregunta en revisión, con su número y sus cuatro burbujas, sin el código del estudiante. El worker la guarda al leer la hoja, y es lo que el docente mira para resolver la pregunta (RF-08). |
 | **Registro de resultados** | Archivo de solo agregado con un hecho por hoja leída: su estado, la lectura y la nota. Lo escribe solo el worker; lo que resuelve el docente va aparte, en el registro de revisiones, que escribe solo la API ([ADR-0023](../adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md)). |
 | **Presupuesto de carga** | Tope de lo que la ruta pública de carga deja entrar al almacén: hojas por lote, bytes por día y tamaño de la petición ([ADR-0022](../adr/0022-poner-un-presupuesto-de-carga-delante-del-almacen.md)). Lo que no cabe se responde con 413 o 429, sin que entre ninguna hoja. |
+| **Preselección** | La opción que la pantalla de revisión trae ya elegida en una pregunta: la única intención que vio la lectura. Se ve igual que una elección del docente y no cuenta en la nota hasta que él guarda (ADR-0024). |
 | **STRIDE** | Clasificación de amenazas en seis categorías: suplantación, manipulación, repudio, divulgación de información, denegación de servicio y elevación de privilegios. Es el método del [modelo de amenazas](../evidencia/modelo-de-amenazas.md) de la S13. |
 | **TA** | *Teaching Assistant.* Asistente de cátedra; usuario operativo del sistema. |
 | **Umbral de confianza** | Valor mínimo de certeza de la detección OMR por debajo del cual una respuesta se envía a revisión manual en lugar de calificarse. Hoy es 70, configurable de 51 a 100 (`OMR_UMBRAL_DE_CONFIANZA`), y sin calibrar con hojas reales (R-04). |
