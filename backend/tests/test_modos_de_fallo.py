@@ -68,6 +68,7 @@ from infraestructura.cola import (
 from infraestructura.consumo import tomar
 from infraestructura.modelo import PENDIENTE_DE_ENCOLAR, ArchivoCargado
 from ingesta import recibir_lote
+from tests.lectura_del_worker import lectura_en
 
 JPG = b"\xff\xd8\xff" + b"\x00" * 32
 UMBRAL_EC07_SEGUNDOS = 10.0
@@ -247,6 +248,8 @@ def _correr_worker(
     monkeypatch.setattr(worker_main, "cliente_redis", lambda: cliente)
     monkeypatch.setattr(worker_main, "NOMBRE_COLA", cola)
     monkeypatch.setattr(worker_main, "RUTA_ALMACEN", str(raiz))
+    monkeypatch.setattr(worker_main, "RUTA_CLAVES", str(raiz / "claves"))
+    monkeypatch.setattr(worker_main, "RUTA_RESULTADOS", str(raiz / "resultados-de-lectura.jsonl"))
     monkeypatch.setattr(worker_main, "atender_una_vez", atender_y_contar)
     # La pausa del worker, y no `time.sleep`: `worker_main.time` es el módulo `time` de todo el
     # proceso, y reemplazar su `sleep` apagaba cualquier otra espera mientras durara la prueba,
@@ -305,7 +308,7 @@ def test_el_trabajo_que_llega_dos_veces_se_procesa_una_sola_vez(
 
         with caplog.at_level(logging.INFO, logger="worker"):
             for _ in range(3):
-                worker_main.atender_una_vez(cliente, cola, almacen)
+                worker_main.atender_una_vez(cliente, cola, almacen, **lectura_en(almacen_con_la_hoja))
 
         procesados = [vars(r)["trabajo"] for r in _eventos(caplog, "hoja_recibida")]
         repetidos = [vars(r)["trabajo"] for r in _eventos(caplog, "trabajo_repetido")]

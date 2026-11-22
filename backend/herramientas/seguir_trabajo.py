@@ -3,8 +3,12 @@
 Es la métrica de seguimiento del taller de mensajería (ADR-0020). La API y el worker escriben una
 línea JSON por evento (`infraestructura/registro.py`), y todos los eventos de un mensaje llevan el
 mismo `trabajo` y la misma `hoja`: `trabajo_publicado` en `ingesta`, y `trabajo_tomado`,
-`reintento_programado`, `trabajo_repetido`, `trabajo_a_fallidos` y `hoja_recibida` en el worker.
-Esta herramienta los junta en orden y dice cómo terminó y cuánto tardó.
+`reintento_programado`, `trabajo_repetido`, `trabajo_a_fallidos`, `hoja_recibida` y
+`hoja_procesada` en el worker. Esta herramienta los junta en orden y dice cómo terminó, cuánto
+tardó y, si la hoja se leyó, en qué estado quedó (calificada, en revisión, sin clave o ilegible).
+
+Antes de la lectura OMR, el recorrido terminaba en `hoja_recibida`; los registros de entonces se
+siguen leyendo igual.
 
 Uso, desde backend/, con el registro guardado en un archivo dentro del repositorio (en local, la
 salida de error de la API y del worker):
@@ -40,8 +44,13 @@ EVENTOS_DEL_RASTRO = {
     "trabajo_repetido",
     "trabajo_a_fallidos",
     "hoja_recibida",
+    "hoja_procesada",
 }
-FINALES = {"hoja_recibida": "procesado", "trabajo_a_fallidos": "en la lista de fallidos"}
+FINALES = {
+    "hoja_recibida": "procesado",
+    "hoja_procesada": "procesado",
+    "trabajo_a_fallidos": "en la lista de fallidos",
+}
 CARPETA_DEL_REPOSITORIO = Path(__file__).resolve().parent.parent.parent
 
 
@@ -101,9 +110,12 @@ def resumen(eventos: list[dict[str, Any]]) -> dict[str, Any]:
     if not eventos:
         return {"estado": "sin eventos"}
     estado = "en camino"
+    hoja_quedo = None
     for evento in eventos:
         if evento["evento"] in FINALES:
             estado = FINALES[evento["evento"]]
+        if evento["evento"] == "hoja_procesada":
+            hoja_quedo = evento.get("estado")
         elif evento["evento"] == "trabajo_repetido":
             estado = estado if estado != "en camino" else "repetido"
     intentos = max((e.get("intento", 1) for e in eventos if "intento" in e), default=0)
@@ -111,7 +123,7 @@ def resumen(eventos: list[dict[str, Any]]) -> dict[str, Any]:
     total_ms = (
         round((momentos[-1] - momentos[0]).total_seconds() * 1000, 1) if len(momentos) > 1 else 0
     )
-    return {
+    resultado = {
         "trabajo": eventos[0].get("trabajo"),
         "hoja": eventos[0].get("hoja"),
         "estado": estado,
@@ -119,6 +131,9 @@ def resumen(eventos: list[dict[str, Any]]) -> dict[str, Any]:
         "de_punta_a_punta_ms": total_ms,
         "eventos": [e["evento"] for e in eventos],
     }
+    if hoja_quedo is not None:
+        resultado["la_hoja_quedo"] = hoja_quedo
+    return resultado
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -145,7 +160,8 @@ def main(argv: list[str] | None = None) -> int:
     elegidos = rastro(eventos, trabajo=args.trabajo, hoja=args.hoja)
     for evento in elegidos:
         detalle = {k: v for k, v in evento.items()
-                   if k in {"intento", "espera_en_cola_ms", "espera_s", "motivo", "bytes"}}
+                   if k in {"intento", "espera_en_cola_ms", "espera_s", "motivo", "bytes",
+                            "estado", "duracion_lectura_ms"}}
         datos = json.dumps(detalle, ensure_ascii=False)
         print(f"{evento.get('momento', '?')}  {evento['evento']:<22} {datos}")
     print(json.dumps(resumen(elegidos), ensure_ascii=False, indent=2))

@@ -212,8 +212,8 @@ class _PantallaPautaState extends State<PantallaPauta> {
       if (!mounted || version != _version) return;
       setState(() {
         _fase = _Fase.error;
-        _mensajeError = 'La API respondió algo que esta pantalla no sabe leer. Vuelva a '
-            'intentarlo más tarde o escriba los distractores a mano.';
+        _mensajeError = 'La respuesta del servidor no se pudo leer. Vuelva a intentarlo más '
+            'tarde o escriba los distractores a mano.';
         _proveedorNoDisponible = false;
         _presupuestoAgotado = false;
       });
@@ -282,9 +282,7 @@ class _PantallaPautaState extends State<PantallaPauta> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const QAvisoDatosEjemplo(
-          detalle: 'El banco de preguntas, la clave y la habilitación (A-04) todavía no están '
-              'construidos: esta parte es de ejemplo. El generador de distractores sí usa la '
-              'API.',
+          detalle: 'El generador de distractores sí funciona.',
         ),
         const SizedBox(height: QEspacios.md),
         const TarjetaExamen(examen: _examen),

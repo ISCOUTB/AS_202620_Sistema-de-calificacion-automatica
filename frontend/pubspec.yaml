@@ -11,6 +11,9 @@ dependencies:
   flutter:
     sdk: flutter
   http: ^1.2.0
+  # El canvas del navegador, para reducir las fotos antes de subirlas (`reducir_foto_navegador.dart`).
+  # Ya venía con `file_picker`; se declara porque ahora se usa directamente.
+  web: ^1.1.1
 
 dev_dependencies:
   flutter_test:

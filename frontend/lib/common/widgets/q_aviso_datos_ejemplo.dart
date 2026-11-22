@@ -4,13 +4,13 @@ import '../tema/tokens.dart';
 
 /// Aviso de que la vista muestra datos de ejemplo.
 ///
-/// Las pantallas cuyo backend todavía no existe (A-02 a A-04) se muestran con datos inventados
-/// para enseñar el flujo. Nada de lo que se vea ahí puede confundirse con una calificación real:
-/// este aviso va arriba, a la vista, y dice qué aspecto lo va a alimentar.
+/// Las pantallas que todavía no usan datos reales se muestran con datos inventados para enseñar el
+/// flujo. Nada de lo que se vea ahí puede confundirse con una calificación real: este aviso va
+/// arriba, a la vista. El detalle habla en palabras del docente, sin códigos de aspecto.
 class QAvisoDatosEjemplo extends StatelessWidget {
   const QAvisoDatosEjemplo({super.key, required this.detalle});
 
-  /// Qué falta para que la vista use datos reales, por ejemplo «la detección de marcas (A-02)».
+  /// Lo que el docente necesita saber de la vista, por ejemplo «Lo que decida aquí no se guarda».
   final String detalle;
 
   @override

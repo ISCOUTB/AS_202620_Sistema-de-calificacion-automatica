@@ -94,8 +94,8 @@ void main() {
 
     expect(find.byType(QAvisoDatosEjemplo), findsOneWidget);
     expect(find.textContaining('Vista con datos de ejemplo'), findsOneWidget);
-    expect(find.textContaining('(A-02)'), findsOneWidget);
-    expect(find.textContaining('(A-03)'), findsOneWidget);
+    expect(find.textContaining('Todavía no muestra sus exámenes'), findsOneWidget);
+    expect(find.textContaining('(A-0'), findsNothing, reason: 'sin códigos de aspecto');
   });
 
   testWidgets('No saluda a un docente ni ofrece acciones de IA fuera del alcance',

@@ -1,0 +1,20 @@
+{
+  "examen": "S14-EC04-S6",
+  "hojas_publicadas": 200,
+  "hojas_procesadas": 200,
+  "estados": {
+    "en_revision": 197,
+    "calificada": 3
+  },
+  "por_hoja_ms": {
+    "p50": 102195.0,
+    "p95": 196446.6,
+    "maximo": 207641.0
+  },
+  "lectura_en_el_worker_ms": {
+    "p50": 1001.7,
+    "p95": 1195.5
+  },
+  "lote_ms": 207640.0,
+  "ec04_cumple": true
+}

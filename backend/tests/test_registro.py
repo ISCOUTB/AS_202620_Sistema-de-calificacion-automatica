@@ -17,6 +17,7 @@ import worker.main as worker_main
 from infraestructura.almacen import AlmacenEnDisco
 from infraestructura.cola import Trabajo, publicar
 from infraestructura.registro import FormateadorJSON
+from tests.lectura_del_worker import lectura_en
 
 
 def _formatear(**campos: object) -> dict:
@@ -66,7 +67,7 @@ def test_el_worker_registra_la_hoja_recibida_con_los_datos_del_trabajo(
     try:
         publicar(cliente, cola, trabajo)
         with caplog.at_level(logging.INFO, logger="worker"):
-            worker_main.atender_una_vez(cliente, cola, AlmacenEnDisco(tmp_path))
+            worker_main.atender_una_vez(cliente, cola, AlmacenEnDisco(tmp_path), **lectura_en(tmp_path))
     finally:
         cliente.delete(cola, f"{cola}:en-curso", f"trabajo-visto:{trabajo.id}")
 

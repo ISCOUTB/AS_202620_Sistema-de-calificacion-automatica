@@ -128,7 +128,10 @@ class _MarcoAppState extends State<MarcoApp> {
         consultarRevision: servicios.consultarRevision,
         guardarRevision: servicios.guardarRevision,
         urlDelRecorte: servicios.urlDelRecorte,
+<<<<<<< HEAD
         encabezadosDelRecorte: servicios.encabezadosDelRecorte,
+=======
+>>>>>>> 88090461e81adc5d38504d646046fa218be33615
         nombresDeHojas: _nombresDeHojas,
         examenPedido: _examenParaRevisar,
         alMostrarse: _revisionALaVista,

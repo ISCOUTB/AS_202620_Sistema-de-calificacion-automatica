@@ -1,0 +1,18 @@
+{
+  "examen": "MEDICION-EC03",
+  "hojas_publicadas": 20,
+  "hojas_procesadas": 20,
+  "estados": {
+    "en_revision": 20
+  },
+  "por_hoja_ms": {
+    "p50": 1236.0,
+    "p95": 1706.2,
+    "maximo": 2507.0
+  },
+  "lectura_en_el_worker_ms": {
+    "p50": 1194.0,
+    "p95": 1691.0
+  },
+  "ec03_cumple": true
+}

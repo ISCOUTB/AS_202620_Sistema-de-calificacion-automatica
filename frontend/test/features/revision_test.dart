@@ -86,7 +86,11 @@ RevisionDelExamen _revision({bool resuelta = false}) => RevisionDelExamen(
       ],
     );
 
+<<<<<<< HEAD
 typedef _Guardado = (String, String, Map<int, String?>);
+=======
+typedef _Guardado = (String, String, String, Map<int, String?>);
+>>>>>>> 88090461e81adc5d38504d646046fa218be33615
 
 Widget _pantalla({
   Future<RevisionDelExamen> Function(String)? consultar,
@@ -96,8 +100,11 @@ Widget _pantalla({
   VoidCallback? alGuardar,
   bool guardarFalla = false,
   Listenable? alMostrarse,
+<<<<<<< HEAD
   String Function(String examenId, String hojaId, int numero)? urlDelRecorte,
   Map<String, String> Function()? encabezadosDelRecorte,
+=======
+>>>>>>> 88090461e81adc5d38504d646046fa218be33615
 }) {
   var resuelta = false;
   return MaterialApp(
@@ -106,9 +113,15 @@ Widget _pantalla({
       body: PantallaRevision(
         listarExamenes: () async => _examenes,
         consultarRevision: consultar ?? (examen) async => _revision(resuelta: resuelta),
+<<<<<<< HEAD
         guardarRevision: (examen, hoja, opciones) async {
           if (guardarFalla) throw const ExcepcionDeRevision('No se pudo contactar con el servidor.');
           guardados?.add((examen, hoja, opciones));
+=======
+        guardarRevision: (examen, hoja, por, opciones) async {
+          if (guardarFalla) throw const ExcepcionDeRevision('No se pudo contactar con el servidor.');
+          guardados?.add((examen, hoja, por, opciones));
+>>>>>>> 88090461e81adc5d38504d646046fa218be33615
           resuelta = true;
           return const ResultadoDeHoja(
             hojaId: 'h-2',
@@ -121,8 +134,11 @@ Widget _pantalla({
         examenPedido: pedido,
         alGuardar: alGuardar,
         alMostrarse: alMostrarse,
+<<<<<<< HEAD
         urlDelRecorte: urlDelRecorte,
         encabezadosDelRecorte: encabezadosDelRecorte,
+=======
+>>>>>>> 88090461e81adc5d38504d646046fa218be33615
       ),
     ),
   );
@@ -216,7 +232,11 @@ void main() {
     expect(find.text('Subida el 16 nov, 14:32'), findsOneWidget);
   });
 
+<<<<<<< HEAD
   testWidgets('Guarda lo elegido y recalcula', (tester) async {
+=======
+  testWidgets('Guarda lo elegido con el nombre del docente y recalcula', (tester) async {
+>>>>>>> 88090461e81adc5d38504d646046fa218be33615
     _fijarTamano(tester, const Size(1280, 1800));
     final guardados = <_Guardado>[];
     var avisos = 0;
@@ -229,14 +249,28 @@ void main() {
 
     await _tocar(tester, find.text('C').first);
     await _tocar(tester, find.text('Ninguna').at(1));
+<<<<<<< HEAD
     expect(find.text('Se guardarán 2 preguntas.'), findsOneWidget);
     expect(_guardar(tester).enabled, isTrue);
+=======
+    expect(find.text('Escriba su nombre para guardar.'), findsOneWidget);
+    expect(_guardar(tester).enabled, isFalse);
+
+    await tester.enterText(find.widgetWithText(TextField, 'Su nombre'), 'Docente de prueba');
+    await tester.pumpAndSettle();
+    expect(find.text('Se guardarán 2 preguntas.'), findsOneWidget);
+>>>>>>> 88090461e81adc5d38504d646046fa218be33615
 
     await _tocar(tester, find.text('Guardar'));
 
     // Dart compara un mapa dentro de un record por identidad: se compara campo por campo.
+<<<<<<< HEAD
     final (examen, hoja, opciones) = guardados.single;
     expect((examen, hoja), ('PROTOTIPO-R05', 'h-2'));
+=======
+    final (examen, hoja, por, opciones) = guardados.single;
+    expect((examen, hoja, por), ('PROTOTIPO-R05', 'h-2', 'Docente de prueba'));
+>>>>>>> 88090461e81adc5d38504d646046fa218be33615
     expect(opciones, {7: 'C', 9: null});
     expect(avisos, 1);
     expect(find.text('Guardado. Nota 3,9.'), findsOneWidget);
@@ -257,6 +291,7 @@ void main() {
     expect(selector.selected, {'B'});
     expect(_guardar(tester).enabled, isFalse, reason: 'nada cambió');
 
+<<<<<<< HEAD
     await _tocar(tester, find.text('A').first);
     await _tocar(tester, find.text('Guardar'));
 
@@ -663,5 +698,357 @@ void main() {
     for (final imagen in imagenes) {
       expect((imagen as NetworkImage).headers, {'Authorization': 'Bearer v1.abc.def'});
     }
+=======
+    await tester.enterText(find.widgetWithText(TextField, 'Su nombre'), 'Docente de prueba');
+    await _tocar(tester, find.text('A').first);
+    await _tocar(tester, find.text('Guardar'));
+
+    expect(guardados.single.$4, {3: 'A'});
+  });
+
+  group('Preselección (ADR-0024)', () {
+    testWidgets('Una pregunta con sugerencia llega marcada y se guarda con solo escribir el nombre',
+        (tester) async {
+      _fijarTamano(tester, const Size(1280, 1800));
+      final guardados = <_Guardado>[];
+      await tester.pumpWidget(_pantalla(
+        guardados: guardados,
+        consultar: (examen) async => _revisionConSugerida(guardada: guardados.isEmpty ? null : 'C'),
+      ));
+      await tester.pumpAndSettle();
+      await _elegirExamen(tester, 'PROTOTIPO-R05');
+
+      expect(_selectorDe(tester, 7).selected, {'C'});
+      expect(_selectorDe(tester, 9).selected, isEmpty);
+      expect(find.text('Escriba su nombre para guardar.'), findsOneWidget);
+
+      await tester.enterText(find.widgetWithText(TextField, 'Su nombre'), 'Docente de prueba');
+      await tester.pumpAndSettle();
+      expect(find.text('Se guardará 1 pregunta.'), findsOneWidget);
+      expect(_guardar(tester).enabled, isTrue);
+      await _tocar(tester, find.text('Guardar'));
+
+      final (examen, hoja, por, opciones) = guardados.single;
+      expect((examen, hoja, por), ('PROTOTIPO-R05', 'h-2', 'Docente de prueba'));
+      expect(opciones, {7: 'C'});
+    });
+
+    testWidgets('La nota provisional no cambia por las preseleccionadas', (tester) async {
+      _fijarTamano(tester, const Size(1280, 1800));
+      await tester.pumpWidget(_pantalla(consultar: (examen) async => _revisionConSugerida()));
+      await tester.pumpAndSettle();
+      await _elegirExamen(tester, 'PROTOTIPO-R05');
+
+      expect(_selectorDe(tester, 7).selected, {'C'});
+      expect(find.text('Nota provisional 2,3'), findsOneWidget);
+    });
+
+    testWidgets('Cambiar una preselección a Ninguna la envía como nula', (tester) async {
+      _fijarTamano(tester, const Size(1280, 1800));
+      final guardados = <_Guardado>[];
+      await tester.pumpWidget(_pantalla(
+        guardados: guardados,
+        consultar: (examen) async => _revisionConSugerida(),
+      ));
+      await tester.pumpAndSettle();
+      await _elegirExamen(tester, 'PROTOTIPO-R05');
+
+      await tester.enterText(find.widgetWithText(TextField, 'Su nombre'), 'Docente de prueba');
+      // Las confusas van primero: la 9 es la primera tarjeta y la 7 la segunda.
+      await _tocar(tester, find.text('Ninguna').at(1));
+      await _tocar(tester, find.text('Guardar'));
+
+      expect(guardados.single.$4, {7: null});
+    });
+
+    testWidgets('Si guardar falla, las preselecciones siguen marcadas', (tester) async {
+      _fijarTamano(tester, const Size(1280, 1800));
+      await tester.pumpWidget(_pantalla(
+        guardarFalla: true,
+        consultar: (examen) async => _revisionConSugerida(),
+      ));
+      await tester.pumpAndSettle();
+      await _elegirExamen(tester, 'PROTOTIPO-R05');
+
+      await tester.enterText(find.widgetWithText(TextField, 'Su nombre'), 'Docente de prueba');
+      await _tocar(tester, find.text('Guardar'));
+
+      expect(find.text('No se pudo contactar con el servidor.'), findsOneWidget);
+      expect(_selectorDe(tester, 7).selected, {'C'});
+      expect(_guardar(tester).enabled, isTrue);
+    });
+
+    testWidgets('Después de guardar se ve lo guardado y no la sugerencia', (tester) async {
+      _fijarTamano(tester, const Size(1280, 1800));
+      final guardados = <_Guardado>[];
+      await tester.pumpWidget(_pantalla(
+        guardados: guardados,
+        consultar: (examen) async => _revisionConSugerida(
+          guardada: guardados.isEmpty ? null : guardados.single.$4[7],
+        ),
+      ));
+      await tester.pumpAndSettle();
+      await _elegirExamen(tester, 'PROTOTIPO-R05');
+
+      await tester.enterText(find.widgetWithText(TextField, 'Su nombre'), 'Docente de prueba');
+      await _tocar(tester, find.text('A').at(1));
+      await _tocar(tester, find.text('Guardar'));
+
+      expect(guardados.single.$4, {7: 'A'});
+      expect(_selectorDe(tester, 7).selected, {'A'});
+      expect(_guardar(tester).enabled, isFalse, reason: 'nada cambió desde lo guardado');
+    });
+
+    testWidgets('Las confusas van antes que las preseleccionadas', (tester) async {
+      _fijarTamano(tester, const Size(1280, 1800));
+      await tester.pumpWidget(_pantalla(consultar: (examen) async => _revisionConSugerida()));
+      await tester.pumpAndSettle();
+      await _elegirExamen(tester, 'PROTOTIPO-R05');
+
+      expect(
+        tester.getTopLeft(find.text('Pregunta 9')).dy,
+        lessThan(tester.getTopLeft(find.text('Pregunta 7')).dy),
+      );
+    });
+  });
+
+  group('Lista de hojas', () {
+    /// Dos hojas con el mismo nombre: la de ayer ya revisada (editada esta mañana) y la de hoy por
+    /// revisar.
+    RevisionDelExamen fechadas(String examen) => RevisionDelExamen(
+          examenId: examen,
+          hojas: [
+            HojaEnRevision(
+              hojaId: 'h-1',
+              notaEnDecimas: 40,
+              provisional: false,
+              codigoCompleto: true,
+              preguntas: [
+                _pregunta(3,
+                    resuelta: 'B', estaResuelta: true, resueltaEn: DateTime(2026, 11, 19, 10, 5)),
+              ],
+              nombreArchivo: 'hoja1.jpg',
+              recibidaEn: DateTime(2026, 11, 18, 14, 32),
+            ),
+            HojaEnRevision(
+              hojaId: 'h-2',
+              notaEnDecimas: 23,
+              provisional: true,
+              codigoCompleto: true,
+              preguntas: [_pregunta(7)],
+              nombreArchivo: 'hoja1.jpg',
+              recibidaEn: DateTime(2026, 11, 19, 9, 0),
+            ),
+          ],
+        );
+    const revisada = 'Revisada\nSubida el 18 nov, 14:32\nEditada el 19 nov, 10:05';
+    const porRevisar = '1 pregunta por revisar\nSubida el 19 nov, 09:00';
+
+    testWidgets('La lista pone arriba la hoja más nueva y dice cuándo se editó', (tester) async {
+      _fijarTamano(tester, const Size(1280, 1800));
+      await tester.pumpWidget(_pantalla(consultar: (examen) async => fechadas(examen)));
+      await tester.pumpAndSettle();
+      await _elegirExamen(tester, 'PROTOTIPO-R05');
+
+      expect(find.text(revisada), findsOneWidget);
+      expect(
+        tester.getTopLeft(find.text(porRevisar)).dy,
+        lessThan(tester.getTopLeft(find.text(revisada)).dy),
+      );
+    });
+
+    testWidgets('Desmarcar Por revisar oculta la hoja abierta y abre la primera visible',
+        (tester) async {
+      _fijarTamano(tester, const Size(1280, 1800));
+      await tester.pumpWidget(_pantalla());
+      await tester.pumpAndSettle();
+      await _elegirExamen(tester, 'PROTOTIPO-R05');
+      expect(find.text('Pregunta 7'), findsOneWidget);
+
+      await _tocar(tester, find.widgetWithText(FilterChip, 'Por revisar'));
+
+      expect(find.text('Pregunta 7'), findsNothing);
+      expect(find.text('Pregunta 3'), findsOneWidget, reason: 'se abre la hoja revisada');
+      expect(find.text('1 por revisar'), findsOneWidget, reason: 'cuenta todas, no las filtradas');
+
+      await _tocar(tester, find.widgetWithText(FilterChip, 'Por revisar'));
+      expect(find.text('foto inclinada.jpg'), findsOneWidget, reason: 'vuelve a la lista');
+    });
+
+    testWidgets('Con los dos filtros desmarcados lo dice', (tester) async {
+      _fijarTamano(tester, const Size(1280, 1800));
+      await tester.pumpWidget(_pantalla());
+      await tester.pumpAndSettle();
+      await _elegirExamen(tester, 'PROTOTIPO-R05');
+
+      await _tocar(tester, find.widgetWithText(FilterChip, 'Por revisar'));
+      await _tocar(tester, find.widgetWithText(FilterChip, 'Revisadas'));
+
+      expect(
+        find.text('No hay hojas para mostrar. Marque «Por revisar» o «Revisadas».'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Pregunta'), findsNothing);
+      expect(find.text('1 por revisar'), findsOneWidget);
+    });
+
+    testWidgets('Con un solo filtro y nada que mostrar, dice qué falta', (tester) async {
+      _fijarTamano(tester, const Size(1280, 1800));
+      var revisadas = true;
+      await tester.pumpWidget(_pantalla(
+        consultar: (examen) async =>
+            revisadas ? _revision(resuelta: true) : _revisionConSugerida(),
+      ));
+      await tester.pumpAndSettle();
+      await _elegirExamen(tester, 'PROTOTIPO-R05');
+
+      // Todo revisado y solo «Por revisar» marcado: el final de una sesión.
+      await _tocar(tester, find.widgetWithText(FilterChip, 'Revisadas'));
+      expect(find.text('No quedan hojas por revisar.'), findsOneWidget);
+
+      // Nada revisado y solo «Revisadas» marcado.
+      revisadas = false;
+      await _elegirExamen(tester, 'QUIZ-3');
+      await _tocar(tester, find.widgetWithText(FilterChip, 'Revisadas'));
+      await _tocar(tester, find.widgetWithText(FilterChip, 'Por revisar'));
+      expect(find.text('Todavía no hay hojas revisadas.'), findsOneWidget);
+    });
+
+    testWidgets('En el teléfono caben los filtros y las tres líneas de cada hoja', (tester) async {
+      _fijarTamano(tester, const Size(390, 900));
+      await tester.pumpWidget(_pantalla(consultar: (examen) async => fechadas(examen)));
+      await tester.pumpAndSettle();
+      await _elegirExamen(tester, 'PROTOTIPO-R05');
+
+      expect(find.widgetWithText(FilterChip, 'Revisadas'), findsOneWidget);
+      expect(find.text(revisada), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  testWidgets('Un examen sin dudas lo dice', (tester) async {
+    await tester.pumpWidget(_pantalla(
+      consultar: (examen) async => const RevisionDelExamen(examenId: 'QUIZ-3', hojas: []),
+    ));
+    await tester.pumpAndSettle();
+    await _elegirExamen(tester, 'QUIZ-3');
+
+    expect(find.text('No hay preguntas por revisar'), findsOneWidget);
+  });
+
+  testWidgets('Si la revisión no llega, lo dice y deja volver a intentar', (tester) async {
+    var pedidos = 0;
+    await tester.pumpWidget(_pantalla(consultar: (examen) async {
+      pedidos++;
+      throw const ExcepcionDeRevision('No se pudo contactar con el servidor.');
+    }));
+    await tester.pumpAndSettle();
+    await _elegirExamen(tester, 'PROTOTIPO-R05');
+
+    expect(find.text('No se pudo pedir la revisión'), findsOneWidget);
+    await _tocar(tester, find.text('Volver a intentar'));
+    expect(pedidos, 2);
+  });
+
+  testWidgets('El examen que pide la carga queda elegido', (tester) async {
+    final pedido = ValueNotifier<String?>(null);
+    addTearDown(pedido.dispose);
+    await tester.pumpWidget(_pantalla(pedido: pedido));
+    await tester.pumpAndSettle();
+
+    pedido.value = 'PROTOTIPO-R05';
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Pregunta 7'), findsOneWidget);
+  });
+
+  group('Volver a la revisión', () {
+    /// Cada consulta trae una hoja más, como si entre una y otra se hubiera subido otra hoja.
+    Future<RevisionDelExamen> Function(String) creciente(List<String> pedidos) =>
+        (examen) async {
+          pedidos.add(examen);
+          return RevisionDelExamen(examenId: examen, hojas: [
+            for (var i = 1; i <= pedidos.length; i++)
+              HojaEnRevision(
+                hojaId: 'h-$i',
+                notaEnDecimas: 23,
+                provisional: true,
+                codigoCompleto: true,
+                preguntas: [_pregunta(7)],
+                nombreArchivo: 'hoja $i.jpg',
+              ),
+          ]);
+        };
+
+    testWidgets('Si la carga pide el examen que ya estaba elegido, trae las hojas nuevas',
+        (tester) async {
+      // Lo que se vio en local: elegir el examen en Revisión, subir hojas en Carga y tocar
+      // «Revisar» mostraba la revisión de antes de subir.
+      _fijarTamano(tester, const Size(1280, 1800));
+      final pedidos = <String>[];
+      final pedido = ValueNotifier<String?>(null);
+      final mostrada = ValueNotifier<int>(0);
+      addTearDown(pedido.dispose);
+      addTearDown(mostrada.dispose);
+      await tester.pumpWidget(
+        _pantalla(consultar: creciente(pedidos), pedido: pedido, alMostrarse: mostrada),
+      );
+      await tester.pumpAndSettle();
+      await _elegirExamen(tester, 'PROTOTIPO-R05');
+      expect(find.text('hoja 2.jpg'), findsNothing);
+
+      pedido.value = 'PROTOTIPO-R05';
+      mostrada.value++;
+      await tester.pumpAndSettle();
+
+      expect(find.text('hoja 2.jpg'), findsOneWidget);
+      expect(pedidos, ['PROTOTIPO-R05', 'PROTOTIPO-R05']);
+    });
+
+    testWidgets('Si la carga pide otro examen, lo pide una sola vez', (tester) async {
+      _fijarTamano(tester, const Size(1280, 1800));
+      final pedidos = <String>[];
+      final pedido = ValueNotifier<String?>(null);
+      final mostrada = ValueNotifier<int>(0);
+      addTearDown(pedido.dispose);
+      addTearDown(mostrada.dispose);
+      await tester.pumpWidget(
+        _pantalla(consultar: creciente(pedidos), pedido: pedido, alMostrarse: mostrada),
+      );
+      await tester.pumpAndSettle();
+      await _elegirExamen(tester, 'PROTOTIPO-R05');
+
+      pedido.value = 'QUIZ-3';
+      mostrada.value++;
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+
+      expect(pedidos, ['PROTOTIPO-R05', 'QUIZ-3']);
+    });
+
+    testWidgets('Volver sin examen elegido no pide nada', (tester) async {
+      final pedidos = <String>[];
+      final mostrada = ValueNotifier<int>(0);
+      addTearDown(mostrada.dispose);
+      await tester.pumpWidget(_pantalla(consultar: creciente(pedidos), alMostrarse: mostrada));
+      await tester.pumpAndSettle();
+
+      mostrada.value++;
+      await tester.pumpAndSettle();
+
+      expect(pedidos, isEmpty);
+    });
+  });
+
+  testWidgets('En el teléfono no se desborda', (tester) async {
+    _fijarTamano(tester, const Size(390, 900));
+    await tester.pumpWidget(_pantalla());
+    await tester.pumpAndSettle();
+    await _elegirExamen(tester, 'PROTOTIPO-R05');
+
+    expect(find.text('Pregunta 7'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+>>>>>>> 88090461e81adc5d38504d646046fa218be33615
   });
 }

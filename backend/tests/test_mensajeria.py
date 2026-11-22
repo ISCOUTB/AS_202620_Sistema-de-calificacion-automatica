@@ -10,6 +10,8 @@ Redis (ADR-0002). Estas pruebas sostienen lo que el taller pide demostrar:
    cola al arrancar y se procesa.
 3. **Duplicados.** Si el worker murió después de procesar y antes de confirmar, la entrega que
    vuelve se confirma sin procesarse otra vez.
+3b. **Una hoja que mata al worker no lo mata para siempre** (R-36). Cada vuelta desde la lista en
+   curso cuenta como un intento, y después de cuatro la hoja va a fallidos y las demás se leen.
 4. **Reintentos con espera creciente y lista de fallidos.** Un fallo recuperable se reintenta con
    esperas de 5 y 10 s y se procesa cuando se recupera; uno que no se recupera termina, después de
    cuatro intentos, en la lista de fallidos con el motivo; y desde ahí se puede reencolar.
@@ -28,6 +30,10 @@ Validadas provocando la falla, una mutación a la vez:
 - `leer_trabajo` exigiendo `hoja_id`: falla la de los mensajes anteriores al contrato;
 - `recuperar_en_curso` sin devolver nada: fallan la de al menos una vez y la del duplicado, y la de
   Redis que falla a mitad en `test_modos_de_fallo.py`;
+- `recuperar_en_curso` sin sumar el intento: fallan la del intento que suma y la de la hoja que mata
+  al worker, que se queda tomándola para siempre;
+- `recuperar_en_curso` sin mirar si el trabajo ya se procesó: falla la del último intento ya
+  procesado, que termina en fallidos;
 - la marca puesta antes de procesar, como en ADR-0016: fallan cuatro, entre ellas la del fallo
   recuperable, porque el reintento se descarta como repetido y la hoja nunca se procesa;
 - la marca puesta después del acuse: falla la del duplicado, que se procesa dos veces;
@@ -61,12 +67,14 @@ from infraestructura.cola import (
     MensajeInvalido,
     Trabajo,
     leer_trabajo,
+    marcar_procesado,
     publicar,
     serializar_trabajo,
 )
 from infraestructura.consumo import (
     ESPERA_BASE_SEGUNDOS,
     MAXIMO_DE_INTENTOS,
+    MOTIVO_EL_WORKER_MURIO,
     clave_en_curso,
     clave_fallidos,
     clave_reintentos,
@@ -75,9 +83,10 @@ from infraestructura.consumo import (
     reencolar_fallidos,
     tomar,
 )
-from infraestructura.modelo import ArchivoCargado
+from infraestructura.modelo import ILEGIBLE, ArchivoCargado
 from infraestructura.registro import FormateadorJSON
 from ingesta import recibir_lote
+from tests.lectura_del_worker import lectura_en
 
 JPG = b"\xff\xd8\xff" + b"\x00" * 32
 EXAMEN = "CALC-2026-01"
@@ -225,7 +234,7 @@ def test_un_mensaje_fuera_del_contrato_va_a_fallidos_sin_reintentarse(
     cliente.rpush(cola, texto)
 
     with caplog.at_level(logging.INFO, logger="worker"):
-        resultado = worker_main.atender_una_vez(cliente, cola, AlmacenEnDisco(tmp_path))
+        resultado = worker_main.atender_una_vez(cliente, cola, AlmacenEnDisco(tmp_path), **lectura_en(tmp_path))
 
     assert resultado == worker_main.FALLIDO
     assert estado_de_la_cola(cliente, cola) == {
@@ -248,7 +257,7 @@ def test_un_trabajo_que_quedo_en_curso_vuelve_a_la_cola_al_arrancar_y_se_procesa
 
     with caplog.at_level(logging.INFO, logger="worker"):
         worker_main._recuperar(cliente, cola)
-        resultado = worker_main.atender_una_vez(cliente, cola, AlmacenEnDisco(tmp_path))
+        resultado = worker_main.atender_una_vez(cliente, cola, AlmacenEnDisco(tmp_path), **lectura_en(tmp_path))
 
     assert resultado == worker_main.PROCESADO
     assert [vars(r)["trabajo"] for r in _eventos(caplog, "hoja_recibida")] == [trabajo.id]
@@ -272,17 +281,78 @@ def test_si_murio_despues_de_procesar_la_entrega_que_vuelve_no_se_procesa_otra_v
     with monkeypatch.context() as parche:
         parche.setattr(worker_main, "confirmar", morir)
         with pytest.raises(_MuerteAntesDelAcuse):
-            worker_main.atender_una_vez(cliente, cola, AlmacenEnDisco(tmp_path))
+            worker_main.atender_una_vez(cliente, cola, AlmacenEnDisco(tmp_path), **lectura_en(tmp_path))
 
     caplog.clear()  # lo que registró la vuelta que murió no cuenta
     with caplog.at_level(logging.INFO, logger="worker"):
         worker_main._recuperar(cliente, cola)
-        resultado = worker_main.atender_una_vez(cliente, cola, AlmacenEnDisco(tmp_path))
+        resultado = worker_main.atender_una_vez(cliente, cola, AlmacenEnDisco(tmp_path), **lectura_en(tmp_path))
 
     assert resultado == worker_main.REPETIDO
     assert [vars(r)["trabajo"] for r in _eventos(caplog, "trabajo_repetido")] == [trabajo.id]
     assert _eventos(caplog, "hoja_recibida") == []
     assert estado_de_la_cola(cliente, cola)["en_curso"] == 0
+
+
+def test_un_trabajo_que_vuelve_de_en_curso_suma_un_intento(cliente, cola, tmp_path):
+    """La vuelta desde la lista en curso cuenta: el worker lo tuvo en la mano y no lo terminó."""
+    trabajo = _publicar_una_hoja(cliente, cola, tmp_path)
+    assert tomar(cliente, cola, timeout=1) is not None  # el worker que muere
+
+    worker_main._recuperar(cliente, cola)
+
+    vuelto = leer_trabajo(cliente.lindex(cola, 0))
+    assert (vuelto.id, vuelto.intento) == (trabajo.id, 2)
+
+
+def test_una_hoja_que_mata_al_worker_termina_en_fallidos_y_deja_pasar_a_las_demas(
+    cliente, cola, tmp_path, caplog
+):
+    """R-36. Antes, el trabajo volvía igual a la cabeza de la cola: un PNG de 120 KB que pedía más
+    de 100 MB al decodificarse mataba al worker en cada reinicio, y ninguna otra hoja se leía."""
+    asesina = _publicar_una_hoja(cliente, cola, tmp_path)
+    otra = _publicar_una_hoja(cliente, cola, tmp_path)
+
+    with caplog.at_level(logging.INFO, logger="worker"):
+        for _ in range(MAXIMO_DE_INTENTOS):
+            tomada = leer_trabajo(tomar(cliente, cola, timeout=1))  # el worker la toma y muere
+            assert tomada.id == asesina.id
+            worker_main._recuperar(cliente, cola)
+        resultado = worker_main.atender_una_vez(
+            cliente, cola, AlmacenEnDisco(tmp_path), **lectura_en(tmp_path)
+        )
+
+    assert resultado == worker_main.PROCESADO
+    assert [vars(r)["trabajo"] for r in _eventos(caplog, "hoja_recibida")] == [otra.id]
+    [registro] = cliente.lrange(clave_fallidos(cola), 0, -1)
+    fallido = json.loads(registro)
+    assert (fallido["motivo"], fallido["intentos"]) == (MOTIVO_EL_WORKER_MURIO, MAXIMO_DE_INTENTOS)
+    assert leer_trabajo(fallido["mensaje"]).id == asesina.id
+    assert len(_eventos(caplog, "trabajo_a_fallidos")) == 1
+    assert estado_de_la_cola(cliente, cola) == {
+        "pendientes": 0, "en_curso": 0, "esperando_reintento": 0, "fallidos": 1,
+    }
+
+
+def test_si_ya_se_proceso_en_su_ultimo_intento_no_va_a_fallidos(cliente, cola, tmp_path, caplog):
+    """El worker procesó la hoja en su cuarto intento, la marcó y murió antes del acuse: la hoja
+    está leída, así que vuelve y solo se confirma, como cualquier duplicado."""
+    trabajo = _publicar_una_hoja(cliente, cola, tmp_path)
+    cliente.lpop(cola)
+    cliente.rpush(cola, serializar_trabajo(Trabajo(
+        id=trabajo.id, payload=trabajo.payload, intento=MAXIMO_DE_INTENTOS,
+    )))
+    assert tomar(cliente, cola, timeout=1) is not None
+    marcar_procesado(cliente, trabajo.id)
+
+    with caplog.at_level(logging.INFO, logger="worker"):
+        worker_main._recuperar(cliente, cola)
+        resultado = worker_main.atender_una_vez(
+            cliente, cola, AlmacenEnDisco(tmp_path), **lectura_en(tmp_path)
+        )
+
+    assert resultado == worker_main.REPETIDO
+    assert estado_de_la_cola(cliente, cola)["fallidos"] == 0
 
 
 # --- 4. Reintentos con espera creciente y lista de fallidos -------------------------------------
@@ -303,7 +373,9 @@ def test_un_fallo_recuperable_se_reintenta_con_espera_y_se_procesa_al_recuperars
     reloj = Reloj()
 
     def vuelta():
-        return worker_main.atender_una_vez(cliente, cola, almacen, reloj=reloj, azar=SIN_AZAR)
+        return worker_main.atender_una_vez(
+            cliente, cola, almacen, **lectura_en(tmp_path), reloj=reloj, azar=SIN_AZAR
+        )
 
     with caplog.at_level(logging.INFO, logger="worker"):
         assert vuelta() == worker_main.REINTENTO
@@ -337,7 +409,8 @@ def test_un_fallo_que_no_se_recupera_termina_en_fallidos_con_el_motivo(
         resultados = []
         for _ in range(MAXIMO_DE_INTENTOS):
             resultados.append(worker_main.atender_una_vez(
-                cliente, cola, AlmacenEnDisco(tmp_path), reloj=reloj, azar=SIN_AZAR,
+                cliente, cola, AlmacenEnDisco(tmp_path), **lectura_en(tmp_path),
+                reloj=reloj, azar=SIN_AZAR,
             ))
             reloj.ahora += 60
 
@@ -358,7 +431,7 @@ def test_lo_que_esta_en_fallidos_se_puede_reencolar_cuando_se_corrige_la_causa(
     ruta.unlink()
     reloj = Reloj()
     for _ in range(MAXIMO_DE_INTENTOS):
-        worker_main.atender_una_vez(cliente, cola, AlmacenEnDisco(tmp_path), reloj=reloj,
+        worker_main.atender_una_vez(cliente, cola, AlmacenEnDisco(tmp_path), **lectura_en(tmp_path), reloj=reloj,
                                     azar=SIN_AZAR)
         reloj.ahora += 60
     cliente.rpush(clave_fallidos(cola), json.dumps({"mensaje": "no es JSON", "motivo": "x"}))
@@ -366,7 +439,7 @@ def test_lo_que_esta_en_fallidos_se_puede_reencolar_cuando_se_corrige_la_causa(
     ruta.write_bytes(JPG)  # alguien devolvió la imagen
     assert reencolar_fallidos(cliente, cola) == 1
 
-    assert worker_main.atender_una_vez(cliente, cola, AlmacenEnDisco(tmp_path)) == (
+    assert worker_main.atender_una_vez(cliente, cola, AlmacenEnDisco(tmp_path), **lectura_en(tmp_path)) == (
         worker_main.PROCESADO
     )
     # El que no cumple el contrato se queda: reencolarlo lo traería de vuelta al mismo lugar.
@@ -378,7 +451,7 @@ def test_una_referencia_fuera_del_almacen_no_se_reintenta(cliente, cola, tmp_pat
         "hoja_id": "h", "examen_id": "e", "nombre_archivo": "n", "referencia": "../../etc/passwd",
     })))
 
-    assert worker_main.atender_una_vez(cliente, cola, AlmacenEnDisco(tmp_path)) == (
+    assert worker_main.atender_una_vez(cliente, cola, AlmacenEnDisco(tmp_path), **lectura_en(tmp_path)) == (
         worker_main.FALLIDO
     )
     assert estado_de_la_cola(cliente, cola)["esperando_reintento"] == 0
@@ -396,9 +469,13 @@ def test_un_mensaje_se_sigue_de_la_api_al_worker_con_el_mismo_trabajo_y_la_misma
     reloj = Reloj()
     with caplog.at_level(logging.INFO):
         trabajo = _publicar_una_hoja(cliente, cola, tmp_path)
-        worker_main.atender_una_vez(cliente, cola, almacen, reloj=reloj, azar=SIN_AZAR)
+        worker_main.atender_una_vez(
+            cliente, cola, almacen, **lectura_en(tmp_path), reloj=reloj, azar=SIN_AZAR
+        )
         reloj.ahora += 5
-        worker_main.atender_una_vez(cliente, cola, almacen, reloj=reloj, azar=SIN_AZAR)
+        worker_main.atender_una_vez(
+            cliente, cola, almacen, **lectura_en(tmp_path), reloj=reloj, azar=SIN_AZAR
+        )
 
     lineas = [FormateadorJSON().format(r) for r in caplog.records]
     eventos = rastro(leer_eventos(lineas), trabajo=trabajo.id)
@@ -406,10 +483,12 @@ def test_un_mensaje_se_sigue_de_la_api_al_worker_con_el_mismo_trabajo_y_la_misma
 
     assert [e["evento"] for e in eventos] == [
         "trabajo_publicado", "trabajo_tomado", "reintento_programado", "trabajo_tomado",
-        "hoja_recibida",
+        "hoja_recibida", "hoja_procesada",
     ]
     assert {e["hoja"] for e in eventos} == {trabajo.payload["hoja_id"]}
     assert (final["estado"], final["intentos"]) == ("procesado", 2)
+    # Lo que guarda la prueba no es una hoja: la lectura la deja ilegible, y el trabajo termina.
+    assert final["la_hoja_quedo"] == ILEGIBLE
     assert all(e.get("espera_en_cola_ms") is not None
                for e in eventos if e["evento"] == "trabajo_tomado")
 

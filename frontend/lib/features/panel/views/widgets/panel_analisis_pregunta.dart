@@ -238,23 +238,17 @@ class _NotaClaveEquivalente extends StatelessWidget {
               TextSpan(
                 children: [
                   const TextSpan(
-                    text: 'Un distractor muy elegido no siempre es un error de concepto. ',
+                    text: 'Si un distractor se lleva casi tantas marcas como la correcta, ',
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
                       color: QColores.textoSobreNavy,
                     ),
                   ),
-                  const TextSpan(
-                    text: 'Si se lleva casi tantas marcas como la respuesta correcta, conviene '
-                        'revisar si la clave admite dos respuestas equivalentes, como ',
-                  ),
+                  const TextSpan(text: 'revise si las dos son equivalentes, como '),
                   TextSpan(text: '1 − cos²(x)', style: formula),
                   const TextSpan(text: ' y '),
                   TextSpan(text: 'sen²(x)', style: formula),
-                  const TextSpan(
-                    text: '. QuantIA no lo comprueba por su cuenta: una equivalencia solo '
-                        'cuenta si se habilita de forma explícita en la clave.',
-                  ),
+                  const TextSpan(text: '.'),
                 ],
               ),
               style: textos.bodyMedium?.copyWith(

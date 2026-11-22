@@ -23,10 +23,12 @@ from infraestructura.modelo import (
     LecturaDeBurbuja,
 )
 from omr.decision import (
+    CORTE_DE_INTENCION_POR_OMISION,
     DISPERSION_MINIMA_PARA_DUDAR,
     RELLENO_MAXIMO_DE_UNA_VACIA,
     RELLENO_MINIMO_DE_UNA_COMPLETA,
     clasificar_burbuja,
+    comprobar_corte_de_intencion,
     comprobar_umbral_de_confianza,
     decidir_codigo,
     decidir_pregunta,
@@ -208,6 +210,93 @@ def test_una_fila_sin_burbujas_es_un_error():
         decidir_pregunta(1, (), UMBRAL)
 
 
+# --- La sugerencia de una pregunta en revisión ------------------------------------------------
+
+
+def test_una_sola_marca_tenue_llega_sugerida():
+    pregunta = decidir_pregunta(1, _fila(50, 0, 0, 0), UMBRAL)
+
+    assert (pregunta.estado, pregunta.opcion, pregunta.opcion_sugerida) == (DUDOSA, None, "A")
+
+
+def test_una_marca_junto_a_un_borron_bajo_el_corte_sugiere_la_marca():
+    pregunta = decidir_pregunta(1, _fila(80, 35, 0, 0), UMBRAL)
+
+    assert (pregunta.estado, pregunta.opcion_sugerida) == (DUDOSA, "A")
+
+
+def test_dos_intenciones_no_sugieren_nada():
+    """RF-03: el sistema nunca elige entre candidatas, ni siquiera como sugerencia."""
+    tenues = decidir_pregunta(1, _fila(55, 52, 0, 0), UMBRAL)
+    claras = decidir_pregunta(1, _fila(90, 85, 0, 0), UMBRAL)
+
+    assert (tenues.estado, tenues.opcion_sugerida) == (DUDOSA, None)
+    assert (claras.estado, claras.opcion_sugerida) == (DOBLE_MARCA, None)
+
+
+def test_un_borron_solo_no_sugiere_nada():
+    pregunta = decidir_pregunta(1, _fila(35, 0, 0, 0), UMBRAL)
+
+    assert (pregunta.estado, pregunta.opcion_sugerida) == (DUDOSA, None)
+
+
+def test_fuera_de_revision_no_hay_sugerencia():
+    una = decidir_pregunta(1, _fila(90, 0, 0, 0), UMBRAL)
+    ninguna = decidir_pregunta(1, _fila(0, 0, 0, 0), UMBRAL)
+
+    assert (una.estado, una.opcion_sugerida) == (UNA_MARCA, None)
+    assert (ninguna.estado, ninguna.opcion_sugerida) == (SIN_MARCA, None)
+
+
+def test_el_corte_lo_decide_quien_llama():
+    fila = _fila(45, 0, 0, 0)
+
+    assert decidir_pregunta(1, fila, UMBRAL, corte_de_intencion=50).opcion_sugerida is None
+    assert decidir_pregunta(1, fila, UMBRAL, corte_de_intencion=40).opcion_sugerida == "A"
+
+
+def test_por_omision_el_corte_es_40():
+    assert CORTE_DE_INTENCION_POR_OMISION == 40
+    assert decidir_pregunta(1, _fila(40, 0, 0, 0), UMBRAL).opcion_sugerida == "A"
+    assert decidir_pregunta(1, _fila(39, 0, 0, 0), UMBRAL).opcion_sugerida is None
+
+
+@pytest.mark.parametrize("corte", [30, 51, 0, 100])
+def test_un_corte_fuera_de_31_a_50_es_un_error(corte):
+    with pytest.raises(ValueError):
+        comprobar_corte_de_intencion(corte)
+    with pytest.raises(ValueError):
+        decidir_pregunta(1, _fila(50, 0, 0, 0), UMBRAL, corte_de_intencion=corte)
+
+
+@pytest.mark.parametrize("corte", [31, 40, 50])
+def test_un_corte_de_31_a_50_se_admite(corte):
+    assert comprobar_corte_de_intencion(corte) == corte
+
+
+def test_una_burbuja_que_no_se_ve_bien_cuenta_como_intencion_con_cualquier_corte():
+    """La «D borrón (50 %)» de la foto inclinada es una marca completa con brillo: la lectura la
+    deja en 50, y 50 llega a cualquier corte permitido."""
+    burbuja = clasificar_burbuja("D", 0.0, DISPERSION_MINIMA_PARA_DUDAR)
+    fila = _fila(0, 0, 0) + (burbuja,)
+
+    for corte in (31, 40, 50):
+        assert decidir_pregunta(1, fila, UMBRAL, corte_de_intencion=corte).opcion_sugerida == "D"
+
+
+def test_la_sugerida_siempre_es_la_unica_intencion_de_la_fila():
+    """Recorre todas las filas de tres burbujas, de 5 en 5: si hay sugerencia, solo esa burbuja
+    llega al corte y la pregunta va a revisión."""
+    for confianzas in itertools.product(range(0, 101, 5), repeat=3):
+        pregunta = decidir_pregunta(1, _fila(*confianzas), UMBRAL)
+        intenciones = [i for i, c in enumerate(confianzas) if c >= 40]
+        if pregunta.opcion_sugerida is not None:
+            assert pregunta.estado in (DUDOSA, DOBLE_MARCA)
+            assert intenciones == ["ABC".index(pregunta.opcion_sugerida)]
+        elif pregunta.estado == DUDOSA:
+            assert len(intenciones) != 1
+
+
 # --- El código del estudiante ----------------------------------------------------------------
 
 
@@ -225,6 +314,57 @@ def test_una_columna_sin_marca_deja_el_codigo_incompleto_y_dice_cual():
     assert codigo.estado == CODIGO_INCOMPLETO
     assert codigo.valor == "T12?45678"
     assert codigo.columnas_por_revisar == (3,)
+
+
+def _columna_con(**confianzas: int) -> tuple[LecturaDeBurbuja, ...]:
+    """Una columna del código con esas confianzas por dígito (`**{"3": 50}`) y 0 en las demás."""
+    return tuple(
+        LecturaDeBurbuja(str(d), 0.0, VACIA, confianzas.get(str(d), 0)) for d in range(10)
+    )
+
+
+def _codigo_con_la_tercera(columna: tuple[LecturaDeBurbuja, ...]):
+    columnas = tuple(_columna(d) for d in (1, 2, 3, 4, 5, 6, 7, 8))
+    return decidir_codigo(columnas[:2] + (columna,) + columnas[3:], UMBRAL)
+
+
+def test_una_columna_con_una_sola_intencion_tenue_se_acepta():
+    codigo = _codigo_con_la_tercera(_columna_con(**{"3": 50}))
+
+    assert (codigo.estado, codigo.valor, codigo.columnas_por_revisar) == (
+        CODIGO_COMPLETO,
+        "T12345678",
+        (),
+    )
+
+
+def test_una_intencion_con_un_borron_al_lado_se_acepta():
+    codigo = _codigo_con_la_tercera(_columna_con(**{"3": 60, "7": 35}))
+
+    assert (codigo.estado, codigo.valor) == (CODIGO_COMPLETO, "T12345678")
+
+
+def test_dos_intenciones_dejan_la_columna_por_revisar():
+    codigo = _codigo_con_la_tercera(_columna_con(**{"3": 55, "7": 52}))
+
+    assert (codigo.estado, codigo.valor, codigo.columnas_por_revisar) == (
+        CODIGO_INCOMPLETO,
+        "T12?45678",
+        (3,),
+    )
+
+
+def test_un_borron_solo_deja_la_columna_por_revisar():
+    codigo = _codigo_con_la_tercera(_columna_con(**{"3": 35}))
+
+    assert (codigo.valor, codigo.columnas_por_revisar) == ("T12?45678", (3,))
+
+
+def test_el_corte_del_codigo_lo_decide_quien_llama():
+    columnas = (_columna_con(**{"3": 45}),) * 8
+
+    assert decidir_codigo(columnas, UMBRAL, corte_de_intencion=50).estado == CODIGO_INCOMPLETO
+    assert decidir_codigo(columnas, UMBRAL, corte_de_intencion=40).valor == "T33333333"
 
 
 def test_el_codigo_del_estudiante_no_sale_en_el_repr():

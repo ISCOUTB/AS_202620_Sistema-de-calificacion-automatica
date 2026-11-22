@@ -39,6 +39,7 @@ from infraestructura.modelo import PENDIENTE_DE_ENCOLAR, ArchivoCargado
 from ingesta import recibir_lote
 from tests.test_durabilidad_recepcion import ColaQueSeCae
 from tests.test_recepcion import JPG, PNG, ColaFalsa
+from tests.lectura_del_worker import lectura_en
 
 EXAMEN = "CALC-2026-01"
 COLA = "procesamiento"
@@ -166,7 +167,7 @@ def test_el_worker_registra_de_que_hoja_es_el_trabajo(
     try:
         publicar(cliente, cola, trabajo)
         with caplog.at_level(logging.INFO, logger="worker"):
-            worker_main.atender_una_vez(cliente, cola, AlmacenEnDisco(tmp_path))
+            worker_main.atender_una_vez(cliente, cola, AlmacenEnDisco(tmp_path), **lectura_en(tmp_path))
     finally:
         cliente.delete(cola, f"{cola}:en-curso", f"trabajo-visto:{trabajo.id}")
 

@@ -33,6 +33,26 @@ ACEPTADO: dict[int, set[tuple[str, str | None]]] = {
 }
 
 
+# Lo que quiso marcar el estudiante en cada pregunta difícil, para juzgar la sugerencia (ADR-0024):
+# donde no quiso nada (en blanco, dos marcas, una marca borrada), ninguna sugerencia es correcta.
+INTENCION: dict[int, str | None] = {
+    31: None,
+    32: None,
+    33: "B",
+    34: "B",
+    35: None,
+    36: "C",
+    37: "C",
+    38: "B",
+    39: "D",
+    40: "A",
+}
+
+
+def _intencion(numero: int) -> str | None:
+    return "ABCD"[(numero - 1) % 4] if numero <= 30 else INTENCION[numero]
+
+
 def _aceptable(pregunta: LecturaDePregunta) -> bool:
     if pregunta.estado == DUDOSA:
         return True
@@ -51,3 +71,18 @@ def test_ninguna_respuesta_se_lee_mal_sin_avisar(foto):
     assert mal_leidas == []
     assert lectura.codigo.valor is not None
     assert all(leido in ("?", esperado) for leido, esperado in zip(lectura.codigo.valor, "T12345678"))
+
+
+@pytest.mark.skipif(not FOTOS, reason="OMR_FOTOS_R05 no apunta a las fotos del prototipo")
+@pytest.mark.parametrize("foto", FOTOS, ids=[foto.stem for foto in FOTOS])
+def test_ninguna_sugerencia_contradice_lo_que_se_marco(foto):
+    """ADR-0024: una pregunta en revisión llega preseleccionada solo con lo que el estudiante quiso
+    marcar. Que llegue confusa (sin sugerencia) está permitido."""
+    lectura = leer_hoja(foto.read_bytes(), 70)
+
+    equivocadas = [
+        (p.numero, p.opcion_sugerida)
+        for p in lectura.preguntas
+        if p.opcion_sugerida is not None and p.opcion_sugerida != _intencion(p.numero)
+    ]
+    assert equivocadas == []

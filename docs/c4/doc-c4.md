@@ -7,7 +7,7 @@ cambios y no se desincronicen en silencio.
 | | |
 |---|---|
 | **Sistema** | QuantIA, sistema de calificación de exámenes de opción múltiple mediante OMR ([ADR-0008](../adr/0008-renombrar-el-sistema-a-quantia.md)) |
-| **Última actualización** | 2026-10-31 |
+| **Última actualización** | 2026-11-06 |
 | **Niveles completos** | Nivel 1 (Contexto), Nivel 2 (Contenedores) y Nivel 3 (Componentes) |
 | **Notación** | C4 model — [c4model.com](https://c4model.com) · Renderizado con Mermaid `flowchart` |
 | **Documentos relacionados** | [`../arc42/arc42-template-ES.md`](../arc42/arc42-template-ES.md) · [`../adr/`](../adr/) · [`../aspectos.md`](../aspectos.md) |
@@ -16,6 +16,7 @@ cambios y no se desincronicen en silencio.
 | **Taller de mensajería** | La relación 5 del Nivel 2 pasa a entregar al menos una vez: el worker toma con `BLMOVE` a una lista en curso y confirma al terminar, con reintentos y lista de fallidos en el mismo Redis ([ADR-0020](../adr/0020-entregar-los-trabajos-al-menos-una-vez-con-reintentos-y-lista-de-fallidos.md)). El mensaje tiene contrato versionado ([`trabajo-v1.schema.json`](../contrato/trabajo-v1.schema.json)), y la relación 7 empieza a existir: el worker abre la imagen |
 | **Consistencia y caché** | La relación 8 del Nivel 2 deja de ocurrir cuando la misma pregunta ya se pidió: la responde una caché de 24 h en la aplicación web ([ADR-0019](../adr/0019-guardar-en-cache-las-propuestas-de-distractores.md)). En el Nivel 3, `GeneradorConCache` dentro de `autoria` (relaciones 11 y 12), y `ingesta` acuña la identidad de cada hoja, distinta de la de su trabajo ([ADR-0018](../adr/0018-dar-a-la-hoja-una-identidad-propia-y-derivar-su-estado-de-la-bitacora.md), relación 3). Tabla de garantías en [`consistencia-y-cache.md`](../evidencia/consistencia-y-cache.md) |
 | **Modelo de amenazas (S13)** | STRIDE sobre los elementos y las relaciones del Nivel 2 ([modelo de amenazas](../evidencia/modelo-de-amenazas.md)). La primera, AM-01, es la relación 1 llenando el almacén, en el disco que comparten los equipos del servidor: la cierra un presupuesto de carga de 250 hojas por lote y 256 MB por día, más un tope de 100 MB por petición, con 413 o 429 y sin que entre ninguna hoja ([ADR-0022](../adr/0022-poner-un-presupuesto-de-carga-delante-del-almacen.md)). En el Nivel 3, `PresupuestoDeCarga` dentro de `ingesta` y el tope del cuerpo en `api` |
+| **Lectura y calificación (A-02, A-03)** | La relación 7 del Nivel 2 queda construida: el worker lee la hoja con OpenCV, busca la clave del examen, la califica y guarda el resultado y los recortes en el almacén, por puertos de `infraestructura` ([ADR-0023](../adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md)). La relación 3 suma la lectura de las notas y la escritura de lo que resuelve el docente (RF-08). En el Nivel 3, `omr`, `calificacion` y `dashboard` pasan a componentes con código, y `calificacion` corre en los dos contenedores. La base de datos sigue prevista: hasta R-06 los resultados son un archivo en el almacén |
 
 ---
 
@@ -217,8 +218,9 @@ flowchart TB
     web -.->|"Lee y escribe datos
     <b>[SQL · PostgreSQL]</b>"| db
 
-    web -->|"Almacena escaneos
-    <b>[Llamada en proceso · puerto AlmacenDeImagenes]</b>"| imagenes
+    web -->|"Almacena escaneos y revisiones,
+    lee notas y recortes
+    <b>[Llamada en proceso · puertos del almacén]</b>"| imagenes
 
     web -->|"Crea trabajos de procesamiento
     <b>[Redis · RPUSH · JSON]</b>"| cola
@@ -229,8 +231,9 @@ flowchart TB
     worker -.->|"Lee y escribe resultados
     <b>[SQL · PostgreSQL]</b>"| db
 
-    worker -.->|"Lee hojas escaneadas
-    <b>[Lectura de imagen (prevista)]</b>"| imagenes
+    worker -->|"Lee la hoja y la clave,
+    guarda el resultado y los recortes
+    <b>[Llamada en proceso · puertos del almacén]</b>"| imagenes
 
     web -->|"Solicita distractores (opcional)
     <b>[HTTPS · JSON · chat compatible con OpenAI]</b>"| llm
@@ -271,11 +274,11 @@ flowchart TB
 |---|---|---|---|---|
 | 1 | Profesor / TA → Aplicación web | Gestiona cursos, bancos de preguntas, exámenes, escaneos y consulta resultados. | HTTPS · frontend Flutter compilado a web · respuestas en JSON; la carga de hojas viaja como `multipart/form-data`. Descrita campo por campo en [`../contrato/openapi.json`](../contrato/openapi.json). | **Construido**. Desde [ADR-0022](../adr/0022-poner-un-presupuesto-de-carga-delante-del-almacen.md), un lote que no cabe en el presupuesto de carga, o una petición de más de 100 MB, se responde con 413 o 429 sin que entre ninguna hoja (amenaza AM-01) |
 | 2 | Aplicación web → Base de datos | Consulta y persiste la información estructurada de QuantIA. | SQL sobre PostgreSQL | **Previsto.** El contenedor se levanta, pero no tiene esquema y ningún componente lo consulta. Depende del ADR que cierre el riesgo R-06. |
-| 3 | Aplicación web → Almacén de imágenes | Almacena las hojas de respuesta escaneadas. | Llamada en proceso al puerto `AlmacenDeImagenes`, no una API de objetos. El adaptador actual escribe los bytes en un volumen local. | **Construido**, con adaptador provisional (riesgo R-06). |
+| 3 | Aplicación web → Almacén de imágenes | Almacena las hojas de respuesta escaneadas. Desde A-03, también lee el registro de resultados y los recortes, lista las claves y escribe lo que resuelve el docente. | Llamada en proceso al puerto `AlmacenDeImagenes`, no una API de objetos. El adaptador actual escribe los bytes en un volumen local. Desde A-03, también por `LectorDeResultados`, `CatalogoDeClaves` y el registro de revisiones, del que la aplicación web es el único escritor: archivos de solo agregado en el mismo volumen ([ADR-0023](../adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md)). | **Construido**, con adaptadores provisionales (riesgo R-06). |
 | 4 | Aplicación web → Cola de trabajos | Crea los trabajos que deben ser procesados de forma asíncrona. | Redis · `RPUSH` sobre una lista · JSON con la forma `{"id": ..., "payload": {...}}`; desde la S11, la aplicación web espera a Redis 2 s para conectar y 2 s para responder, sin reintentos del cliente ([ADR-0016](../adr/0016-acotar-la-espera-de-la-cola-y-hacer-idempotente-al-worker.md)) | **Construido**. Si la cola no responde o responde tarde, la hoja queda `pendiente_de_encolar` en la bitácora (ADR-0006) |
 | 5 | Cola de trabajos → Worker de procesamiento | Entrega los trabajos pendientes para su procesamiento. | Redis · `BLPOP`, bloqueante con timeout de 5 s · el mismo JSON; desde la S11, el worker espera 10 s al socket y procesa cada `id` una sola vez, con `SET trabajo-visto:<id> NX EX` ([ADR-0016](../adr/0016-acotar-la-espera-de-la-cola-y-hacer-idempotente-al-worker.md)). Desde el taller de mensajería, `BLMOVE` a `procesamiento:en-curso` con acuse (`LREM`) al terminar, reintentos en `procesamiento:reintentos` (5, 10 y 20 s) y `procesamiento:fallidos`; mensaje con contrato versionado, [`trabajo-v1.schema.json`](../contrato/trabajo-v1.schema.json) ([ADR-0020](../adr/0020-entregar-los-trabajos-al-menos-una-vez-con-reintentos-y-lista-de-fallidos.md)) | **Construido**. Sin acuse de recibo: un worker que muere después del `BLPOP` pierde el trabajo (R-22). **Desde ADR-0020, al menos una vez**: lo que queda en curso vuelve a la cola al arrancar (R-22 cerrado) |
-| 6 | Worker de procesamiento → Base de datos | Consulta información necesaria y persiste las calificaciones y resultados del procesamiento. | SQL sobre PostgreSQL | **Previsto**, por la misma razón que la relación 2. |
-| 7 | Worker de procesamiento → Almacén de imágenes | Recupera las hojas escaneadas que debe procesar. | Lectura de la imagen desde el worker | **Previsto.** Depende del aspecto A-02; hoy el worker solo registra el trabajo en su log. **Desde ADR-0020, construido en parte**: el worker abre la imagen con `AlmacenDeImagenes.leer` para comprobar que está, y si no se puede leer, reintenta y termina en la lista de fallidos ([ADR-0020](../adr/0020-entregar-los-trabajos-al-menos-una-vez-con-reintentos-y-lista-de-fallidos.md)); procesarla sigue siendo A-02 |
+| 6 | Worker de procesamiento → Base de datos | Consulta información necesaria y persiste las calificaciones y resultados del procesamiento. | SQL sobre PostgreSQL | **Previsto**, por la misma razón que la relación 2. Mientras tanto, las calificaciones van al registro de resultados, en el almacén (relación 7). |
+| 7 | Worker de procesamiento → Almacén de imágenes | Recupera las hojas escaneadas que debe procesar. Desde A-02 y A-03, lee también la clave del examen y guarda el resultado de cada hoja y el recorte de cada pregunta dudosa. | Llamada en proceso: `AlmacenDeImagenes.leer` y `guardar` (los recortes, en PNG), `FuenteDeClaves` (un JSON por examen) y `RegistroDeResultados` (un archivo de solo agregado con `fsync` por línea, del que el worker es el único escritor) | **Construido.** Desde ADR-0020 el worker abre la imagen, y si no se puede leer, reintenta y termina en la lista de fallidos. Desde [ADR-0023](../adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md) la lee y la califica: una hoja que no se puede leer queda `ILEGIBLE` con su motivo, sin reintento |
 | 8 | Aplicación web → Proveedor de LLM *(opcional)* | Solicita distractores diagnósticos para una pregunta durante la autoría. | HTTPS · JSON · `POST /chat/completions` compatible con OpenAI; clave en la variable de entorno `LLM_API_KEY`; 20 s de espera, sin reintentos; a lo sumo 6 solicitudes por minuto y 150 por día ([ADR-0015](../adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md)) | **Construido** ([ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)). Opcional: sin clave o con el proveedor caído, la ruta `/distractores` responde 503; sin cupo en el presupuesto, 429 sin llegar a esta relación. Desde [ADR-0019](../adr/0019-guardar-en-cache-las-propuestas-de-distractores.md), la misma pregunta pedida otra vez en menos de 24 horas sale de la caché de la aplicación web, y tampoco llega a esta relación |
 
 ---
@@ -286,7 +289,7 @@ Estas notas explican **por qué** se han separado los diferentes contenedores y 
 
 **Por qué la aplicación web y el worker están separados.** El procesamiento de las hojas de respuesta puede requerir operaciones de reconocimiento de imágenes y cálculo que no deben bloquear la interacción del profesor. Por esta razón, la aplicación web recibe la solicitud y delega el procesamiento al worker mediante la cola de trabajos, siguiendo la decisión establecida en [ADR-0002](../adr/0002-procesar-calificacion-de-forma-asincrona.md).
 
-**Por qué existe una cola de trabajos.** La cola permite implementar el procesamiento asíncrono. Cuando el profesor carga las hojas escaneadas, la aplicación web crea un trabajo y lo coloca en la cola. El worker toma posteriormente ese trabajo. Hoy el worker solo lo registra en su log; el procesamiento de la hoja está previsto y todavía no está construido. De esta manera, la aplicación web puede continuar atendiendo otras solicitudes mientras se procesa el examen.
+**Por qué existe una cola de trabajos.** La cola permite implementar el procesamiento asíncrono. Cuando el profesor carga las hojas escaneadas, la aplicación web crea un trabajo y lo coloca en la cola. El worker toma posteriormente ese trabajo, lee la hoja y la califica. De esta manera, la aplicación web puede continuar atendiendo otras solicitudes mientras se procesa el examen.
 
 **Por qué el almacén de imágenes está separado de la base de datos.** Las hojas de respuesta escaneadas son archivos binarios y no forman parte de la información estructurada de QuantIA. Por ello, se almacenan en un contenedor de almacenamiento independiente. La base de datos está prevista para conservar la información estructurada y las referencias necesarias para relacionar cada archivo con su examen correspondiente.
 
@@ -294,9 +297,11 @@ Estas notas explican **por qué** se han separado los diferentes contenedores y 
 
 **Por qué el profesor interactúa únicamente con la aplicación web.** El profesor es el único usuario humano de QuantIA (RNF-05). No interactúa directamente con la base de datos, la cola, el worker ni el almacén de imágenes. La aplicación web actúa como punto de entrada para sus operaciones.
 
-**Por qué el worker accede directamente al almacén de imágenes.** El worker necesita recuperar las hojas escaneadas para realizar el procesamiento OMR. La aplicación web se encarga de registrar la carga y almacenar el archivo, mientras que el worker lo recuperará cuando consuma el trabajo correspondiente. Esta relación está prevista y todavía no está construida: hoy el worker solo registra el trabajo en su log.
+**Por qué el worker accede directamente al almacén de imágenes.** El worker necesita recuperar las hojas escaneadas para realizar el procesamiento OMR. La aplicación web se encarga de registrar la carga y almacenar el archivo, mientras que el worker lo recupera cuando consume el trabajo correspondiente. Desde A-02 la relación está construida: el worker lee la hoja, busca la clave del examen en el mismo almacén y deja ahí el resultado y los recortes.
 
-**Por qué el worker escribe en la base de datos.** Una vez terminado el procesamiento, el worker debe persistir los resultados de la calificación y la información necesaria para que la aplicación web pueda presentarlos posteriormente al profesor. Esta relación está prevista y todavía no está construida.
+**Por qué el worker todavía no escribe en la base de datos.** Una vez terminado el procesamiento, el worker debe persistir los resultados de la calificación para que la aplicación web pueda presentarlos al profesor. Como la base de datos sigue sin decidirse (R-06), los resultados van a un registro de solo agregado en el almacén, detrás de un puerto, con el worker como único escritor ([ADR-0023](../adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md)). Cuando exista la base de datos, entra como otro adaptador de ese puerto y esta relación pasa a construida.
+
+**Por qué los registros de resultados y de revisiones no son contenedores.** Son archivos en el volumen del almacén de imágenes, leídos y escritos por llamadas en proceso a puertos de `infraestructura`, igual que la bitácora de recepción: no se despliegan aparte ni tienen protocolo propio. Por eso aparecen en las relaciones 3 y 7 y no como cajas.
 
 **Por qué el proveedor de LLM se conecta con la aplicación web.** El LLM únicamente participa en la fase de autoría, cuando el profesor solicita propuestas de distractores diagnósticos (RF-11). No participa en el flujo de procesamiento de las hojas ni en el cálculo de las calificaciones. Por ello, la interacción se realiza desde la aplicación web.
 
@@ -341,7 +346,7 @@ menos una vez», y eso se anota en su columna de protocolo. La alternativa de un
 
 **Por qué no aparece el escáner.** El escáner es una herramienta externa utilizada para digitalizar la hoja física. Su resultado es un archivo que el profesor carga en QuantIA, por lo que no constituye un contenedor ni un sistema con el que QuantIA mantenga una integración propia.
 
-**Procesamiento asíncrono.** El flujo principal previsto es el siguiente. **Los pasos 1 a 4 están construidos**; del 5 en adelante, hoy el worker solo consume el trabajo y lo registra en su log, y el resto está previsto.
+**Procesamiento asíncrono.** El flujo principal es el siguiente. **Desde A-02 y A-03 están construidos todos los pasos**, con dos salvedades: en el paso 8 los resultados van al registro del almacén y no a la base de datos (R-06), y del paso 9 faltan las estadísticas del Panel.
 
 1. El profesor carga las hojas escaneadas mediante la aplicación web.
 2. La aplicación web almacena las hojas en el almacén de imágenes.
@@ -350,8 +355,8 @@ menos una vez», y eso se anota en su columna de protocolo. La alternativa de un
 5. El worker consume el trabajo y recupera las hojas escaneadas.
 6. El worker realiza el reconocimiento óptico de marcas (OMR).
 7. El worker calcula las calificaciones utilizando la clave registrada.
-8. El worker almacena los resultados en la base de datos.
-9. El profesor consulta las notas, estadísticas y alertas mediante la aplicación web.
+8. El worker almacena los resultados (hoy, en el registro de resultados del almacén).
+9. El profesor consulta las notas y las alertas mediante la aplicación web.
 10. Cuando corresponde, el profesor resuelve manualmente las marcas ambiguas desde la aplicación web.
 
 
@@ -369,22 +374,26 @@ son dominio: `api`, que traduce HTTP a llamadas de módulo, y `worker`, que cons
 nivel se dibuja contra el código de hoy, con la misma convención del Nivel 2: flecha continua para
 lo construido y punteada para lo previsto. La tabla de elementos dice el estado de cada componente.
 
-Hoy tienen código el aspecto A-01, en `ingesta` e `infraestructura`, y el A-06, en `autoria`, que
-desde el segundo corte incluye el presupuesto del proveedor de LLM (ADR-0015). `omr`,
-`calificacion`, `dashboard` e `identidad` existen como paquetes con su docstring
-(`Responsabilidad:`, `Requisitos:` e `Importa:`) y sin implementación.
+Hoy tienen código el aspecto A-01, en `ingesta` e `infraestructura`; el A-06, en `autoria`, que
+desde el segundo corte incluye el presupuesto del proveedor de LLM (ADR-0015); y desde el 6-nov,
+A-02 y A-03, en `omr`, `calificacion` y `dashboard`
+([ADR-0023](../adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md)).
+`identidad` existe como paquete con su docstring (`Responsabilidad:`, `Requisitos:` e
+`Importa:`) y sin implementación.
 
 ### Reparto de módulos por contenedor
 
 | Contenedor | Componentes | Por qué |
 |---|---|---|
-| Aplicación web (servicio `api`) | `api`, `ingesta`, `autoria`, `dashboard`, `identidad`, `infraestructura` | Atienden lo que el profesor pide y espera ver responder: la carga de hojas (RF-01), el banco y la habilitación (RF-06, RF-07), los resultados (RF-05) y el acceso (RF-09). |
-| Worker de procesamiento (servicio `worker`) | `worker`, `omr`, `calificacion`, `identidad`, `infraestructura` | ADR-0002 decide que un pool de workers ejecuta `omr → calificacion` fuera de la petición HTTP (RF-02, RF-03, RF-04, RF-08). |
+| Aplicación web (servicio `api`) | `api`, `ingesta`, `autoria`, `dashboard`, `calificacion`, `identidad`, `infraestructura` | Atienden lo que el profesor pide y espera ver responder: la carga de hojas (RF-01), el banco y la habilitación (RF-06, RF-07), los resultados (RF-05), la revisión manual (RF-08) y el acceso (RF-09). |
+| Worker de procesamiento (servicio `worker`) | `worker`, `omr`, `calificacion`, `identidad`, `infraestructura` | ADR-0002 decide que un pool de workers ejecuta `omr → calificacion` fuera de la petición HTTP (RF-02, RF-03, RF-04). |
 
-`identidad` e `infraestructura` aparecen en los dos contenedores porque los dos procesos corren la
-misma imagen y el mismo código de `backend/`: no están duplicados. `infraestructura` es la que los
-dos usan hoy. `identidad` aparece en el worker porque `omr` y `calificacion` la declaran en su línea
-`Importa:` ([`omr/__init__.py`](../../backend/omr/__init__.py),
+`calificacion`, `identidad` e `infraestructura` aparecen en los dos contenedores porque los dos
+procesos corren la misma imagen y el mismo código de `backend/`: no están duplicados.
+`calificacion` califica en el worker y recalcula en la aplicación web cuando el docente resuelve
+una pregunta (RF-08). `infraestructura` es la que los dos usan para el almacén y los registros.
+`identidad` aparece en el worker porque `omr` y `calificacion` la declaran en su línea `Importa:`
+([`omr/__init__.py`](../../backend/omr/__init__.py),
 [`calificacion/__init__.py`](../../backend/calificacion/__init__.py)), aunque todavía no haya código
 que la llame.
 
@@ -412,15 +421,22 @@ flowchart TB
         autoria["<b>autoria</b>
         [Componente]
 
-        Distractores diagnósticos y presupuesto
-        del proveedor (construidos); banco, clave
-        y habilitación (previstos)."]
+        Distractores, presupuesto y lista
+        de exámenes con clave (construidos);
+        banco y registro de la clave (previstos)."]
 
         dashboard["<b>dashboard</b>
-        [Componente · previsto]
+        [Componente]
 
-        Resultados, agregaciones
-        y alertas de revisión."]
+        Notas por hoja y preguntas en
+        revisión (construidas); agregaciones
+        por pregunta y curso (previstas)."]
+
+        calificacion_web["<b>calificacion</b>
+        [Componente]
+
+        Resuelve las preguntas en revisión
+        y recalcula la nota (RF-08)."]
 
         identidad["<b>identidad</b>
         [Componente · previsto]
@@ -431,8 +447,9 @@ flowchart TB
         infraestructura["<b>infraestructura</b>
         [Componente de soporte]
 
-        Modelo compartido, puertos
-        de almacén y bitácora, cola."]
+        Modelo compartido, puertos del
+        almacén, la bitácora, las claves
+        y los registros, y la cola."]
     end
 
     imagenes[("Almacén de imágenes
@@ -446,23 +463,33 @@ flowchart TB
 
     profesor -->|"Sube hojas
     <b>[HTTPS · multipart/form-data]</b>"| api
-    profesor -.->|"Registra el banco, consulta resultados
+    profesor -->|"Consulta notas, resuelve revisiones
+    <b>[HTTPS · JSON]</b>"| api
+    profesor -.->|"Registra el banco
     <b>[HTTPS · JSON]</b>"| api
 
     api -->|"recibir_lote()"| ingesta
-    api -->|"Construye almacén, bitácora
-    y cliente de cola"| infraestructura
+    api -->|"Construye almacén, bitácora,
+    registros y cliente de cola"| infraestructura
     api -->|"proponer_distractores();
-    estado del presupuesto"| autoria
-    api -.->|"Rutas previstas"| dashboard
+    estado del presupuesto;
+    examenes_con_clave()"| autoria
+    api -->|"resultados_del_examen();
+    revision_del_examen()"| dashboard
+    api -->|"resolver_preguntas()"| calificacion_web
 
     ingesta -->|"Puertos AlmacenDeImagenes
     y BitacoraDeRecepcion; publicar()"| infraestructura
+    dashboard -->|"nota_vigente()"| calificacion_web
+    dashboard -->|"LectorDeResultados
+    y LectorDeRevisiones"| infraestructura
+    calificacion_web -->|"Registro de revisiones"| infraestructura
+    autoria -->|"CatalogoDeClaves"| infraestructura
     ingesta -.->|"Verifica acceso"| identidad
     autoria -.->|"Verifica acceso"| identidad
     dashboard -.->|"Verifica acceso"| identidad
 
-    infraestructura -->|"<b>[Escritura en volumen]</b>"| imagenes
+    infraestructura -->|"<b>[Lectura y escritura en volumen]</b>"| imagenes
     infraestructura -->|"<b>[Redis · RPUSH · JSON]</b>"| cola
     infraestructura -.->|"<b>[SQL]</b>"| db
 
@@ -479,8 +506,8 @@ flowchart TB
     classDef external fill:#999999,stroke:#6B6B6B,color:#ffffff,stroke-dasharray: 5 5
 
     class profesor person
-    class api,ingesta,autoria component
-    class dashboard,identidad previsto
+    class api,ingesta,autoria,dashboard,calificacion_web component
+    class identidad previsto
     class infraestructura soporte
     class imagenes,cola,db,llm external
 ```
@@ -494,20 +521,21 @@ flowchart TB
         ciclo["<b>worker</b>
         [Componente]
 
-        Ciclo desencolar()
-        y registro en log."]
+        Ciclo de la cola con acuse;
+        leer_y_calificar() por hoja."]
 
         omr["<b>omr</b>
-        [Componente · previsto]
+        [Componente]
 
-        Detección de marcas y
-        nivel de confianza."]
+        Lee la hoja: cada burbuja con su
+        confianza y cada pregunta con su
+        estado; recorta las dudosas."]
 
         calificacion["<b>calificacion</b>
-        [Componente · previsto]
+        [Componente]
 
         Compara contra la clave
-        habilitada y calcula notas."]
+        habilitada y calcula la nota."]
 
         identidad2["<b>identidad</b>
         [Componente · previsto]
@@ -518,8 +546,9 @@ flowchart TB
         infraestructura2["<b>infraestructura</b>
         [Componente de soporte]
 
-        Cliente de cola y,
-        a futuro, persistencia."]
+        Cliente de cola y puertos del
+        almacén, las claves y el
+        registro de resultados."]
     end
 
     cola2[("Cola de trabajos
@@ -529,15 +558,15 @@ flowchart TB
     db2[("Base de datos
     [Contenedor]")]
 
-    ciclo -->|"desencolar()"| infraestructura2
-    infraestructura2 -->|"<b>[Redis · BLPOP (timeout 5 s) · JSON]</b>"| cola2
-    ciclo -.->|"Entrega la hoja"| omr
-    omr -.->|"Respuestas y confianza"| calificacion
+    ciclo -->|"tomar(), confirmar()"| infraestructura2
+    infraestructura2 -->|"<b>[Redis · BLMOVE · JSON]</b>"| cola2
+    ciclo -->|"leer_hoja_con_recortes()"| omr
+    ciclo -->|"calificar(lectura, clave)"| calificacion
+    ciclo -->|"Abre la hoja, busca la clave,
+    guarda el resultado y los recortes"| infraestructura2
     omr -.->|"Verifica acceso"| identidad2
     calificacion -.->|"Verifica acceso"| identidad2
-    omr -.->|"Lee la hoja"| infraestructura2
-    calificacion -.->|"Persiste notas"| infraestructura2
-    infraestructura2 -.->|"<b>[Lectura en volumen]</b>"| imagenes2
+    infraestructura2 -->|"<b>[Lectura y escritura en volumen]</b>"| imagenes2
     infraestructura2 -.->|"<b>[SQL]</b>"| db2
 
     classDef component fill:#1168BD,stroke:#3379B7,color:#ffffff
@@ -545,8 +574,8 @@ flowchart TB
     classDef soporte fill:#5B3A8E,stroke:#42295F,color:#ffffff
     classDef external fill:#999999,stroke:#6B6B6B,color:#ffffff,stroke-dasharray: 5 5
 
-    class ciclo component
-    class omr,calificacion,identidad2 previsto
+    class ciclo,omr,calificacion component
+    class identidad2 previsto
     class infraestructura2 soporte
     class cola2,imagenes2,db2 external
 ```
@@ -567,15 +596,15 @@ flowchart TB
 
 | Componente | Contenedor | Responsabilidad | Requisitos | Estado |
 |---|---|---|---|---|
-| `api` | Web | Entrada HTTP: `GET /health`, `POST /examenes/{examen_id}/hojas`, `POST /distractores` y `GET /metricas`. Construye por petición el almacén, la bitácora y el cliente de cola; el presupuesto del proveedor lo crea una sola vez, al arrancar, porque tiene que recordar de una solicitud a la siguiente (ADR-0015). Publica el contrato ([`openapi.json`](../contrato/openapi.json), 1.5.0). La caché de propuestas también la crea una sola vez, por la misma razón (ADR-0019), y el presupuesto de carga (ADR-0022). Ningún cuerpo de petición pasa de 100 MB: lo corta un middleware por dentro de CORS (ADR-0022). | RF-01, RF-11 | Construido: [`backend/api/main.py`](../../backend/api/main.py) |
+| `api` | Web | Entrada HTTP: `GET /health`, `POST /examenes/{examen_id}/hojas`, `POST /distractores` y `GET /metricas`; desde A-02 y A-03, `GET /examenes`, `GET /examenes/{examen_id}/resultados`, `GET /examenes/{examen_id}/revision`, `POST /examenes/{examen_id}/hojas/{hoja_id}/revision` y el recorte de cada pregunta en revisión. Construye por petición el almacén, la bitácora, los registros y el cliente de cola; el presupuesto del proveedor lo crea una sola vez, al arrancar, porque tiene que recordar de una solicitud a la siguiente (ADR-0015). Publica el contrato ([`openapi.json`](../contrato/openapi.json), 1.8.0, nueve rutas). La caché de propuestas también la crea una sola vez, por la misma razón (ADR-0019), y el presupuesto de carga (ADR-0022). Ningún cuerpo de petición pasa de 100 MB: lo corta un middleware por dentro de CORS (ADR-0022). | RF-01, RF-05, RF-08, RF-11 | Construido: [`backend/api/main.py`](../../backend/api/main.py) |
 | `ingesta` | Web | Valida extensión y firma de bytes, almacena, acuña el trabajo, lo registra en la bitácora y lo publica ([ADR-0006](../adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md)). Acuña también la identidad de cada hoja, `hoja_id`, distinta de la de su trabajo ([ADR-0018](../adr/0018-dar-a-la-hoja-una-identidad-propia-y-derivar-su-estado-de-la-bitacora.md)). Antes de leer la primera hoja, el lote entero tiene que caber en el presupuesto de carga (`PresupuestoDeCarga`, [ADR-0022](../adr/0022-poner-un-presupuesto-de-carga-delante-del-almacen.md)). | RF-01 | Construido: [`backend/ingesta/recepcion.py`](../../backend/ingesta/recepcion.py) |
-| `autoria` | Web | Banco de preguntas y clave, habilitación explícita del examen y, opcionalmente, distractores diagnósticos con apoyo de un LLM ([ADR-0004](../adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md), [ADR-0005](../adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md), [ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)). | RF-06, RF-07, RF-11 | Construido en parte: los distractores diagnósticos (A-06) en [`backend/autoria/distractores.py`](../../backend/autoria/distractores.py) y [`proveedor_llm.py`](../../backend/autoria/proveedor_llm.py), y el presupuesto del proveedor (segundo corte) en [`presupuesto.py`](../../backend/autoria/presupuesto.py); banco, clave y habilitación previstos (A-04). La caché de propuestas, en [`cache.py`](../../backend/autoria/cache.py) (ADR-0019) |
-| `dashboard` | Web | Resultados y agregaciones por curso, examen y pregunta; alertas de revisión. | RF-05 | Previsto (A-03) |
+| `autoria` | Web | Banco de preguntas y clave, habilitación explícita del examen y, opcionalmente, distractores diagnósticos con apoyo de un LLM ([ADR-0004](../adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md), [ADR-0005](../adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md), [ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)). | RF-06, RF-07, RF-11 | Construido en parte: los distractores diagnósticos (A-06) en [`backend/autoria/distractores.py`](../../backend/autoria/distractores.py) y [`proveedor_llm.py`](../../backend/autoria/proveedor_llm.py), y el presupuesto del proveedor (segundo corte) en [`presupuesto.py`](../../backend/autoria/presupuesto.py); banco, clave y habilitación previstos (A-04). La caché de propuestas, en [`cache.py`](../../backend/autoria/cache.py) (ADR-0019). Desde A-03, la lista de exámenes que tienen clave, sin las respuestas, en [`examenes.py`](../../backend/autoria/examenes.py); la clave existe como dato y se escribe a mano |
+| `dashboard` | Web | Resultados y agregaciones por curso, examen y pregunta; alertas de revisión. | RF-05, RF-08 | Construido en parte (A-03): la nota vigente de cada hoja, sin el código del estudiante, en [`resultados.py`](../../backend/dashboard/resultados.py), y las preguntas en revisión con su recorte, sin la respuesta correcta, en [`revision.py`](../../backend/dashboard/revision.py). Las agregaciones por curso y por pregunta, previstas |
 | `identidad` | Web y Worker | Autenticación, roles y aislamiento de datos por curso. | RF-09, RF-10 | Previsto (A-05) |
-| `worker` | Worker | Consume la cola en un ciclo y registra cada trabajo en su log; es el extremo del recorrido de A-01. Desde ADR-0020 consume con acuse, reintentos y lista de fallidos (`infraestructura/consumo.py`), y abre la imagen de cada hoja. | RF-01 | Construido: [`backend/worker/main.py`](../../backend/worker/main.py) |
-| `omr` | Worker | Detección de marcas, nivel de confianza y clasificación de ambigüedad. | RF-02, RF-03 | Previsto (A-02) |
-| `calificacion` | Worker | Comparación contra la clave habilitada y cálculo de notas; recálculo tras revisión manual. | RF-04, RF-08 | Previsto (A-03) |
-| `infraestructura` | Web y Worker | Modelo de datos compartido (`modelo.py`), puertos y adaptadores provisionales del almacén y de la bitácora, y adaptador de la cola sobre Redis. | Transversal | Construido en parte: sin persistencia estructurada (R-06) |
+| `worker` | Worker | Consume la cola en un ciclo y registra cada trabajo en su log; es el extremo del recorrido de A-01. Desde ADR-0020 consume con acuse, reintentos y lista de fallidos (`infraestructura/consumo.py`), y abre la imagen de cada hoja. Desde A-02 y A-03, `leer_y_calificar`: lee, califica y guarda el resultado y los recortes. | RF-01, RF-02, RF-04 | Construido: [`backend/worker/main.py`](../../backend/worker/main.py) |
+| `omr` | Worker | Detección de marcas, nivel de confianza y clasificación de ambigüedad. | RF-02, RF-03 | Construido (A-02): [`backend/omr/`](../../backend/omr/), con OpenCV solo en `vision.py` y la lectura como función pura en `lectura.py` |
+| `calificacion` | Web y Worker | Comparación contra la clave habilitada y cálculo de notas; recálculo tras revisión manual. | RF-04, RF-08 | Construido (A-03): [`nota.py`](../../backend/calificacion/nota.py) califica en el worker; [`revision.py`](../../backend/calificacion/revision.py) resuelve y recalcula en la aplicación web |
+| `infraestructura` | Web y Worker | Modelo de datos compartido (`modelo.py`), puertos y adaptadores provisionales del almacén, de la bitácora, de las claves y de los registros de resultados y de revisiones, y adaptador de la cola sobre Redis. | Transversal | Construido en parte: sin persistencia estructurada (R-06) |
 
 ### Relaciones
 
@@ -586,13 +615,16 @@ flowchart TB
 | 3 | `ingesta` → `infraestructura` | Guarda la imagen por el puerto `AlmacenDeImagenes`, la registra por `BitacoraDeRecepcion`, acuña y publica el trabajo; la entrada de bitácora y el trabajo llevan el `hoja_id` de la hoja ([ADR-0018](../adr/0018-dar-a-la-hoja-una-identidad-propia-y-derivar-su-estado-de-la-bitacora.md)) | Llamada en proceso | Construido |
 | 4 | `infraestructura` → Almacén de imágenes | Escribe el archivo y la bitácora | Escritura en el volumen `almacen_imagenes` | Construido, con adaptador provisional (R-06) |
 | 5 | `infraestructura` → Cola de trabajos | Publica el trabajo | Redis · `RPUSH` · JSON; 2 s de espera y sin reintentos ([ADR-0016](../adr/0016-acotar-la-espera-de-la-cola-y-hacer-idempotente-al-worker.md)) | Construido |
-| 6 | `worker` → `infraestructura` → Cola de trabajos | Retira el trabajo más antiguo y comprueba que sea la primera entrega | Redis · `BLPOP` (timeout 5 s) · JSON; `SET NX EX` por `id` ([ADR-0016](../adr/0016-acotar-la-espera-de-la-cola-y-hacer-idempotente-al-worker.md)); desde ADR-0020, `BLMOVE` a la lista en curso, `LREM` como acuse, `ZADD` para reintentar y `RPUSH` a fallidos, cada movimiento atómico, y la marca después de procesar | Construido |
-| 7 | `worker` → `omr` → `calificacion` | Procesa la hoja y calcula la nota | Llamada en proceso | Previsto (A-02, A-03) |
+| 6 | `worker` → `infraestructura` → Cola de trabajos | Retira el trabajo más antiguo y comprueba que sea la primera entrega | Redis · `BLPOP` (timeout 5 s) · JSON; `SET NX EX` por `id` ([ADR-0016](../adr/0016-acotar-la-espera-de-la-cola-y-hacer-idempotente-al-worker.md)); desde ADR-0020, `BLMOVE` a la lista en curso, `LREM` como acuse, `ZADD` para reintentar y `RPUSH` a fallidos, cada movimiento atómico, y la marca después de procesar; desde [ADR-0023](../adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md), lo que vuelve de la lista en curso al arrancar suma un intento (R-36) | Construido |
+| 7 | `worker` → `omr` y `calificacion` | Lee la hoja (`leer_hoja_con_recortes`) y, con la clave que buscó, calcula la nota (`calificar`). `calificacion` no importa `omr`: recibe la lectura como tipo de `modelo.py` | Llamada en proceso | Construido (A-02, A-03, [ADR-0023](../adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md)) |
 | 8 | `ingesta`, `autoria`, `dashboard`, `omr`, `calificacion` → `identidad` | Verifican acceso y curso | Llamada en proceso | Previsto (A-05) |
 | 9 | `infraestructura` → Base de datos | Persistencia estructurada | SQL sobre PostgreSQL | Previsto: depende del ADR que cierre R-06 |
 | 10 | `autoria` → Proveedor de LLM | Pide distractores diagnósticos a pedido del profesor, por el adaptador `GeneradorCompatibleConOpenAI` | HTTPS · JSON, compatible con OpenAI | Construido y opcional ([ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)) |
 | 11 | `api` → `autoria` | `proponer_distractores()`, con el generador que `api` construye por petición, envuelto desde el segundo corte en `GeneradorConPresupuesto`, y desde [ADR-0019](../adr/0019-guardar-en-cache-las-propuestas-de-distractores.md) por fuera de él en `GeneradorConCache`, que responde la pregunta repetida sin llegar al presupuesto | Llamada en proceso | Construido |
-| 12 | `api` → `autoria` | `PresupuestoDeSolicitudes.estado()`, que `GET /metricas` publica; y, si no hay cupo, `PresupuestoAgotado`, que `api` traduce a 429 con `Retry-After` | Llamada en proceso | Construido en el segundo corte ([ADR-0015](../adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md)); desde ADR-0019, también `CacheDePropuestas.estado()` |
+| 12 | `api` → `autoria` | `PresupuestoDeSolicitudes.estado()`, que `GET /metricas` publica; y, si no hay cupo, `PresupuestoAgotado`, que `api` traduce a 429 con `Retry-After` | Llamada en proceso | Construido en el segundo corte ([ADR-0015](../adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md)); desde ADR-0019, también `CacheDePropuestas.estado()`; desde A-03, `examenes_con_clave()` para `GET /examenes` |
+| 13 | `worker` → `infraestructura` → Almacén de imágenes | Busca la clave del examen y guarda el resultado de la hoja y el recorte de cada pregunta dudosa | Llamada en proceso a `FuenteDeClaves`, `RegistroDeResultados` y `AlmacenDeImagenes`; lectura y escritura en el volumen | Construido (A-02, A-03) |
+| 14 | `api` → `dashboard` → `calificacion` | Arma las notas por hoja y las preguntas en revisión, con la nota vigente que calcula `calificacion` | Llamada en proceso; `dashboard` lee por `LectorDeResultados` y `LectorDeRevisiones` | Construido (A-03) |
+| 15 | `api` → `calificacion` → `infraestructura` | `resolver_preguntas()`: comprueba que cada pregunta siga por revisar, recalcula y registra cada resolución con el nombre y la hora | Llamada en proceso; escribe por el registro de revisiones, del que la aplicación web es el único escritor | Construido (RF-08) |
 
 ### Notas de modelado
 
@@ -616,12 +648,19 @@ recorre; esa es la violación V-1 de la
 [sección 8.3 del arc42](../arc42/arc42-template-ES.md#83-propiedad-de-datos).
 
 **Por qué `herramientas` no aparece.** No es parte del sistema en operación: son las herramientas
-versionadas que miden EC-07 y EC-08 y exportan el contrato, y su docstring declara que nada de `backend/`
+versionadas que miden EC-01 a EC-04, EC-07 y EC-08, generan las hojas sintéticas y exportan el contrato, y su docstring declara que nada de `backend/`
 importa desde ellas.
 
-**Qué no decide este nivel.** Cómo se recalculará una nota tras la revisión manual (RF-08), cuando
-`dashboard` (en la aplicación web) y `calificacion` (en el worker) tengan código: como un trabajo
-nuevo en la cola o como una llamada directa. Se decide al construir A-03.
+**Cómo se recalcula una nota tras la revisión manual (RF-08).** Este nivel lo dejaba abierto: como
+un trabajo nuevo en la cola o como una llamada directa. Se decidió al construir A-03, y es una
+llamada directa desde la aplicación web (relación 15). Recalcular no vuelve a leer la imagen: aplica
+la opción que eligió el docente a la calificación ya guardada, que lleva la respuesta de la clave en
+cada pregunta, así que no necesita al worker ni a OpenCV, y el docente ve la nota nueva en la misma
+respuesta. Por eso `calificacion` aparece en los dos contenedores.
+
+**Por qué el recorte lo hace el worker y no la aplicación web.** El recorte sale de la hoja ya
+enderezada, que solo existe mientras el worker la lee. Recortar después pediría volver a leer la
+imagen en la aplicación web, con OpenCV y su memoria en el proceso que atiende al docente.
 
 ## Nivel 4 · Código
 

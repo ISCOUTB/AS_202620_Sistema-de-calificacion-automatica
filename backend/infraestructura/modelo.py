@@ -163,8 +163,6 @@ class EntradaDeBitacora:
     referencia: str
     nombre_archivo: str
     hoja_id: str
-<<<<<<< HEAD
-=======
 
 
 # ---------------------------------------------------------------------------------------------
@@ -252,13 +250,18 @@ class LecturaDeBurbuja:
 @dataclass(frozen=True)
 class LecturaDePregunta:
     """Una fila de respuestas ya decidida. `opcion` solo tiene valor con `UNA_MARCA`, y
-    `confianza` es la de la decisión que se tomó (la regla está en `omr.decision`)."""
+    `confianza` es la de la decisión que se tomó (la regla está en `omr.decision`).
+
+    `opcion_sugerida` solo existe en una fila que va a revisión (`DUDOSA` o `DOBLE_MARCA`) con una
+    sola burbuja que llega al corte de intención (ADR-0024): la pantalla la muestra elegida, pero
+    no es la respuesta hasta que el profesor guarda. Las lecturas anteriores no la traen."""
 
     numero: int
     estado: str
     opcion: str | None
     confianza: int
     burbujas: tuple[LecturaDeBurbuja, ...]
+    opcion_sugerida: str | None = None
 
 
 @dataclass(frozen=True)
@@ -279,14 +282,16 @@ class LecturaDeHoja:
     """Lo que `omr` leyó en una hoja, sin juzgar todavía si está bien o mal.
 
     Trae todas las filas que imprime el formato, en orden, aunque el examen tenga menos
-    preguntas. Guarda el umbral con el que se decidió para que la lectura se pueda reproducir
-    y comparar cuando el umbral se calibre (R-04)."""
+    preguntas. Guarda el umbral y el corte de intención (ADR-0024) con los que se decidió, para
+    que la lectura se pueda reproducir y comparar cuando se calibren (R-04). Una lectura anterior
+    al corte no lo trae."""
 
     version_del_formato: str
     codigo: LecturaDelCodigo
     preguntas: tuple[LecturaDePregunta, ...]
     umbral_de_confianza: int
     duracion_ms: float
+    corte_de_intencion: int = 40
 
 
 # ---------------------------------------------------------------------------------------------
@@ -343,4 +348,3 @@ class ResolucionDelProfesor:
     opcion: str | None
     por: str
     en: datetime
->>>>>>> 32a2567 (feat(omr): leer la hoja en posiciones fijas y medir cada burbuja contra su papel (A-02))

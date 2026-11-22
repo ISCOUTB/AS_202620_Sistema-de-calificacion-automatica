@@ -141,12 +141,12 @@ Future<ResultadoDistractores> proponerDistractores(
     ).timeout(const Duration(seconds: 25));
   } on TimeoutException {
     throw const ExcepcionDistractores(
-      'La API no respondió a tiempo. Puede volver a pedirlo o escribir los distractores a mano.',
+      'El servidor no respondió a tiempo. Puede volver a pedirlo o escribir los distractores a mano.',
       proveedorNoDisponible: true,
     );
   } catch (_) {
     throw const ExcepcionDistractores(
-      'No se pudo contactar con la API. Revise su conexión y vuelva a intentarlo.',
+      'No se pudo contactar con el servidor. Revise su conexión y vuelva a intentarlo.',
     );
   }
 
@@ -157,7 +157,7 @@ Future<ResultadoDistractores> proponerDistractores(
         return ResultadoDistractores.desdeJson(jsonDecode(cuerpo) as Map<String, dynamic>);
       } catch (_) {
         throw const ExcepcionDistractores(
-          'La API respondió, pero las propuestas no se pudieron leer. Vuelva a pedirlas.',
+          'El servidor respondió, pero las propuestas no se pudieron leer. Vuelva a pedirlas.',
         );
       }
     case 503:
@@ -185,7 +185,7 @@ Future<ResultadoDistractores> proponerDistractores(
         'largo permitido.',
       );
     default:
-      throw ExcepcionDistractores('La API respondió ${respuesta.statusCode}.');
+      throw ExcepcionDistractores('El servidor respondió ${respuesta.statusCode}.');
   }
 }
 

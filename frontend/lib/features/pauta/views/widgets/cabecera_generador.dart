@@ -41,18 +41,12 @@ class CabeceraGenerador extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: QEspacios.xs),
-                Text(
-                  'Propone opciones incorrectas ligadas a un error de procedimiento. Usted '
-                  'decide cuáles usar.',
-                  style: textos.bodyMedium?.copyWith(color: QColores.textoSobreNavySuave),
-                ),
-                const SizedBox(height: QEspacios.sm),
                 // A-06 es opcional: el sistema califica igual sin esta ayuda, y el docente
                 // debe saberlo antes de depender de ella.
                 Text(
-                  'Es opcional: el examen funciona igual si usted escribe los distractores a '
-                  'mano.',
-                  style: textos.bodySmall?.copyWith(color: QColores.textoSobreNavySuave),
+                  'Propone opciones incorrectas ligadas a un error de procedimiento. Es opcional, '
+                  'y usted decide cuáles usar.',
+                  style: textos.bodyMedium?.copyWith(color: QColores.textoSobreNavySuave),
                 ),
               ],
             ),

@@ -3,15 +3,18 @@ import 'package:flutter/material.dart';
 import '../../../../common/tema/tokens.dart';
 import '../../../../common/widgets/q_chip_estado.dart';
 import '../../../../common/widgets/q_tarjeta.dart';
+import '../../data/preparacion_de_hojas.dart';
 import '../../data/servicio_carga.dart';
 import 'formato_carga.dart';
 
-/// Zona de selección: el botón que abre el diálogo de archivos, el resumen del lote y la lista de
-/// lo elegido, con la opción de quitar un archivo antes de subirlo.
+/// Zona de selección: el botón que abre el diálogo de archivos, en el celular también el de la
+/// cámara, el resumen del lote y la lista de lo elegido, con la opción de quitar un archivo antes
+/// de subirlo.
 ///
-/// Frente al diseño de Stitch faltan dos cosas a propósito: el botón «Escanear con cámara» y la
-/// invitación a arrastrar archivos. Ninguna de las dos existe en esta versión (el selector es
-/// `file_picker`), y una zona que invita a soltar archivos que luego no recibe se siente rota.
+/// Frente al diseño de Stitch falta a propósito la invitación a arrastrar archivos: no existe en
+/// esta versión (el selector es `file_picker`), y una zona que invita a soltar archivos que luego
+/// no recibe se siente rota. El botón de la cámara del diseño sí está, como «Tomar foto», y solo
+/// aparece en pantallas táctiles: en el computador abriría el mismo diálogo de archivos.
 class ZonaSeleccion extends StatelessWidget {
   const ZonaSeleccion({
     super.key,
@@ -21,6 +24,7 @@ class ZonaSeleccion extends StatelessWidget {
     required this.alSeleccionar,
     required this.alQuitar,
     required this.alQuitarTodos,
+    this.alTomarFoto,
   });
 
   final List<ArchivoSeleccionado> archivos;
@@ -35,14 +39,26 @@ class ZonaSeleccion extends StatelessWidget {
   final ValueChanged<int> alQuitar;
   final VoidCallback alQuitarTodos;
 
+  /// Abre la cámara para una foto. Nulo fuera de una pantalla táctil, y entonces no hay botón.
+  final VoidCallback? alTomarFoto;
+
   @override
   Widget build(BuildContext context) {
     final textos = Theme.of(context).textTheme;
-    final boton = OutlinedButton.icon(
-      onPressed: habilitada ? alSeleccionar : null,
-      icon: const Icon(Icons.folder_open_outlined),
-      label: const Text('Seleccionar archivos'),
-    );
+    final botones = [
+      // La cámara va primero: en el celular, lo normal es tomar la foto en el momento.
+      if (alTomarFoto != null)
+        OutlinedButton.icon(
+          onPressed: habilitada ? alTomarFoto : null,
+          icon: const Icon(Icons.photo_camera_outlined),
+          label: const Text('Tomar foto'),
+        ),
+      OutlinedButton.icon(
+        onPressed: habilitada ? alSeleccionar : null,
+        icon: const Icon(Icons.folder_open_outlined),
+        label: const Text('Seleccionar archivos'),
+      ),
+    ];
 
     return QTarjeta(
       padding: EdgeInsets.all(compacta ? QEspacios.md : QEspacios.lg),
@@ -76,19 +92,29 @@ class ZonaSeleccion extends StatelessWidget {
                 ),
                 const SizedBox(height: QEspacios.sm + 4),
                 Text(
-                  'Seleccione las hojas escaneadas',
+                  'Seleccione las fotos o los escaneos',
                   style: textos.titleLarge,
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: QEspacios.xs),
                 Text(
-                  'JPG, PNG o PDF. Puede elegir varios archivos a la vez y volver al selector '
-                  'para sumar más.',
+                  'Puede elegir varias a la vez.',
                   style: textos.bodyMedium?.copyWith(color: QColores.textoSuave),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: QEspacios.md),
-                if (compacta) SizedBox(width: double.infinity, child: boton) else boton,
+                if (compacta)
+                  for (final (i, boton) in botones.indexed) ...[
+                    if (i > 0) const SizedBox(height: QEspacios.sm),
+                    SizedBox(width: double.infinity, child: boton),
+                  ]
+                else
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: QEspacios.sm,
+                    runSpacing: QEspacios.sm,
+                    children: botones,
+                  ),
               ],
             ),
           ),
@@ -202,6 +228,11 @@ class _ListaArchivos extends StatelessWidget {
                           describirTamano(archivos[i].contenido.length),
                           style: textos.bodySmall,
                         ),
+                        if (tienePocaResolucion(archivos[i]))
+                          Text(
+                            'Poca resolución: puede quedar ilegible',
+                            style: textos.bodySmall?.copyWith(color: QColores.advertenciaTexto),
+                          ),
                       ],
                     ),
                   ),

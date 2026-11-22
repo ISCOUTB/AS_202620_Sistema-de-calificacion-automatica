@@ -30,17 +30,38 @@ que es lo que era entonces.
 cuando el ADR de persistencia definitiva elija un medio, cambia el adaptador y no cambian ni
 `ingesta` ni el modelo. `BitacoraEnDisco` es un adaptador honesto para un solo proceso, no una
 bitácora distribuida.
+
+**Quien solo la lee lo hace por otro puerto**, `LectorDeRecepciones`, como el registro de
+resultados: `dashboard` necesita saber con qué nombre y a qué hora llegó cada hoja para que el
+profesor la reconozca en la revisión, y no tiene por qué poder registrar ni confirmar nada.
 """
 
 import json
 import os
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Protocol
 
 from infraestructura.modelo import EntradaDeBitacora
 
-__all__ = ["BitacoraDeRecepcion", "BitacoraEnDisco", "BitacoraEnMemoria"]
+__all__ = [
+    "BitacoraDeRecepcion",
+    "LectorDeRecepciones",
+    "RecepcionDeHoja",
+    "BitacoraEnDisco",
+    "BitacoraEnMemoria",
+]
+
+
+@dataclass(frozen=True)
+class RecepcionDeHoja:
+    """Cómo llegó una hoja: el nombre con que el docente subió el archivo y cuándo quedó
+    registrada. El nombre puede ser el del estudiante si el docente los nombra así (arc42 §8.7).
+    `recibida_en` es None solo si la línea no trae una fecha legible."""
+
+    nombre_archivo: str
+    recibida_en: datetime | None
 
 
 class BitacoraDeRecepcion(Protocol):
@@ -56,6 +77,15 @@ class BitacoraDeRecepcion(Protocol):
 
     def pendientes(self) -> list[EntradaDeBitacora]:
         """Entradas registradas y nunca confirmadas: hojas almacenadas sin encolar."""
+        ...
+
+
+class LectorDeRecepciones(Protocol):
+    """El puerto de solo lectura. `dashboard` depende de esta forma."""
+
+    def recepciones_del_examen(self, examen_id: str) -> dict[str, RecepcionDeHoja]:
+        """Cómo llegó cada hoja del examen, por `hoja_id`. Si una hoja tiene más de una línea
+        `recibida`, vale la primera: es cuando llegó."""
         ...
 
 
@@ -137,6 +167,47 @@ class BitacoraEnDisco:
 
         return [e for id_, e in recibidas.items() if id_ not in confirmadas]
 
+    def recepciones_del_examen(self, examen_id: str) -> dict[str, RecepcionDeHoja]:
+        """Recorre el archivo y solo decodifica las líneas que nombran al examen, como
+        `ResultadosEnDisco.hechos_del_examen`. Una línea truncada se salta."""
+        if not self.ruta.exists():
+            return {}
+        nombre = json.dumps(examen_id, ensure_ascii=False)
+        recepciones: dict[str, RecepcionDeHoja] = {}
+        with open(self.ruta, encoding="utf-8", errors="replace") as archivo:
+            for linea in archivo:
+                if nombre not in linea:
+                    continue
+                try:
+                    hecho = json.loads(linea)
+                except ValueError:
+                    continue
+                if (
+                    not isinstance(hecho, dict)
+                    or hecho.get("hecho") != "recibida"
+                    or hecho.get("examen_id") != examen_id
+                ):
+                    continue
+                # Como en `pendientes`: antes de ADR-0018, el trabajo era la hoja.
+                hoja_id = hecho.get("hoja_id", hecho.get("trabajo_id"))
+                if not isinstance(hoja_id, str) or hoja_id in recepciones:
+                    continue
+                recepciones[hoja_id] = RecepcionDeHoja(
+                    nombre_archivo=str(hecho.get("nombre_archivo", "")),
+                    recibida_en=_instante(hecho.get("momento")),
+                )
+        return recepciones
+
+
+def _instante(valor: object) -> datetime | None:
+    """La fecha ISO 8601 de una línea, o None si falta o no se puede leer."""
+    if not isinstance(valor, str):
+        return None
+    try:
+        return datetime.fromisoformat(valor)
+    except ValueError:
+        return None
+
 
 class BitacoraEnMemoria:
     """Adaptador para pruebas y para el arranque en desarrollo. No sobrevive al proceso, y por
@@ -146,12 +217,23 @@ class BitacoraEnMemoria:
     def __init__(self) -> None:
         self.recibidas: dict[str, EntradaDeBitacora] = {}
         self.confirmadas: set[str] = set()
+        self.momentos: dict[str, datetime] = {}
 
     def registrar(self, entrada: EntradaDeBitacora) -> None:
         self.recibidas[entrada.trabajo_id] = entrada
+        self.momentos.setdefault(entrada.trabajo_id, datetime.now(timezone.utc))
 
     def confirmar_encolada(self, trabajo_id: str) -> None:
         self.confirmadas.add(trabajo_id)
 
     def pendientes(self) -> list[EntradaDeBitacora]:
         return [e for i, e in self.recibidas.items() if i not in self.confirmadas]
+
+    def recepciones_del_examen(self, examen_id: str) -> dict[str, RecepcionDeHoja]:
+        recepciones: dict[str, RecepcionDeHoja] = {}
+        for trabajo_id, entrada in self.recibidas.items():
+            if entrada.examen_id == examen_id and entrada.hoja_id not in recepciones:
+                recepciones[entrada.hoja_id] = RecepcionDeHoja(
+                    entrada.nombre_archivo, self.momentos.get(trabajo_id)
+                )
+        return recepciones

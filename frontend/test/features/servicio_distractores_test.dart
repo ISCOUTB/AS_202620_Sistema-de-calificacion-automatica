@@ -157,7 +157,7 @@ void main() {
   test('Si no hay red, lo dice sin culpar al proveedor', () async {
     final e = await _falla(MockClient((_) async => throw http.ClientException('sin red')));
 
-    expect(e.mensaje, startsWith('No se pudo contactar con la API'));
+    expect(e.mensaje, startsWith('No se pudo contactar con el servidor'));
     expect(e.proveedorNoDisponible, isFalse);
     expect(e.presupuestoAgotado, isFalse);
   });

@@ -35,6 +35,14 @@ services:
       # Bitácora de recepción (ADR-0006). Solo `api` la escribe. El código deriva esta ruta
       # de RUTA_ALMACEN; aquí son dos literales, así que se cambian juntas.
       RUTA_BITACORA: ${RUTA_BITACORA:-/app/almacen_imagenes/bitacora-de-recepcion.jsonl}
+      # El registro de resultados que escribe el worker (ADR-0023): la API lo lee para mostrar
+      # cómo quedó cada hoja. El mismo valor que en `worker`, abajo.
+      RUTA_RESULTADOS: ${RUTA_RESULTADOS:-/app/almacen_imagenes/resultados-de-lectura.jsonl}
+      # Las claves de respuestas: la API ofrece en la pantalla de carga los exámenes que tienen
+      # una, y el worker califica con ellas. El mismo valor que en `worker`, abajo.
+      RUTA_CLAVES: ${RUTA_CLAVES:-/app/almacen_imagenes/claves-de-respuestas}
+      # Lo que resuelve el profesor en las preguntas en revisión (RF-08). Solo `api` lo escribe.
+      RUTA_REVISIONES: ${RUTA_REVISIONES:-/app/almacen_imagenes/revisiones-del-profesor.jsonl}
       # Proveedor de LLM para los distractores (ADR-0013). Solo `api` lo usa: el worker no
       # participa en la autoría. Sin clave en el `.env`, la ruta responde 503 y nada más cambia.
       LLM_URL_BASE: ${LLM_URL_BASE:-https://api.groq.com/openai/v1}
@@ -63,6 +71,11 @@ services:
       # El mismo valor que lee `api`, arriba. RUTA_BITACORA no va aquí: `worker/main.py` no
       # la lee, y declarar una variable que el servicio ignora es configuración muerta.
       NOMBRE_COLA: ${NOMBRE_COLA:-procesamiento}
+      # La clave de cada examen y el registro de lo que se leyó (A-02 y A-03), en el volumen de
+      # las hojas, como la bitácora de la API: fuera de él se perderían al recrear el contenedor.
+      # Son archivos hasta R-06, y la clave se copia a mano porque A-04 todavía no la registra.
+      RUTA_CLAVES: ${RUTA_CLAVES:-/app/almacen_imagenes/claves-de-respuestas}
+      RUTA_RESULTADOS: ${RUTA_RESULTADOS:-/app/almacen_imagenes/resultados-de-lectura.jsonl}
     volumes:
       - almacen_imagenes:/app/almacen_imagenes
     depends_on:

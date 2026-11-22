@@ -2,23 +2,26 @@ import 'package:flutter/material.dart';
 
 import '../../../../common/tema/tokens.dart';
 import '../../../../common/widgets/q_tarjeta.dart';
+import '../../data/servicio_examenes.dart';
 
-/// Tarjeta del examen de destino: el identificador al que quedan asociadas las hojas.
+/// El examen al que van las hojas.
 ///
-/// Es un campo de texto y no una lista porque la API todavía no publica los exámenes: el módulo
-/// que los registra (A-04) aún no existe, y un desplegable con opciones inventadas haría creer que
-/// el sistema ya los conoce.
+/// Con la lista de exámenes que tienen clave (`GET /examenes`), el docente elige el suyo en un
+/// desplegable: escribir el identificador de memoria hacía que una letra mal puesta mandara las
+/// hojas a un examen sin clave, y nadie lo notaba hasta ver «Sin nota». En una pantalla ancha se
+/// puede escribir para filtrar la lista; en el teléfono solo se elige, sin abrir el teclado.
 ///
-/// El diseño original traía aquí un interruptor de «validación estricta». No está, porque esa
-/// validación no se puede apagar: el backend revisa los primeros bytes de cada archivo siempre.
-/// Un interruptor que no hace nada enseña algo falso; una línea fija dice lo que sí ocurre.
+/// Sin la lista, porque no se pudo cargar o porque la pantalla no recibió el servicio, queda el
+/// campo de texto.
 class TarjetaExamen extends StatelessWidget {
   const TarjetaExamen({
     super.key,
     required this.controlador,
     required this.habilitada,
     required this.compacta,
-    required this.alCambiar,
+    this.examenes,
+    this.cargando = false,
+    this.alReintentar,
   });
 
   final TextEditingController controlador;
@@ -30,73 +33,148 @@ class TarjetaExamen extends StatelessWidget {
   /// Menos relleno en columnas angostas, donde cada píxel de ancho cuenta.
   final bool compacta;
 
-  final ValueChanged<String> alCambiar;
+  /// Los exámenes con clave. Nula si no hay lista: entonces el examen se escribe.
+  final List<ExamenConClave>? examenes;
+
+  /// Mientras se pide la lista.
+  final bool cargando;
+
+  /// Vuelve a pedir la lista. Solo llega cuando no se pudo cargar.
+  final VoidCallback? alReintentar;
 
   @override
   Widget build(BuildContext context) {
-    final textos = Theme.of(context).textTheme;
     return QTarjeta(
       padding: EdgeInsets.all(compacta ? QEspacios.md : QEspacios.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Examen de destino', style: textos.titleMedium),
-          const SizedBox(height: 2),
-          Text(
-            'Las hojas quedan asociadas a este examen.',
-            style: textos.bodySmall,
-          ),
-          const SizedBox(height: QEspacios.md),
-          TextField(
-            controller: controlador,
-            enabled: habilitada,
-            onChanged: alCambiar,
-            autocorrect: false,
-            textInputAction: TextInputAction.done,
-            decoration: const InputDecoration(
-              labelText: 'Identificador del examen',
-              helperText: 'Por ejemplo, CALC-2026-02',
-              prefixIcon: Icon(Icons.assignment_outlined),
-            ),
-          ),
-          const SizedBox(height: QEspacios.md),
-          Container(
-            padding: const EdgeInsets.all(QEspacios.sm + 4),
-            decoration: BoxDecoration(
-              color: QColores.superficieAzul,
-              borderRadius: BorderRadius.circular(QRadios.control),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(
-                  Icons.verified_user_outlined,
-                  size: 20,
-                  color: QColores.cobaltoOscuro,
-                ),
-                const SizedBox(width: QEspacios.sm + 4),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Se revisa el contenido de cada archivo, no solo su extensión.',
-                        style: textos.labelLarge,
+          if (cargando)
+            const TextField(
+              enabled: false,
+              decoration: InputDecoration(
+                labelText: 'Cargando los exámenes…',
+                prefixIcon: Icon(Icons.assignment_outlined),
+              ),
+            )
+          else if (examenes case final lista?)
+            _Lista(
+              controlador: controlador,
+              examenes: lista,
+              habilitada: habilitada,
+              // En un teléfono, tocar el campo abriría el teclado encima de la lista.
+              conFiltro: MediaQuery.sizeOf(context).width >= 600,
+            )
+          else
+            TextField(
+              controller: controlador,
+              enabled: habilitada,
+              autocorrect: false,
+              textInputAction: TextInputAction.done,
+              decoration: InputDecoration(
+                labelText: 'Examen',
+                hintText: 'Por ejemplo, CALC-2026-02',
+                helperText: alReintentar == null
+                    ? null
+                    : 'No se pudo cargar la lista. Escriba el nombre exacto.',
+                prefixIcon: const Icon(Icons.assignment_outlined),
+                suffixIcon: alReintentar == null
+                    ? null
+                    : IconButton(
+                        tooltip: 'Volver a cargar la lista',
+                        onPressed: habilitada ? alReintentar : null,
+                        icon: const Icon(Icons.refresh_outlined),
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Un archivo que no sea un JPG, PNG o PDF real se rechaza, y el reporte '
-                        'dice por qué.',
-                        style: textos.bodySmall,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
         ],
       ),
+    );
+  }
+}
+
+/// Lo que coincide con lo escrito, o todos si nada coincide.
+List<DropdownMenuEntry<String>> _filtrar(List<DropdownMenuEntry<String>> entradas, String filtro) {
+  final buscado = filtro.trim().toLowerCase();
+  final coinciden = [
+    for (final entrada in entradas)
+      if (entrada.label.toLowerCase().contains(buscado)) entrada,
+  ];
+  return coinciden.isEmpty ? entradas : coinciden;
+}
+
+/// El examen elegido de la lista, sin importar mayúsculas: «prototipo-r05» es PROTOTIPO-R05.
+/// Nulo si lo escrito no es un examen de la lista.
+ExamenConClave? examenElegido(String escrito, List<ExamenConClave> examenes) {
+  final texto = escrito.trim();
+  for (final examen in examenes) {
+    if (examen.examenId == texto) return examen;
+  }
+  for (final examen in examenes) {
+    if (examen.examenId.toLowerCase() == texto.toLowerCase()) return examen;
+  }
+  return null;
+}
+
+class _Lista extends StatelessWidget {
+  const _Lista({
+    required this.controlador,
+    required this.examenes,
+    required this.habilitada,
+    required this.conFiltro,
+  });
+
+  final TextEditingController controlador;
+  final List<ExamenConClave> examenes;
+  final bool habilitada;
+  final bool conFiltro;
+
+  @override
+  Widget build(BuildContext context) {
+    final escrito = controlador.text.trim().toLowerCase();
+    final elegido = examenElegido(controlador.text, examenes);
+    final sinCoincidencias = escrito.isNotEmpty &&
+        !examenes.any((examen) => examen.examenId.toLowerCase().contains(escrito));
+
+    final String? ayuda;
+    if (examenes.isEmpty) {
+      ayuda = 'Todavía no hay exámenes con clave.';
+    } else if (elegido != null && !elegido.habilitada) {
+      ayuda = 'Su clave no está habilitada: las hojas quedarán sin nota.';
+    } else {
+      ayuda = null;
+    }
+
+    return DropdownMenu<String>(
+      controller: controlador,
+      enabled: habilitada && examenes.isNotEmpty,
+      expandedInsets: EdgeInsets.zero,
+      requestFocusOnTap: conFiltro,
+      enableFilter: conFiltro,
+      // Si lo escrito no coincide con ninguno, se ven todos: un menú vacío no ayuda a corregir.
+      filterCallback: conFiltro ? _filtrar : null,
+      menuHeight: 320,
+      label: const Text('Examen'),
+      hintText: 'Elija el examen',
+      leadingIcon: const Icon(Icons.assignment_outlined),
+      helperText: ayuda,
+      errorText: sinCoincidencias ? 'No hay un examen con ese nombre.' : null,
+      dropdownMenuEntries: [
+        for (final examen in examenes)
+          DropdownMenuEntry(
+            value: examen.examenId,
+            label: examen.examenId,
+            trailingIcon: examen.habilitada
+                ? null
+                : Text(
+                    'Sin habilitar',
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodySmall
+                        ?.copyWith(color: QColores.advertenciaTexto),
+                  ),
+          ),
+      ],
     );
   }
 }

@@ -6,6 +6,7 @@ import '../../../../common/widgets/q_chip_estado.dart';
 import '../../../../common/widgets/q_panel_navy.dart';
 import '../../../../common/widgets/q_tarjeta.dart';
 import '../../data/servicio_carga.dart';
+import '../../data/servicio_resultados.dart';
 import 'aviso_carga.dart';
 import 'formato_carga.dart';
 
@@ -28,6 +29,10 @@ class ReporteRecepcion extends StatelessWidget {
     required this.enviados,
     required this.ancho,
     this.claveCabecera,
+    this.lecturas,
+    this.leyendo = false,
+    this.alConsultarDeNuevo,
+    this.alRevisar,
   });
 
   final ResultadoCarga resultado;
@@ -45,6 +50,19 @@ class ReporteRecepcion extends StatelessWidget {
 
   /// Marca la cabecera para que la pantalla pueda llevarla a la vista cuando llega el reporte.
   final Key? claveCabecera;
+
+  /// Lo que ya se leyó de cada hoja aceptada, por `hoja_id`. Nulo si la pantalla no consulta
+  /// resultados: entonces el reporte es solo el de la recepción.
+  final Map<String, ResultadoDeHoja>? lecturas;
+
+  /// Verdadero mientras la pantalla sigue preguntando por los resultados.
+  final bool leyendo;
+
+  /// Vuelve a preguntar, cuando ya se dejó de hacerlo y faltan hojas.
+  final VoidCallback? alConsultarDeNuevo;
+
+  /// Lleva a la pantalla de revisión, desde una hoja con preguntas que esperan al docente.
+  final VoidCallback? alRevisar;
 
   @override
   Widget build(BuildContext context) {
@@ -65,12 +83,22 @@ class ReporteRecepcion extends StatelessWidget {
     final cuadra = resultado.totalProcesados == enviados && detallados == enviados;
     final chipAlLado = ancho >= 520;
 
+    ResultadoDeHoja? lecturaDe(HojaAceptada hoja) =>
+        hoja.hojaId == null ? null : lecturas?[hoja.hojaId];
     final tarjetas = <Widget>[
       for (final archivo in resultado.rechazados)
         _TarjetaRechazo(archivo: archivo, chipAlLado: chipAlLado),
-      for (final hoja in pendientes) _TarjetaAceptada(hoja: hoja, chipAlLado: chipAlLado),
-      for (final hoja in encoladas) _TarjetaAceptada(hoja: hoja, chipAlLado: chipAlLado),
+      for (final hoja in pendientes)
+        _TarjetaAceptada(hoja: hoja, chipAlLado: chipAlLado, lectura: lecturaDe(hoja)),
+      for (final hoja in encoladas)
+        _TarjetaAceptada(
+          hoja: hoja,
+          chipAlLado: chipAlLado,
+          lectura: lecturaDe(hoja),
+          alRevisar: alRevisar,
+        ),
     ];
+    final lecturasDelLote = lecturas;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -83,6 +111,16 @@ class ReporteRecepcion extends StatelessWidget {
             pendientes: pendientes.length,
           ),
         ),
+        // Solo se leen las que llegaron a la cola: una en espera no entra a la lectura.
+        if (lecturasDelLote != null && encoladas.isNotEmpty) ...[
+          const SizedBox(height: QEspacios.md),
+          _ResumenDeLectura(
+            porLeer: encoladas.length,
+            lecturas: lecturasDelLote.values.toList(),
+            leyendo: leyendo,
+            alConsultarDeNuevo: alConsultarDeNuevo,
+          ),
+        ],
         if (!cuadra) ...[
           const SizedBox(height: QEspacios.md),
           AvisoCarga(
@@ -92,7 +130,7 @@ class ReporteRecepcion extends StatelessWidget {
             texto: 'Se enviaron ${contar(enviados, 'archivo', 'archivos')}, pero el reporte '
                 'detalla $detallados.',
             detalle: 'Compare la lista con sus archivos: los que no aparezcan aquí no tienen '
-                'confirmación de la API.',
+                'confirmación del servidor.',
           ),
         ],
         if (tarjetas.isNotEmpty) ...[
@@ -138,9 +176,9 @@ class _Cabecera extends StatelessWidget {
 
     final textoRecibidas = contar(recibidas, 'recibida', 'recibidas');
     final textoRechazadas = contar(rechazadas, 'rechazada', 'rechazadas');
-    final textoPendientes = contar(pendientes, 'pendiente de encolar', 'pendientes de encolar');
-    final anuncio = 'Reporte de recepción del examen $examenId. '
-        'Se procesaron ${contar(total, 'archivo', 'archivos')}: $textoRecibidas'
+    final textoPendientes = contar(pendientes, 'en espera', 'en espera');
+    final textoTotal = contar(total, 'archivo subido', 'archivos subidos');
+    final anuncio = 'Examen $examenId. $textoTotal: $textoRecibidas'
         '${pendientes > 0 ? ', de ellas $textoPendientes' : ''}, y $textoRechazadas.';
 
     return Semantics(
@@ -170,7 +208,7 @@ class _Cabecera extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Reporte de recepción · $examenId',
+                          'Examen $examenId',
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: textos.bodySmall?.copyWith(
@@ -179,7 +217,7 @@ class _Cabecera extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'Se procesaron $total archivo(s)',
+                          textoTotal,
                           style: textos.titleMedium?.copyWith(
                             color: QColores.textoSobreNavy,
                           ),
@@ -215,8 +253,7 @@ class _Cabecera extends StatelessWidget {
               if (rechazadas > 0) ...[
                 const SizedBox(height: QEspacios.sm + 4),
                 Text(
-                  'Los archivos rechazados no se guardaron: corríjalos y vuelva a '
-                  'seleccionarlos para subirlos.',
+                  'Los rechazados no se guardaron: corríjalos y vuelva a subirlos.',
                   style: textos.bodySmall?.copyWith(color: QColores.textoSobreNavySuave),
                 ),
               ],
@@ -235,24 +272,33 @@ class _Cabecera extends StatelessWidget {
 /// a subir y quedaría duplicada. El texto no promete un reintento automático: todavía no existe
 /// (consumir las pendientes de la bitácora es trabajo de A-02).
 class _TarjetaAceptada extends StatelessWidget {
-  const _TarjetaAceptada({required this.hoja, required this.chipAlLado});
+  const _TarjetaAceptada({
+    required this.hoja,
+    required this.chipAlLado,
+    this.lectura,
+    this.alRevisar,
+  });
 
   final HojaAceptada hoja;
   final bool chipAlLado;
+  final VoidCallback? alRevisar;
+
+  /// Cómo quedó la hoja después de leerla, si ya se leyó.
+  final ResultadoDeHoja? lectura;
 
   @override
   Widget build(BuildContext context) {
+    final leida = lectura;
+    if (leida != null) return _tarjetaLeida(context, leida);
     final pendiente = hoja.estado == EstadoHoja.pendienteDeEncolar;
     final tono = pendiente ? QTono.advertencia : QTono.exito;
-    final estado = pendiente ? 'Pendiente de encolar' : 'En cola · ${idCorto(hoja.trabajoId)}';
+    final estado = pendiente ? 'En espera' : 'Recibida';
     final detalle = pendiente
-        ? 'Recibida y guardada. Su trabajo no llegó a la cola y queda registrado como '
-            'pendiente; no hace falta volver a subirla.'
-        : 'Recibida. Su trabajo quedó en la cola de procesamiento.';
+        ? 'Quedó guardada, pero todavía no entra a la lectura. No hace falta volver a subirla.'
+        : 'Se está leyendo.';
 
     return _TarjetaArchivo(
-      anuncio: '${hoja.nombreArchivo}. ${pendiente ? 'Pendiente de encolar' : 'En cola'}. '
-          '$detalle',
+      anuncio: '${hoja.nombreArchivo}. $estado. $detalle',
       riel: tono.acento,
       icono: iconoDeArchivo(hoja.nombreArchivo),
       tonoIcono: QTono.neutro,
@@ -268,6 +314,160 @@ class _TarjetaAceptada extends StatelessWidget {
         style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: QColores.textoSuave),
       ),
       pie: Text('Trabajo ${hoja.trabajoId}', style: QTexto.codigo),
+    );
+  }
+
+  /// La hoja ya leída: su nota, lo que espera al docente o por qué no se pudo leer.
+  Widget _tarjetaLeida(BuildContext context, ResultadoDeHoja leida) {
+    final nota = leida.notaEnDecimas == null ? null : notaLegible(leida.notaEnDecimas!);
+    final preguntas = leida.preguntasPorRevisar;
+    final textoPreguntas = preguntas.isEmpty
+        ? ''
+        : preguntas.length == 1
+            ? 'Espera su revisión la pregunta ${preguntas.first}.'
+            : 'Esperan su revisión las preguntas ${_enumerar(preguntas)}.';
+    final avisoCodigo = leida.codigoCompleto == false
+        ? ' El código del estudiante quedó incompleto: revíselo en la hoja.'
+        : '';
+    final (QTono tono, IconData icono, String chip, String detalle) = switch (leida.estado) {
+      EstadoDeLectura.calificada => (
+          QTono.exito,
+          Icons.task_alt_outlined,
+          'Calificada · $nota',
+          'Nota $nota de 5,0.${leida.revisada ? ' Incluye su revisión.' : ''}$avisoCodigo',
+        ),
+      EstadoDeLectura.enRevision => (
+          QTono.advertencia,
+          Icons.rate_review_outlined,
+          'En revisión · $nota',
+          'Nota provisional $nota. $textoPreguntas$avisoCodigo',
+        ),
+      EstadoDeLectura.sinClaveHabilitada => (
+          QTono.advertencia,
+          Icons.key_off_outlined,
+          'Sin nota',
+          '${_frase(motivoLegible(leida.motivo))}$avisoCodigo',
+        ),
+      EstadoDeLectura.ilegible => (
+          QTono.error,
+          Icons.image_not_supported_outlined,
+          'Ilegible',
+          'No se pudo leer: ${motivoLegible(leida.motivo)}. Tome la foto de nuevo y súbala.',
+        ),
+    };
+    return _TarjetaArchivo(
+      anuncio: '${hoja.nombreArchivo}. $chip. $detalle',
+      riel: tono.acento,
+      icono: iconoDeArchivo(hoja.nombreArchivo),
+      tonoIcono: QTono.neutro,
+      nombre: hoja.nombreArchivo,
+      chipAlLado: chipAlLado,
+      chip: QChipEstado(texto: chip, tono: tono, icono: icono),
+      cuerpo: Text(
+        detalle,
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: QColores.textoSuave),
+      ),
+      pie: Text('Trabajo ${hoja.trabajoId}', style: QTexto.codigo),
+      accion:
+          leida.estado == EstadoDeLectura.enRevision && preguntas.isNotEmpty && alRevisar != null
+              ? TextButton.icon(
+                  onPressed: alRevisar,
+                  icon: const Icon(Icons.rate_review_outlined, size: 18),
+                  label: const Text('Revisar'),
+                )
+              : null,
+    );
+  }
+}
+
+/// «el examen todavía no tiene clave» como frase: «El examen todavía no tiene clave.».
+String _frase(String texto) =>
+    texto.isEmpty ? texto : '${texto[0].toUpperCase()}${texto.substring(1)}.';
+
+/// «7», «7 y 12», «3, 7 y 12».
+String _enumerar(List<int> numeros) {
+  if (numeros.length == 1) return '${numeros.first}';
+  final antes = numeros.sublist(0, numeros.length - 1).join(', ');
+  return '$antes y ${numeros.last}';
+}
+
+/// Cuántas hojas del lote ya se leyeron y cómo quedaron, mientras el worker avanza.
+class _ResumenDeLectura extends StatelessWidget {
+  const _ResumenDeLectura({
+    required this.porLeer,
+    required this.lecturas,
+    required this.leyendo,
+    required this.alConsultarDeNuevo,
+  });
+
+  final int porLeer;
+  final List<ResultadoDeHoja> lecturas;
+  final bool leyendo;
+  final VoidCallback? alConsultarDeNuevo;
+
+  @override
+  Widget build(BuildContext context) {
+    final textos = Theme.of(context).textTheme;
+    int cuantas(EstadoDeLectura estado) => lecturas.where((l) => l.estado == estado).length;
+    final partes = [
+      if (cuantas(EstadoDeLectura.calificada) > 0)
+        contar(cuantas(EstadoDeLectura.calificada), 'calificada', 'calificadas'),
+      if (cuantas(EstadoDeLectura.enRevision) > 0)
+        '${cuantas(EstadoDeLectura.enRevision)} en revisión',
+      if (cuantas(EstadoDeLectura.sinClaveHabilitada) > 0)
+        '${cuantas(EstadoDeLectura.sinClaveHabilitada)} sin nota',
+      if (cuantas(EstadoDeLectura.ilegible) > 0)
+        contar(cuantas(EstadoDeLectura.ilegible), 'ilegible', 'ilegibles'),
+    ];
+    final leidas = lecturas.length;
+    final todas = leidas >= porLeer;
+    final titulo = todas
+        ? 'Lectura terminada: ${contar(leidas, 'hoja leída', 'hojas leídas')}'
+        : 'Leídas $leidas de $porLeer';
+    final detalle = partes.isEmpty
+        ? (leyendo ? 'El sistema está leyendo las hojas.' : 'Todavía no hay hojas leídas.')
+        : '${partes.join(' · ')}.';
+
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      label: '$titulo. $detalle',
+      child: ExcludeSemantics(
+        child: QTarjeta(
+          padding: const EdgeInsets.all(QEspacios.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    todas ? Icons.fact_check_outlined : Icons.document_scanner_outlined,
+                    size: 20,
+                    color: QColores.cobaltoOscuro,
+                  ),
+                  const SizedBox(width: QEspacios.sm),
+                  Expanded(child: Text(titulo, style: textos.titleSmall)),
+                  if (!todas && !leyendo && alConsultarDeNuevo != null)
+                    TextButton.icon(
+                      onPressed: alConsultarDeNuevo,
+                      icon: const Icon(Icons.refresh_outlined, size: 18),
+                      label: const Text('Consultar de nuevo'),
+                    ),
+                ],
+              ),
+              const SizedBox(height: QEspacios.xs),
+              Text(detalle, style: textos.bodySmall),
+              if (!todas && leyendo) ...[
+                const SizedBox(height: QEspacios.sm),
+                LinearProgressIndicator(
+                  value: porLeer == 0 ? null : leidas / porLeer,
+                  semanticsLabel: 'Leyendo las hojas',
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -329,6 +529,7 @@ class _TarjetaArchivo extends StatelessWidget {
     required this.chipAlLado,
     required this.cuerpo,
     this.pie,
+    this.accion,
   });
 
   final String anuncio;
@@ -341,68 +542,81 @@ class _TarjetaArchivo extends StatelessWidget {
   final Widget cuerpo;
   final Widget? pie;
 
+  /// Un botón al pie de la tarjeta. Va fuera de la frase que lee el lector de pantalla, para que
+  /// se pueda alcanzar como botón.
+  final Widget? accion;
+
   @override
   Widget build(BuildContext context) {
     return Semantics(
       container: true,
       label: anuncio,
-      child: ExcludeSemantics(
-        child: QTarjeta(
-          riel: riel,
-          padding: const EdgeInsets.all(QEspacios.md),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      child: QTarjeta(
+        riel: riel,
+        padding: const EdgeInsets.all(QEspacios.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ExcludeSemantics(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: tonoIcono.fondo,
-                      borderRadius: BorderRadius.circular(QRadios.control),
-                    ),
-                    child: Icon(icono, size: 20, color: tonoIcono.texto),
-                  ),
-                  const SizedBox(width: QEspacios.sm + 4),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.only(top: QEspacios.sm),
-                          child: Text(
-                            nombre,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.titleSmall,
-                          ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: tonoIcono.fondo,
+                          borderRadius: BorderRadius.circular(QRadios.control),
                         ),
-                        if (!chipAlLado) ...[
-                          const SizedBox(height: QEspacios.sm),
-                          chip,
-                        ],
+                        child: Icon(icono, size: 20, color: tonoIcono.texto),
+                      ),
+                      const SizedBox(width: QEspacios.sm + 4),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.only(top: QEspacios.sm),
+                              child: Text(
+                                nombre,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.titleSmall,
+                              ),
+                            ),
+                            if (!chipAlLado) ...[
+                              const SizedBox(height: QEspacios.sm),
+                              chip,
+                            ],
+                          ],
+                        ),
+                      ),
+                      if (chipAlLado) ...[
+                        const SizedBox(width: QEspacios.sm),
+                        Padding(
+                          padding: const EdgeInsets.only(top: QEspacios.xs + 2),
+                          child: chip,
+                        ),
                       ],
-                    ),
+                    ],
                   ),
-                  if (chipAlLado) ...[
-                    const SizedBox(width: QEspacios.sm),
-                    Padding(
-                      padding: const EdgeInsets.only(top: QEspacios.xs + 2),
-                      child: chip,
-                    ),
+                  const SizedBox(height: QEspacios.sm + 4),
+                  cuerpo,
+                  if (pie != null) ...[
+                    const SizedBox(height: QEspacios.sm),
+                    pie!,
                   ],
                 ],
               ),
-              const SizedBox(height: QEspacios.sm + 4),
-              cuerpo,
-              if (pie != null) ...[
-                const SizedBox(height: QEspacios.sm),
-                pie!,
-              ],
+            ),
+            if (accion != null) ...[
+              const SizedBox(height: QEspacios.xs),
+              Align(alignment: AlignmentDirectional.centerStart, child: accion!),
             ],
-          ),
+          ],
         ),
       ),
     );

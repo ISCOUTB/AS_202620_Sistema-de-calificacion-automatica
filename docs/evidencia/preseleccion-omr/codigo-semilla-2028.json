@@ -1,0 +1,56 @@
+{
+  "hojas_generadas": 300,
+  "semilla": 2028,
+  "umbral_de_confianza": 70,
+  "corte_de_intencion": 40,
+  "hojas_ilegibles": {},
+  "hojas_con_el_codigo_completo_y_correcto": 18,
+  "por_caso": {
+    "clara": {
+      "aceptado_bien": 394
+    },
+    "tenue": {
+      "aceptado_bien": 149,
+      "por_revisar": 4
+    },
+    "media": {
+      "aceptado_bien": 155
+    },
+    "chulo": {
+      "aceptado_bien": 156
+    },
+    "equis": {
+      "aceptado_bien": 159
+    },
+    "borrada_y_otra": {
+      "aceptado_bien": 236
+    },
+    "con_brillo": {
+      "aceptado_bien": 163
+    },
+    "doble": {
+      "por_revisar": 196
+    },
+    "solo_borrada": {
+      "por_revisar": 195
+    },
+    "en_blanco": {
+      "por_revisar": 166
+    },
+    "solo_borron_fuerte": {
+      "por_revisar": 204
+    },
+    "borron_fuerte_y_otra": {
+      "aceptado_bien": 223
+    }
+  },
+  "confianza_de_los_borrones_fuertes": {
+    "medidos": 3000,
+    "minima": 29,
+    "mediana": 34,
+    "p95": 36,
+    "maxima": 38
+  },
+  "mal": 0,
+  "detalle_de_los_mal_aceptados": []
+}

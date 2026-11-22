@@ -1,0 +1,52 @@
+{
+  "hojas_generadas": 300,
+  "semilla": 2026,
+  "umbral_de_confianza": 70,
+  "hojas_ilegibles": {},
+  "ec01_exactitud_en_marcas_claras": 1.0,
+  "ec01_cumple": true,
+  "ec02_ambiguas_a_revision": 1.0,
+  "ec02_cumple": true,
+  "errores_silenciosos": 0,
+  "preguntas_a_revision_por_hoja": 0.46,
+  "por_caso": {
+    "clara": {
+      "bien": 9406
+    },
+    "en_blanco": {
+      "bien": 970
+    },
+    "doble": {
+      "bien": 247
+    },
+    "media": {
+      "bien": 215
+    },
+    "tenue": {
+      "bien": 207
+    },
+    "chulo": {
+      "bien": 181
+    },
+    "equis": {
+      "bien": 176
+    },
+    "solo_borrada": {
+      "bien": 239
+    },
+    "borrada_y_otra": {
+      "bien": 222
+    },
+    "con_brillo": {
+      "a_revision": 137
+    }
+  },
+  "codigos": {
+    "completo_y_correcto": 300
+  },
+  "lectura_ms": {
+    "p50": 378.0,
+    "p95": 458.8
+  },
+  "detalle_de_los_errores_silenciosos": []
+}
