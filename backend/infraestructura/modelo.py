@@ -56,6 +56,7 @@ __all__ = [
     "ResultadoDePregunta",
     "CalificacionDeHoja",
     "ResolucionDelProfesor",
+    "Examen",
 ]
 
 # Estados en los que puede quedar una hoja aceptada. Son dos y no uno desde
@@ -163,6 +164,29 @@ class EntradaDeBitacora:
     referencia: str
     nombre_archivo: str
     hoja_id: str
+
+
+# ---------------------------------------------------------------------------------------------
+# El examen y su dueño (ADR-0028). Dueño: `autoria`.
+# ---------------------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Examen:
+    """Un examen, de quién es y cómo lo llama su docente.
+
+    **El identificador no es el nombre.** `examen_id` lo acuña el sistema (`000001`, `000002`...)
+    y es el que viaja en las rutas, en la cola, en los registros y en el almacén. `nombre` es el
+    que escribe el docente, y dos docentes pueden usar el mismo: cada uno tiene el suyo, con su
+    propio identificador. Un mismo docente no puede tener dos exámenes con el mismo nombre.
+
+    `docente` es el correo de la sesión que lo creó (ADR-0025). Solo ese docente lo ve, sube hojas
+    a él, registra su clave y consulta sus resultados."""
+
+    examen_id: str
+    nombre: str
+    docente: str
+    creado_en: datetime
 
 
 # ---------------------------------------------------------------------------------------------

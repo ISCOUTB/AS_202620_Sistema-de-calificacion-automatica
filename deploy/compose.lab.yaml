@@ -92,6 +92,9 @@ services:
       SESION_SECRETO: ${SESION_SECRETO:-}
       DOCENTES: ${DOCENTES:-}
       SESION_HORAS: ${SESION_HORAS:-12}
+      # Los exámenes anteriores a ADR-0028 no tenían dueño: se asignan a este correo de DOCENTES,
+      # o al primero de la lista si está vacío. Los exámenes nuevos ya nacen con dueño.
+      DOCENTE_DE_LOS_EXAMENES_ANTERIORES: ${DOCENTE_DE_LOS_EXAMENES_ANTERIORES:-}
       # Traefik termina el HTTPS y reenvía la petición con X-Forwarded-For y X-Forwarded-Proto.
       # Uvicorn solo cree esas cabeceras si vienen de 127.0.0.1, y aquí vienen del contenedor de
       # Traefik: sin esta línea, una redirección de FastAPI apunta a http:// y el registro de

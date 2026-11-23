@@ -58,6 +58,7 @@ RUTA_RECORTE = "/examenes/{examen_id}/hojas/{hoja_id}/preguntas/{numero}/recorte
 RUTA_SESION = "/sesion"
 RUTA_CLAVE = "/examenes/{examen_id}/clave"
 RUTA_HABILITACION = "/examenes/{examen_id}/clave/habilitacion"
+RUTA_PANEL = "/examenes/{examen_id}/panel"
 
 
 @pytest.fixture(scope="module")
@@ -159,7 +160,7 @@ def test_la_version_del_contrato_es_la_declarada_en_el_codigo(contrato_publicado
     assert contrato_publicado["info"]["version"] == VERSION_DEL_CONTRATO
 
 
-def test_el_contrato_declara_las_doce_rutas_que_la_api_expone(contrato_publicado):
+def test_el_contrato_declara_las_trece_rutas_que_la_api_expone(contrato_publicado):
     """Las rutas son lo primero que un consumidor busca; que desaparezca una es el cambio
     incompatible mas obvio que existe.
 
@@ -167,13 +168,17 @@ def test_el_contrato_declara_las_doce_rutas_que_la_api_expone(contrato_publicado
     ADR-0013 promete cuando el proveedor de LLM falla, y un cliente que no sepa que existe la
     trataria como un error inesperado. Desde 1.2.0 se exige tambien su 429, el corte del
     presupuesto de ADR-0015, y la ruta `GET /metricas` que lo publica. Desde 2.0.0, la ruta de
-    entrar (ADR-0025), y desde 2.1.0, las dos de la clave (ADR-0026)."""
+    entrar (ADR-0025), desde 2.1.0, las dos de la clave (ADR-0026), y desde 3.0.0, crear un examen
+    y su panel (ADR-0028)."""
     rutas = contrato_publicado["paths"]
 
     assert set(rutas) == {
         "/health", RUTA_CARGA, RUTA_DISTRACTORES, RUTA_METRICAS, RUTA_RESULTADOS, RUTA_EXAMENES,
         RUTA_REVISION, RUTA_RESOLVER, RUTA_RECORTE, RUTA_SESION, RUTA_CLAVE, RUTA_HABILITACION,
+        RUTA_PANEL,
     }
+    assert {"get", "post"} <= set(rutas[RUTA_EXAMENES])
+    assert "get" in rutas[RUTA_PANEL]
     assert {"get", "put"} <= set(rutas[RUTA_CLAVE])
     assert "post" in rutas[RUTA_HABILITACION]
     assert "get" in rutas[RUTA_REVISION]
@@ -259,11 +264,11 @@ def test_los_resultados_no_publican_el_codigo_del_estudiante(contrato_publicado)
 
 
 def test_la_lista_de_examenes_no_publica_las_respuestas_de_la_clave(contrato_publicado):
-    """`GET /examenes` es publica hasta A-05. Para elegir el examen basta con su identificador y
-    con saber si la clave esta habilitada: cualquier campo mas podria filtrar la clave."""
+    """Para elegir el examen basta con su identificador, su nombre (ADR-0028) y con saber si la
+    clave esta habilitada: cualquier campo mas podria filtrar la clave."""
     esquema = contrato_publicado["components"]["schemas"]["ExamenEnRespuesta"]
 
-    assert set(esquema["properties"]) == {"examen_id", "habilitada"}
+    assert set(esquema["properties"]) == {"examen_id", "nombre", "habilitada"}
 
 
 def test_la_revision_no_publica_la_clave_y_trae_el_codigo(contrato_publicado):

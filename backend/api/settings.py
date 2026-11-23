@@ -40,6 +40,16 @@ RUTA_CLAVES = os.environ.get("RUTA_CLAVES", RUTA_CLAVES_POR_OMISION)
 # Lo que resuelve el profesor en las preguntas en revisión (RF-08). Solo la API lo escribe y lo lee.
 RUTA_REVISIONES = os.environ.get("RUTA_REVISIONES", RUTA_REVISIONES_POR_OMISION)
 
+# El registro de exámenes con su dueño (ADR-0028), cuando no hay base de datos. Con
+# `DATABASE_URL` va a la tabla `examenes` y esta ruta no se usa. Solo la API lo lee y lo escribe.
+RUTA_EXAMENES = os.environ.get("RUTA_EXAMENES", os.path.join(RUTA_ALMACEN, "examenes.json"))
+
+# A quién se le asignan los exámenes que existían antes de ADR-0028 y no tienen dueño, cuando no
+# se sabe quién habilitó su clave (si se sabe y tiene cuenta, va a ese docente). Tiene que ser un
+# correo de DOCENTES. Vacío, se asignan al primer docente de la lista. Se aplica una vez por
+# proceso, la primera vez que alguien consulta sus exámenes, y no toca los que ya tienen dueño.
+DOCENTE_DE_LOS_EXAMENES_ANTERIORES = os.environ.get("DOCENTE_DE_LOS_EXAMENES_ANTERIORES", "")
+
 # La base de datos (ADR-0027). Con ella, la bitácora, los resultados y las revisiones van a
 # Postgres y las tres RUTA_* de arriba dejan de usarse; sin ella, siguen siendo archivos. Las
 # imágenes y las claves son archivos en los dos casos. El worker lee la misma variable.

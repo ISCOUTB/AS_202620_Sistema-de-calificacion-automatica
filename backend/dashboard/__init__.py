@@ -2,9 +2,16 @@
 Responsabilidad: Presentación de resultados y agregaciones por curso, examen y pregunta.
 Requisitos: RF-05
 Importa: infraestructura, identidad, calificacion
-Posee: ResultadoDeHoja, ResultadosDelExamen, BurbujaEnRevision, PreguntaEnRevision, HojaEnRevision, RevisionDelExamen
+Posee: ResultadoDeHoja, ResultadosDelExamen, BurbujaEnRevision, PreguntaEnRevision, HojaEnRevision, RevisionDelExamen, PanelDelExamen, ResumenDelPanel, MarcasDelExamen, PreguntaDelPanel
 """
 
+from dashboard.panel import (
+    MarcasDelExamen,
+    PanelDelExamen,
+    PreguntaDelPanel,
+    ResumenDelPanel,
+    panel_del_examen,
+)
 from dashboard.resultados import ResultadoDeHoja, ResultadosDelExamen, resultados_del_examen
 from dashboard.revision import (
     BurbujaEnRevision,
@@ -25,4 +32,9 @@ __all__ = [
     "RevisionDelExamen",
     "revision_del_examen",
     "referencia_del_recorte",
+    "PanelDelExamen",
+    "ResumenDelPanel",
+    "MarcasDelExamen",
+    "PreguntaDelPanel",
+    "panel_del_examen",
 ]

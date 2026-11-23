@@ -53,13 +53,21 @@ def _registrar(cliente, respuestas, examen=EXAMEN):
     return cliente.put(f"/examenes/{examen}/clave", json={"respuestas": respuestas})
 
 
+def _crear(cliente, nombre="Cálculo 3") -> str:
+    """Crea el examen como lo hace la aplicación desde ADR-0028 y devuelve su identificador."""
+    respuesta = cliente.post("/examenes", json={"nombre": nombre})
+    assert respuesta.status_code == 201
+    return respuesta.json()["examen_id"]
+
+
 def test_la_clave_registrada_se_lee_sin_habilitar_y_aparece_en_la_carga(cliente):
-    respuesta = _registrar(cliente, ["A", "B", "c"])
+    examen = _crear(cliente)
+    respuesta = _registrar(cliente, ["A", "B", "c"], examen)
 
     assert respuesta.status_code == 200
-    clave = cliente.get(f"/examenes/{EXAMEN}/clave").json()
+    clave = cliente.get(f"/examenes/{examen}/clave").json()
     assert clave == {
-        "examen_id": EXAMEN,
+        "examen_id": examen,
         "respuestas": ["A", "B", "C"],
         "habilitada_por": None,
         "habilitada_en": None,
@@ -67,14 +75,15 @@ def test_la_clave_registrada_se_lee_sin_habilitar_y_aparece_en_la_carga(cliente)
     }
     assert respuesta.json() == clave
     assert cliente.get("/examenes").json()["examenes"] == [
-        {"examen_id": EXAMEN, "habilitada": False}
+        {"examen_id": examen, "nombre": "Cálculo 3", "habilitada": False}
     ]
 
 
 def test_habilitarla_la_deja_a_nombre_del_docente_de_la_sesion(cliente):
-    _registrar(cliente, ["A", "B"])
+    examen = _crear(cliente)
+    _registrar(cliente, ["A", "B"], examen)
 
-    respuesta = cliente.post(f"/examenes/{EXAMEN}/clave/habilitacion")
+    respuesta = cliente.post(f"/examenes/{examen}/clave/habilitacion")
 
     assert respuesta.status_code == 200
     assert respuesta.json()["habilitada_por"] == DOCENTE_DE_PRUEBA

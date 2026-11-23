@@ -5,18 +5,24 @@ import pytest
 import redis
 
 from infraestructura.cola import cliente_redis
-from tests.sesion_de_prueba import DOCENTE_DE_PRUEBA
+from tests.sesion_de_prueba import DOCENTE_DE_PRUEBA, RegistroDondeTodoEsDelDocente
 
 
 @pytest.fixture(autouse=True)
 def docente_con_sesion() -> Iterator[None]:
     """Las pruebas de las rutas hablan con la API como un docente que ya entró (ADR-0025). La
-    sesión en sí se prueba en `test_sesion.py`, que quita esta sustitución."""
-    from api.main import app, docente_de_la_sesion
+    sesión en sí se prueba en `test_sesion.py`, que quita esta sustitución.
 
+    Y con un registro de exámenes donde todo examen es de ese docente (ADR-0028): las pruebas que
+    tratan del dueño ponen el suyo encima."""
+    from api.main import app, docente_de_la_sesion, obtener_registro_de_examenes
+
+    registro = RegistroDondeTodoEsDelDocente()
     app.dependency_overrides[docente_de_la_sesion] = lambda: DOCENTE_DE_PRUEBA
+    app.dependency_overrides[obtener_registro_de_examenes] = lambda: registro
     yield
     app.dependency_overrides.pop(docente_de_la_sesion, None)
+    app.dependency_overrides.pop(obtener_registro_de_examenes, None)
 
 
 @pytest.fixture

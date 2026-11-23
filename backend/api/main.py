@@ -5,6 +5,7 @@ el presupuesto del proveedor, en `autoria`."""
 
 import functools
 import logging
+import threading
 import time
 from collections.abc import Iterator
 from datetime import datetime, timedelta, timezone
@@ -23,11 +24,13 @@ from api.esquemas import (
     EstadoDeLaCacheEnRespuesta,
     EstadoDelPresupuestoDeCargaEnRespuesta,
     EstadoDelPresupuestoEnRespuesta,
+    ExamenCreadoEnRespuesta,
     ExamenEnRespuesta,
     ExamenesEnRespuesta,
     HojaAceptadaEnRespuesta,
     HojaEnRevisionEnRespuesta,
     LoteFueraDePresupuestoEnRespuesta,
+    PanelEnRespuesta,
     PresupuestoAgotadoEnRespuesta,
     ProveedorNoDisponibleEnRespuesta,
     RespuestaDeCarga,
@@ -41,6 +44,7 @@ from api.esquemas import (
     SesionEnRespuesta,
     SolicitudDeClave,
     SolicitudDeDistractores,
+    SolicitudDeExamen,
     SolicitudDeRevision,
     SolicitudDeSesion,
 )
@@ -49,6 +53,7 @@ from api.settings import (
     ALLOWED_ORIGIN,
     CARGA_HOJAS_POR_LOTE,
     CARGA_MB_POR_DIA,
+    DOCENTE_DE_LOS_EXAMENES_ANTERIORES,
     DOCENTES,
     LLM_API_KEY,
     LLM_MODELO,
@@ -61,6 +66,7 @@ from api.settings import (
     DATABASE_URL,
     RUTA_BITACORA,
     RUTA_CLAVES,
+    RUTA_EXAMENES,
     RUTA_RESULTADOS,
     RUTA_REVISIONES,
     SESION_HORAS,
@@ -71,23 +77,33 @@ from autoria import (
     CacheDePropuestas,
     ClaveInvalida,
     ClaveYaUsada,
+    ExamenNoEncontrado,
     ExamenSinClave,
     GeneradorCompatibleConOpenAI,
     GeneradorConCache,
     GeneradorConPresupuesto,
     GeneradorDeDistractores,
+    NombreDeExamenInvalido,
     PreguntaParaDistractores,
     PresupuestoAgotado,
     PresupuestoDeSolicitudes,
     ProveedorNoDisponible,
+    adoptar_examenes_sin_dueno,
     clave_se_puede_cambiar,
-    examenes_con_clave,
+    crear_examen,
+    examen_del_docente,
+    examenes_del_docente,
     habilitar_clave,
     proponer_distractores,
     registrar_clave,
 )
 from calificacion import HojaSinNotaQueRevisar, resolver_preguntas
-from dashboard import referencia_del_recorte, resultados_del_examen, revision_del_examen
+from dashboard import (
+    panel_del_examen,
+    referencia_del_recorte,
+    resultados_del_examen,
+    revision_del_examen,
+)
 from identidad import (
     ConfiguracionDeDocentesInvalida,
     autenticar,
@@ -98,12 +114,14 @@ from identidad import (
 from infraestructura.almacen import AlmacenDeImagenes, AlmacenEnDisco
 from infraestructura.base_de_datos import (
     BitacoraEnPostgres,
+    ExamenesEnPostgres,
     ResultadosEnPostgres,
     RevisionesEnPostgres,
 )
 from infraestructura.bitacora import BitacoraDeRecepcion, BitacoraEnDisco, LectorDeRecepciones
-from infraestructura.claves import CatalogoDeClaves, ClaveMalEscrita, ClavesEnDisco
-from infraestructura.modelo import ClaveDeRespuestas
+from infraestructura.claves import ClaveMalEscrita, ClavesEnDisco
+from infraestructura.examenes import ExamenesEnDisco, RegistroDeExamenes
+from infraestructura.modelo import ClaveDeRespuestas, Examen
 from infraestructura.cola import ESPERA_AL_PUBLICAR_SEGUNDOS, cliente_redis
 from infraestructura.modelo import PENDIENTE_DE_ENCOLAR, ArchivoCargado
 from infraestructura.registro import configurar_registro
@@ -192,7 +210,7 @@ def obtener_revisiones() -> RevisionesDelProfesor:
     return RevisionesEnDisco(Path(RUTA_REVISIONES))
 
 
-def obtener_catalogo_de_claves() -> CatalogoDeClaves:
+def obtener_catalogo_de_claves() -> ClavesEnDisco:
     """Dependencia del catálogo de claves, el mismo directorio que lee el worker. Por petición y
     sustituible, como el almacén y la bitácora."""
     return ClavesEnDisco(Path(RUTA_CLAVES))
@@ -202,6 +220,80 @@ def obtener_registro_de_claves() -> ClavesEnDisco:
     """Las claves para leerlas y escribirlas desde la aplicación (ADR-0026): el mismo directorio que
     lee el worker. Por petición y sustituible, como las demás."""
     return ClavesEnDisco(Path(RUTA_CLAVES))
+
+
+def _registro_de_examenes() -> RegistroDeExamenes:
+    if DATABASE_URL:
+        return ExamenesEnPostgres(DATABASE_URL)
+    return ExamenesEnDisco(Path(RUTA_EXAMENES))
+
+
+# La adopción de los exámenes anteriores a ADR-0028 corre una sola vez por proceso, la primera vez
+# que se pide el registro. Si falla (la base no responde, por ejemplo), se vuelve a intentar en la
+# siguiente petición; la petición en curso sigue, porque los exámenes nuevos no dependen de ella.
+_ADOPCION_HECHA = threading.Event()
+_CANDADO_DE_ADOPCION = threading.Lock()
+
+
+def _docente_de_los_examenes_anteriores() -> str | None:
+    docentes = obtener_docentes()
+    elegido = DOCENTE_DE_LOS_EXAMENES_ANTERIORES.strip().lower()
+    if elegido:
+        return elegido if elegido in docentes else None
+    return next(iter(docentes), None)
+
+
+def _adoptar_examenes_anteriores(registro: RegistroDeExamenes) -> None:
+    if _ADOPCION_HECHA.is_set():
+        return
+    with _CANDADO_DE_ADOPCION:
+        if _ADOPCION_HECHA.is_set():
+            return
+        docente = _docente_de_los_examenes_anteriores()
+        if docente is None:
+            # Sin docentes nadie entra; con un correo que no está en la lista, los exámenes
+            # quedarían a nombre de nadie. Se avisa y se espera a que se corrija la configuración.
+            logger.warning(
+                "No se adoptaron los exámenes anteriores",
+                extra={"evento": "adopcion_sin_docente"},
+            )
+            return
+        try:
+            claves = ClavesEnDisco(Path(RUTA_CLAVES)).claves_registradas()
+            mencionados = {clave.examen_id for clave in claves}
+            mencionados |= obtener_bitacora().examenes_mencionados()
+            # Desde ADR-0026 la habilitación guarda el correo de la sesión: quien habilitó la clave
+            # es el dueño más probable, si sigue en la lista de docentes.
+            con_cuenta = obtener_docentes()
+            probables = {
+                clave.examen_id: clave.habilitacion.por.strip().lower()
+                for clave in claves
+                if clave.habilitacion is not None
+                and clave.habilitacion.por.strip().lower() in con_cuenta
+            }
+            adoptados = adoptar_examenes_sin_dueno(
+                mencionados, docente, datetime.now(timezone.utc), registro, probables
+            )
+        except (OSError, ValueError) as error:
+            logger.warning(
+                "No se pudieron adoptar los exámenes anteriores",
+                extra={"evento": "adopcion_fallida", "motivo": str(error)},
+            )
+            return
+        _ADOPCION_HECHA.set()
+        # Sin el correo: el registro no guarda quién es el docente.
+        logger.info(
+            "Exámenes anteriores adoptados",
+            extra={"evento": "examenes_adoptados", "examenes": len(adoptados)},
+        )
+
+
+def obtener_registro_de_examenes() -> RegistroDeExamenes:
+    """El registro de exámenes con su dueño (ADR-0028). Por petición y sustituible, como los demás.
+    La primera vez en cada proceso asigna los exámenes anteriores que no tienen dueño."""
+    registro = _registro_de_examenes()
+    _adoptar_examenes_anteriores(registro)
+    return registro
 
 
 @functools.lru_cache(maxsize=4)
@@ -349,6 +441,26 @@ def docente_de_la_sesion(
     return sesion.correo
 
 
+def examen_de_la_sesion(
+    examen_id: str,
+    docente: str = Depends(docente_de_la_sesion),
+    registro: RegistroDeExamenes = Depends(obtener_registro_de_examenes),
+) -> Examen:
+    """El examen de la ruta, si es del docente de la sesión (ADR-0028). Si no existe o es de otro
+    docente, 404 con el mismo mensaje: nadie puede averiguar qué exámenes tienen los demás. Sin
+    sesión, el 401 de `docente_de_la_sesion` llega antes."""
+    try:
+        return examen_del_docente(examen_id, docente, registro)
+    except ExamenNoEncontrado as error:
+        raise HTTPException(status_code=404, detail="Ese examen no existe en su cuenta.") from error
+
+
+# El 404 que agrega `examen_de_la_sesion` a toda ruta de un examen.
+_EXAMEN_SUYO: dict[int | str, dict] = {
+    404: {"description": "El examen no existe o no es del docente de la sesión."}
+}
+
+
 @app.get("/health", summary="Sonda de vida", response_description="La API responde.")
 def salud() -> RespuestaDeSalud:
     return RespuestaDeSalud(status="ok")
@@ -429,9 +541,10 @@ def _registrar_lote_fuera_de_presupuesto(
     "/examenes/{examen_id}/hojas",
     summary="Cargar hojas escaneadas de un examen",
     response_description="Qué entró y qué no, archivo por archivo.",
-    dependencies=[Depends(docente_de_la_sesion)],
+    dependencies=[Depends(examen_de_la_sesion)],
     responses={
         **_PIDE_SESION,
+        **_EXAMEN_SUYO,
         413: {
             "model": LoteFueraDePresupuestoEnRespuesta,
             "description": (
@@ -470,12 +583,8 @@ async def cargar_hojas(
     vez de omitirse porque EC-07 exige que ningún archivo cargado desaparezca sin traza, y
     reintentarla es asunto del sistema, no del docente: el archivo ya está adentro.
 
-    **El `examen_id` todavía no se verifica contra nada, y es un hueco conocido, no un olvido.**
-    El módulo `autoria` es el que registrará los exámenes, y esa parte (aspecto A-04) aún no
-    existe; `identidad` ya pide una sesión (ADR-0025), pero todavía no sabe de cursos (EC-06), así
-    que no comprueba que el docente pueda cargar en ese examen. La ruta ya tiene la forma
-    definitiva para que cuando esas partes lleguen solo haya que sumar la comprobación, sin migrar
-    el frontend.
+    **Solo en un examen del docente de la sesión** (ADR-0028): si el examen no existe o es de otro
+    docente, responde 404 y no entra ninguna hoja.
 
     **Un lote que no cabe en el presupuesto de carga no entra entero** (ADR-0022). Responde 413
     si trae más hojas de las que admite un lote o pesa más que el cupo de un día, y 429 con
@@ -691,13 +800,14 @@ def proponer_distractores_para_una_pregunta(
 
 @app.get(
     "/examenes",
-    summary="Exámenes con clave registrada",
-    response_description="Cada examen con clave, sin sus respuestas, ordenados por identificador.",
-    dependencies=[Depends(docente_de_la_sesion)],
+    summary="Los exámenes del docente con clave registrada",
+    response_description="Cada examen suyo con clave, sin sus respuestas, por identificador.",
     responses=_PIDE_SESION,
 )
 def examenes(
-    catalogo: CatalogoDeClaves = Depends(obtener_catalogo_de_claves),
+    docente: str = Depends(docente_de_la_sesion),
+    registro: RegistroDeExamenes = Depends(obtener_registro_de_examenes),
+    claves: ClavesEnDisco = Depends(obtener_catalogo_de_claves),
 ) -> ExamenesEnRespuesta:
     """Los exámenes que tienen una clave registrada, para que la pantalla de carga los ofrezca en
     una lista y el docente no tenga que escribir el identificador de memoria: una letra mal
@@ -705,20 +815,62 @@ def examenes(
 
     **No devuelve las respuestas de la clave**: para elegir el examen basta con su identificador.
     Una clave mal escrita no aparece, y una sin habilitar sí, marcada, porque sus hojas se leen sin
-    nota."""
+    nota.
+
+    **Solo los del docente de la sesión** (ADR-0028), cada uno con su nombre y el identificador que
+    le dio el sistema."""
     return ExamenesEnRespuesta(
         examenes=[
-            ExamenEnRespuesta.model_validate(examen) for examen in examenes_con_clave(catalogo)
+            ExamenEnRespuesta.model_validate(examen)
+            for examen in examenes_del_docente(docente, registro, claves)
         ]
     )
+
+
+@app.post(
+    "/examenes",
+    summary="Crear un examen con su nombre",
+    response_description="El examen del docente con ese nombre y su identificador.",
+    status_code=201,
+    responses={
+        **_PIDE_SESION,
+        200: {"model": ExamenCreadoEnRespuesta, "description": "Ya tenía un examen con ese nombre."},
+        422: {"description": "El nombre está vacío, es muy largo o no se puede leer."},
+    },
+)
+def crear_un_examen(
+    solicitud: SolicitudDeExamen,
+    respuesta: Response,
+    docente: str = Depends(docente_de_la_sesion),
+    registro: RegistroDeExamenes = Depends(obtener_registro_de_examenes),
+) -> ExamenCreadoEnRespuesta:
+    """Crea un examen a nombre del docente de la sesión y le da un identificador propio, como
+    `000001` (ADR-0028). El identificador es el que se usa en las demás rutas del examen.
+
+    Dos docentes pueden usar el mismo nombre: cada uno recibe su examen. Si el docente ya tiene uno
+    con ese nombre (sin distinguir mayúsculas ni espacios de más), responde 200 con ese y no crea
+    otro."""
+    try:
+        examen, creado = crear_examen(
+            solicitud.nombre, docente, datetime.now(timezone.utc), registro
+        )
+    except NombreDeExamenInvalido as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    if creado:
+        logger.info(
+            "Examen creado", extra={"evento": "examen_creado", "examen": examen.examen_id}
+        )
+    else:
+        respuesta.status_code = 200
+    return ExamenCreadoEnRespuesta.model_validate(examen)
 
 
 @app.get(
     "/examenes/{examen_id}/resultados",
     summary="Cómo quedó cada hoja leída de un examen",
     response_description="El último resultado de cada hoja leída, sin el código del estudiante.",
-    dependencies=[Depends(docente_de_la_sesion)],
-    responses=_PIDE_SESION,
+    dependencies=[Depends(examen_de_la_sesion)],
+    responses={**_PIDE_SESION, **_EXAMEN_SUYO},
 )
 def resultados(
     examen_id: str,
@@ -743,8 +895,8 @@ def resultados(
     "/examenes/{examen_id}/revision",
     summary="Las preguntas que esperan al profesor en un examen",
     response_description="Cada hoja en revisión, con el código del estudiante y sin la clave.",
-    dependencies=[Depends(docente_de_la_sesion)],
-    responses=_PIDE_SESION,
+    dependencies=[Depends(examen_de_la_sesion)],
+    responses={**_PIDE_SESION, **_EXAMEN_SUYO},
 )
 def revision(
     examen_id: str,
@@ -759,8 +911,8 @@ def revision(
 
     **No lleva la respuesta correcta**: el profesor dice qué marcó el estudiante y el sistema decide
     si es correcto. **Sí lleva el código del estudiante**, para que el profesor sepa de quién es la
-    hoja, y el nombre del archivo, que puede ser el del estudiante. La ruta pide sesión
-    (ADR-0025), pero sin cursos todavía cualquier docente con cuenta ve todas las hojas (EC-06)."""
+    hoja, y el nombre del archivo, que puede ser el del estudiante. Solo el docente dueño del
+    examen la ve (ADR-0028)."""
     proyeccion = revision_del_examen(examen_id, lector, revisiones, recepciones)
     return RevisionDelExamenEnRespuesta(
         examen_id=proyeccion.examen_id,
@@ -772,9 +924,15 @@ def revision(
     "/examenes/{examen_id}/hojas/{hoja_id}/revision",
     summary="Guardar lo que el profesor resolvió en una hoja",
     response_description="El resultado de la hoja con la nota recalculada.",
+    dependencies=[Depends(examen_de_la_sesion)],
     responses={
         **_PIDE_SESION,
-        404: {"description": "La hoja no está en el examen o no tiene una nota que revisar."},
+        404: {
+            "description": (
+                "El examen no es del docente, o la hoja no está en el examen o no tiene una nota "
+                "que revisar."
+            )
+        },
         422: {"description": "Una pregunta no estaba en revisión o viene dos veces."},
     },
 )
@@ -838,11 +996,11 @@ def resolver_revision(
     "/examenes/{examen_id}/hojas/{hoja_id}/preguntas/{numero}/recorte",
     summary="El recorte de una pregunta en revisión",
     response_class=Response,
-    dependencies=[Depends(docente_de_la_sesion)],
+    dependencies=[Depends(examen_de_la_sesion)],
     responses={
         **_PIDE_SESION,
         200: {"content": {"image/png": {}}, "description": "La fila de burbujas, en PNG."},
-        404: {"description": "La pregunta no tiene recorte."},
+        404: {"description": "El examen no es del docente, o la pregunta no tiene recorte."},
     },
 )
 def recorte(
@@ -866,6 +1024,35 @@ def recorte(
         content=contenido,
         media_type="image/png",
         headers={"Cache-Control": "private, max-age=300"},
+    )
+
+
+@app.get(
+    "/examenes/{examen_id}/panel",
+    summary="Las cifras del panel de un examen",
+    response_description="Promedio, aprobación, marcas, notas y aciertos por pregunta.",
+    responses={**_PIDE_SESION, **_EXAMEN_SUYO},
+)
+def panel(
+    examen: Examen = Depends(examen_de_la_sesion),
+    lector: LectorDeResultados = Depends(obtener_lector_de_resultados),
+    revisiones: RevisionesDelProfesor = Depends(obtener_revisiones),
+    recepciones: LectorDeRecepciones = Depends(obtener_lector_de_recepciones),
+) -> PanelEnRespuesta:
+    """Cómo le fue al grupo en el examen (RF-05), calculado con las hojas que el sistema leyó y lo
+    que el profesor resolvió (ADR-0028). Las notas van en décimas. **No lleva códigos de estudiante
+    ni nombres de archivo.** Un examen sin hojas leídas responde con todo en cero y sin promedio."""
+    cifras = panel_del_examen(examen.examen_id, lector, revisiones, recepciones)
+    return PanelEnRespuesta.model_validate(
+        {
+            "examen_id": examen.examen_id,
+            "nombre": examen.nombre,
+            "resumen": cifras.resumen,
+            "marcas": cifras.marcas,
+            "notas_en_decimas": list(cifras.notas_en_decimas),
+            "preguntas": list(cifras.preguntas),
+        },
+        from_attributes=True,
     )
 
 
@@ -897,8 +1084,11 @@ def _clave_guardada(examen_id: str, claves: ClavesEnDisco) -> ClaveDeRespuestas:
     "/examenes/{examen_id}/clave",
     summary="La clave de un examen",
     response_description="Las respuestas, quién la habilitó y si todavía se puede cambiar.",
-    dependencies=[Depends(docente_de_la_sesion)],
-    responses={**_PIDE_SESION, 404: {"description": "El examen no tiene una clave registrada."}},
+    dependencies=[Depends(examen_de_la_sesion)],
+    responses={
+        **_PIDE_SESION,
+        404: {"description": "El examen no es del docente o no tiene una clave registrada."},
+    },
 )
 def clave(
     examen_id: str,
@@ -916,9 +1106,10 @@ def clave(
     "/examenes/{examen_id}/clave",
     summary="Registrar la clave de un examen",
     response_description="La clave guardada, sin habilitar.",
-    dependencies=[Depends(docente_de_la_sesion)],
+    dependencies=[Depends(examen_de_la_sesion)],
     responses={
         **_PIDE_SESION,
+        **_EXAMEN_SUYO,
         409: {"description": "Ya hay hojas del examen calificadas con la clave: no se cambia."},
         422: {"description": "La clave no cabe en la hoja o el identificador no sirve."},
     },
@@ -956,7 +1147,11 @@ def registrar_la_clave(
     "/examenes/{examen_id}/clave/habilitacion",
     summary="Habilitar la clave de un examen",
     response_description="La clave habilitada, con quién y cuándo.",
-    responses={**_PIDE_SESION, 404: {"description": "El examen no tiene una clave registrada."}},
+    dependencies=[Depends(examen_de_la_sesion)],
+    responses={
+        **_PIDE_SESION,
+        404: {"description": "El examen no es del docente o no tiene una clave registrada."},
+    },
 )
 def habilitar_la_clave(
     examen_id: str,

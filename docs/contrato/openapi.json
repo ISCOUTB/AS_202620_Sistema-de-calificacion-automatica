@@ -326,10 +326,30 @@
         "title": "EstadoDelPresupuestoEnRespuesta",
         "type": "object"
       },
-      "ExamenEnRespuesta": {
-        "description": "Un examen con clave registrada. **No lleva las respuestas**: para elegir el examen basta con\nsu identificador, y la clave no sale del servidor.",
+      "ExamenCreadoEnRespuesta": {
+        "description": "El examen del docente con ese nombre: recién creado (201) o el que ya tenía (200).",
         "properties": {
           "examen_id": {
+            "title": "Examen Id",
+            "type": "string"
+          },
+          "nombre": {
+            "title": "Nombre",
+            "type": "string"
+          }
+        },
+        "required": [
+          "examen_id",
+          "nombre"
+        ],
+        "title": "ExamenCreadoEnRespuesta",
+        "type": "object"
+      },
+      "ExamenEnRespuesta": {
+        "description": "Un examen del docente con clave registrada. **No lleva las respuestas**: para elegir el examen\nbasta con su identificador y su nombre, y la clave no sale del servidor.",
+        "properties": {
+          "examen_id": {
+            "description": "El identificador que acuña el sistema, como `000001`.",
             "title": "Examen Id",
             "type": "string"
           },
@@ -337,17 +357,23 @@
             "description": "Si la clave ya esta habilitada. Sin habilitar, las hojas se leen sin nota.",
             "title": "Habilitada",
             "type": "boolean"
+          },
+          "nombre": {
+            "description": "El nombre que le dio el docente, como «Parcial 1».",
+            "title": "Nombre",
+            "type": "string"
           }
         },
         "required": [
           "examen_id",
+          "nombre",
           "habilitada"
         ],
         "title": "ExamenEnRespuesta",
         "type": "object"
       },
       "ExamenesEnRespuesta": {
-        "description": "Los examenes con clave registrada, ordenados por identificador.",
+        "description": "Los exámenes del docente de la sesión que tienen clave, ordenados por identificador.",
         "properties": {
           "examenes": {
             "items": {
@@ -515,6 +541,143 @@
           "detail"
         ],
         "title": "LoteFueraDePresupuestoEnRespuesta",
+        "type": "object"
+      },
+      "MarcasDelExamenEnRespuesta": {
+        "description": "Cada pregunta de cada hoja con nota, en una sola categoría según lo que vio la lectura.",
+        "properties": {
+          "correctas": {
+            "title": "Correctas",
+            "type": "integer"
+          },
+          "dobles": {
+            "title": "Dobles",
+            "type": "integer"
+          },
+          "en_blanco": {
+            "title": "En Blanco",
+            "type": "integer"
+          },
+          "incorrectas": {
+            "title": "Incorrectas",
+            "type": "integer"
+          },
+          "pendientes": {
+            "description": "De las dudosas y las dobles, las que esperan al profesor.",
+            "title": "Pendientes",
+            "type": "integer"
+          },
+          "tenues_o_dudosas": {
+            "title": "Tenues O Dudosas",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "correctas",
+          "incorrectas",
+          "tenues_o_dudosas",
+          "dobles",
+          "en_blanco",
+          "pendientes"
+        ],
+        "title": "MarcasDelExamenEnRespuesta",
+        "type": "object"
+      },
+      "PanelEnRespuesta": {
+        "description": "El panel de un examen (RF-05). **Sin códigos de estudiante ni nombres de archivo**.",
+        "properties": {
+          "examen_id": {
+            "title": "Examen Id",
+            "type": "string"
+          },
+          "marcas": {
+            "$ref": "#/components/schemas/MarcasDelExamenEnRespuesta"
+          },
+          "nombre": {
+            "title": "Nombre",
+            "type": "string"
+          },
+          "notas_en_decimas": {
+            "description": "La nota de cada hoja con nota, de menor a mayor.",
+            "items": {
+              "type": "integer"
+            },
+            "title": "Notas En Decimas",
+            "type": "array"
+          },
+          "preguntas": {
+            "items": {
+              "$ref": "#/components/schemas/PreguntaDelPanelEnRespuesta"
+            },
+            "title": "Preguntas",
+            "type": "array"
+          },
+          "resumen": {
+            "$ref": "#/components/schemas/ResumenDelPanelEnRespuesta"
+          }
+        },
+        "required": [
+          "examen_id",
+          "nombre",
+          "resumen",
+          "marcas",
+          "notas_en_decimas",
+          "preguntas"
+        ],
+        "title": "PanelEnRespuesta",
+        "type": "object"
+      },
+      "PreguntaDelPanelEnRespuesta": {
+        "properties": {
+          "aciertos": {
+            "title": "Aciertos",
+            "type": "integer"
+          },
+          "correcta": {
+            "title": "Correcta",
+            "type": "string"
+          },
+          "dobles": {
+            "title": "Dobles",
+            "type": "integer"
+          },
+          "dudosas": {
+            "title": "Dudosas",
+            "type": "integer"
+          },
+          "en_blanco": {
+            "title": "En Blanco",
+            "type": "integer"
+          },
+          "hojas": {
+            "description": "Hojas con nota que no la anularon.",
+            "title": "Hojas",
+            "type": "integer"
+          },
+          "marcadas": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "Cuántas veces quedó marcada cada opción.",
+            "title": "Marcadas",
+            "type": "object"
+          },
+          "numero": {
+            "title": "Numero",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "numero",
+          "correcta",
+          "aciertos",
+          "hojas",
+          "marcadas",
+          "en_blanco",
+          "dobles",
+          "dudosas"
+        ],
+        "title": "PreguntaDelPanelEnRespuesta",
         "type": "object"
       },
       "PreguntaEnRevisionEnRespuesta": {
@@ -899,6 +1062,90 @@
         "title": "ResultadosDelExamenEnRespuesta",
         "type": "object"
       },
+      "ResumenDelPanelEnRespuesta": {
+        "description": "Las cifras de cabecera del panel. Las notas van en décimas, como en el resto del contrato:\n37 es 3,7.",
+        "properties": {
+          "aprobados": {
+            "title": "Aprobados",
+            "type": "integer"
+          },
+          "desviacion_en_decimas": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Desviación estándar poblacional de las notas. None si ninguna tiene nota.",
+            "title": "Desviacion En Decimas"
+          },
+          "hojas_con_nota": {
+            "description": "También las de nota provisional.",
+            "title": "Hojas Con Nota",
+            "type": "integer"
+          },
+          "hojas_en_revision": {
+            "description": "Con alguna pregunta que espera al profesor.",
+            "title": "Hojas En Revision",
+            "type": "integer"
+          },
+          "hojas_ilegibles": {
+            "title": "Hojas Ilegibles",
+            "type": "integer"
+          },
+          "hojas_leidas": {
+            "title": "Hojas Leidas",
+            "type": "integer"
+          },
+          "hojas_recibidas": {
+            "description": "Las que registró la recepción, leídas o no.",
+            "title": "Hojas Recibidas",
+            "type": "integer"
+          },
+          "hojas_sin_nota": {
+            "description": "Leídas sin clave habilitada.",
+            "title": "Hojas Sin Nota",
+            "type": "integer"
+          },
+          "nota_aprobatoria_en_decimas": {
+            "title": "Nota Aprobatoria En Decimas",
+            "type": "integer"
+          },
+          "preguntas_por_revisar": {
+            "title": "Preguntas Por Revisar",
+            "type": "integer"
+          },
+          "promedio_en_decimas": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "None si ninguna hoja tiene nota.",
+            "title": "Promedio En Decimas"
+          }
+        },
+        "required": [
+          "hojas_recibidas",
+          "hojas_leidas",
+          "hojas_con_nota",
+          "hojas_sin_nota",
+          "hojas_ilegibles",
+          "hojas_en_revision",
+          "preguntas_por_revisar",
+          "aprobados",
+          "promedio_en_decimas",
+          "desviacion_en_decimas",
+          "nota_aprobatoria_en_decimas"
+        ],
+        "title": "ResumenDelPanelEnRespuesta",
+        "type": "object"
+      },
       "RevisionDelExamenEnRespuesta": {
         "description": "Las hojas de un examen que tienen o tuvieron preguntas en revision.",
         "properties": {
@@ -1005,6 +1252,23 @@
         "title": "SolicitudDeDistractores",
         "type": "object"
       },
+      "SolicitudDeExamen": {
+        "description": "El nombre del examen que se quiere crear (ADR-0028). Lo normaliza y lo limita `autoria`;\naquí solo se acota lo que puede llegar.",
+        "properties": {
+          "nombre": {
+            "description": "Como «Parcial 1».",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Nombre",
+            "type": "string"
+          }
+        },
+        "required": [
+          "nombre"
+        ],
+        "title": "SolicitudDeExamen",
+        "type": "object"
+      },
       "SolicitudDeRevision": {
         "description": "Lo que el profesor resolvio en una hoja, todo junto. Quien lo resolvio no viaja aqui: es el\ndocente de la sesion, y queda registrado con cada resolucion (RF-10, ADR-0025).",
         "properties": {
@@ -1099,7 +1363,7 @@
   "info": {
     "description": "Interfaz HTTP de QuantIA, sistema de calificación de exámenes de opción múltiple. Hoy cubre el aspecto A-01 (carga de hojas escaneadas para calificación) y el A-06 (propuesta opcional de distractores diagnósticos), con el presupuesto que protege la cuota del proveedor de LLM y su métrica en `GET /metricas` (EC-09). Desde la S13, un presupuesto de carga limita las hojas por lote y los bytes por día (ADR-0022). Desde ADR-0025, todas las rutas salvo `/health`, `/metricas` y `POST /sesion` piden el token de una sesión en `Authorization: Bearer`.",
     "title": "QuantIA",
-    "version": "2.1.0"
+    "version": "3.0.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -1172,7 +1436,7 @@
     },
     "/examenes": {
       "get": {
-        "description": "Los exámenes que tienen una clave registrada, para que la pantalla de carga los ofrezca en\nuna lista y el docente no tenga que escribir el identificador de memoria: una letra mal\nescrita mandaba las hojas a un examen sin clave, y nadie lo notaba hasta ver «Sin nota».\n\n**No devuelve las respuestas de la clave**: para elegir el examen basta con su identificador.\nUna clave mal escrita no aparece, y una sin habilitar sí, marcada, porque sus hojas se leen sin\nnota.",
+        "description": "Los exámenes que tienen una clave registrada, para que la pantalla de carga los ofrezca en\nuna lista y el docente no tenga que escribir el identificador de memoria: una letra mal\nescrita mandaba las hojas a un examen sin clave, y nadie lo notaba hasta ver «Sin nota».\n\n**No devuelve las respuestas de la clave**: para elegir el examen basta con su identificador.\nUna clave mal escrita no aparece, y una sin habilitar sí, marcada, porque sus hojas se leen sin\nnota.\n\n**Solo los del docente de la sesión** (ADR-0028), cada uno con su nombre y el identificador que\nle dio el sistema.",
         "operationId": "examenes_examenes_get",
         "responses": {
           "200": {
@@ -1183,7 +1447,7 @@
                 }
               }
             },
-            "description": "Cada examen con clave, sin sus respuestas, ordenados por identificador."
+            "description": "Cada examen suyo con clave, sin sus respuestas, por identificador."
           },
           "401": {
             "description": "Sin sesión, o con un token vencido o que ya no vale (ADR-0025)."
@@ -1194,7 +1458,55 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Exámenes con clave registrada"
+        "summary": "Los exámenes del docente con clave registrada"
+      },
+      "post": {
+        "description": "Crea un examen a nombre del docente de la sesión y le da un identificador propio, como\n`000001` (ADR-0028). El identificador es el que se usa en las demás rutas del examen.\n\nDos docentes pueden usar el mismo nombre: cada uno recibe su examen. Si el docente ya tiene uno\ncon ese nombre (sin distinguir mayúsculas ni espacios de más), responde 200 con ese y no crea\notro.",
+        "operationId": "crear_un_examen_examenes_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SolicitudDeExamen"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExamenCreadoEnRespuesta"
+                }
+              }
+            },
+            "description": "Ya tenía un examen con ese nombre."
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExamenCreadoEnRespuesta"
+                }
+              }
+            },
+            "description": "El examen del docente con ese nombre y su identificador."
+          },
+          "401": {
+            "description": "Sin sesión, o con un token vencido o que ya no vale (ADR-0025)."
+          },
+          "422": {
+            "description": "El nombre está vacío, es muy largo o no se puede leer."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Crear un examen con su nombre"
       }
     },
     "/examenes/{examen_id}/clave": {
@@ -1227,7 +1539,7 @@
             "description": "Sin sesión, o con un token vencido o que ya no vale (ADR-0025)."
           },
           "404": {
-            "description": "El examen no tiene una clave registrada."
+            "description": "El examen no es del docente o no tiene una clave registrada."
           },
           "422": {
             "content": {
@@ -1285,6 +1597,9 @@
           "401": {
             "description": "Sin sesión, o con un token vencido o que ya no vale (ADR-0025)."
           },
+          "404": {
+            "description": "El examen no existe o no es del docente de la sesión."
+          },
           "409": {
             "description": "Ya hay hojas del examen calificadas con la clave: no se cambia."
           },
@@ -1330,7 +1645,7 @@
             "description": "Sin sesión, o con un token vencido o que ya no vale (ADR-0025)."
           },
           "404": {
-            "description": "El examen no tiene una clave registrada."
+            "description": "El examen no es del docente o no tiene una clave registrada."
           },
           "422": {
             "content": {
@@ -1353,7 +1668,7 @@
     },
     "/examenes/{examen_id}/hojas": {
       "post": {
-        "description": "Recibe una o varias hojas escaneadas de un examen y confirma qué entró y qué no (RF-01).\n\n**Responde 200 aunque haya archivos rechazados, y eso es deliberado.** La petición se\natendió por completo: el 200 confirma que el sistema procesó el lote entero, y el cuerpo\ndice archivo por archivo qué pasó. Devolver un error por un rechazo obligaría al cliente a\nreenviar el lote completo, que es justo lo que EC-07 quiere evitar.\n\n**Una hoja puede volver como aceptada y todavía pendiente de encolar.** Desde ADR-0006 el\ncampo `estado` de cada aceptada vale `encolada` o `pendiente_de_encolar`: la segunda es una\nhoja almacenada y registrada en la bitácora cuyo trabajo no llegó a la cola. Se reporta en\nvez de omitirse porque EC-07 exige que ningún archivo cargado desaparezca sin traza, y\nreintentarla es asunto del sistema, no del docente: el archivo ya está adentro.\n\n**El `examen_id` todavía no se verifica contra nada, y es un hueco conocido, no un olvido.**\nEl módulo `autoria` es el que registrará los exámenes, y esa parte (aspecto A-04) aún no\nexiste; `identidad` ya pide una sesión (ADR-0025), pero todavía no sabe de cursos (EC-06), así\nque no comprueba que el docente pueda cargar en ese examen. La ruta ya tiene la forma\ndefinitiva para que cuando esas partes lleguen solo haya que sumar la comprobación, sin migrar\nel frontend.\n\n**Un lote que no cabe en el presupuesto de carga no entra entero** (ADR-0022). Responde 413\nsi trae más hojas de las que admite un lote o pesa más que el cupo de un día, y 429 con\n`Retry-After` si ya no cabe en lo que queda del cupo de las últimas 24 horas. En los dos\ncasos no se lee ninguna hoja, así que no hay nada que revisar antes de volver a subirlo.",
+        "description": "Recibe una o varias hojas escaneadas de un examen y confirma qué entró y qué no (RF-01).\n\n**Responde 200 aunque haya archivos rechazados, y eso es deliberado.** La petición se\natendió por completo: el 200 confirma que el sistema procesó el lote entero, y el cuerpo\ndice archivo por archivo qué pasó. Devolver un error por un rechazo obligaría al cliente a\nreenviar el lote completo, que es justo lo que EC-07 quiere evitar.\n\n**Una hoja puede volver como aceptada y todavía pendiente de encolar.** Desde ADR-0006 el\ncampo `estado` de cada aceptada vale `encolada` o `pendiente_de_encolar`: la segunda es una\nhoja almacenada y registrada en la bitácora cuyo trabajo no llegó a la cola. Se reporta en\nvez de omitirse porque EC-07 exige que ningún archivo cargado desaparezca sin traza, y\nreintentarla es asunto del sistema, no del docente: el archivo ya está adentro.\n\n**Solo en un examen del docente de la sesión** (ADR-0028): si el examen no existe o es de otro\ndocente, responde 404 y no entra ninguna hoja.\n\n**Un lote que no cabe en el presupuesto de carga no entra entero** (ADR-0022). Responde 413\nsi trae más hojas de las que admite un lote o pesa más que el cupo de un día, y 429 con\n`Retry-After` si ya no cabe en lo que queda del cupo de las últimas 24 horas. En los dos\ncasos no se lee ninguna hoja, así que no hay nada que revisar antes de volver a subirlo.",
         "operationId": "cargar_hojas_examenes__examen_id__hojas_post",
         "parameters": [
           {
@@ -1389,6 +1704,9 @@
           },
           "401": {
             "description": "Sin sesión, o con un token vencido o que ya no vale (ADR-0025)."
+          },
+          "404": {
+            "description": "El examen no existe o no es del docente de la sesión."
           },
           "413": {
             "content": {
@@ -1473,7 +1791,7 @@
             "description": "Sin sesión, o con un token vencido o que ya no vale (ADR-0025)."
           },
           "404": {
-            "description": "La pregunta no tiene recorte."
+            "description": "El examen no es del docente, o la pregunta no tiene recorte."
           },
           "422": {
             "content": {
@@ -1543,7 +1861,7 @@
             "description": "Sin sesión, o con un token vencido o que ya no vale (ADR-0025)."
           },
           "404": {
-            "description": "La hoja no está en el examen o no tiene una nota que revisar."
+            "description": "El examen no es del docente, o la hoja no está en el examen o no tiene una nota que revisar."
           },
           "422": {
             "description": "Una pregunta no estaba en revisión o viene dos veces."
@@ -1555,6 +1873,57 @@
           }
         ],
         "summary": "Guardar lo que el profesor resolvió en una hoja"
+      }
+    },
+    "/examenes/{examen_id}/panel": {
+      "get": {
+        "description": "Cómo le fue al grupo en el examen (RF-05), calculado con las hojas que el sistema leyó y lo\nque el profesor resolvió (ADR-0028). Las notas van en décimas. **No lleva códigos de estudiante\nni nombres de archivo.** Un examen sin hojas leídas responde con todo en cero y sin promedio.",
+        "operationId": "panel_examenes__examen_id__panel_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "examen_id",
+            "required": true,
+            "schema": {
+              "title": "Examen Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PanelEnRespuesta"
+                }
+              }
+            },
+            "description": "Promedio, aprobación, marcas, notas y aciertos por pregunta."
+          },
+          "401": {
+            "description": "Sin sesión, o con un token vencido o que ya no vale (ADR-0025)."
+          },
+          "404": {
+            "description": "El examen no existe o no es del docente de la sesión."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Las cifras del panel de un examen"
       }
     },
     "/examenes/{examen_id}/resultados": {
@@ -1586,6 +1955,9 @@
           "401": {
             "description": "Sin sesión, o con un token vencido o que ya no vale (ADR-0025)."
           },
+          "404": {
+            "description": "El examen no existe o no es del docente de la sesión."
+          },
           "422": {
             "content": {
               "application/json": {
@@ -1607,7 +1979,7 @@
     },
     "/examenes/{examen_id}/revision": {
       "get": {
-        "description": "Las hojas con preguntas que la lectura no pudo decidir, y en cada pregunta lo que se midió\nen sus burbujas y lo que el profesor ya resolvió (RF-08). Una hoja sigue apareciendo después de\nresuelta, para poder cambiar una decisión. Cada hoja lleva el nombre con que se subió y la hora\nen que llegó, para que el profesor sepa cuál es.\n\n**No lleva la respuesta correcta**: el profesor dice qué marcó el estudiante y el sistema decide\nsi es correcto. **Sí lleva el código del estudiante**, para que el profesor sepa de quién es la\nhoja, y el nombre del archivo, que puede ser el del estudiante. La ruta pide sesión\n(ADR-0025), pero sin cursos todavía cualquier docente con cuenta ve todas las hojas (EC-06).",
+        "description": "Las hojas con preguntas que la lectura no pudo decidir, y en cada pregunta lo que se midió\nen sus burbujas y lo que el profesor ya resolvió (RF-08). Una hoja sigue apareciendo después de\nresuelta, para poder cambiar una decisión. Cada hoja lleva el nombre con que se subió y la hora\nen que llegó, para que el profesor sepa cuál es.\n\n**No lleva la respuesta correcta**: el profesor dice qué marcó el estudiante y el sistema decide\nsi es correcto. **Sí lleva el código del estudiante**, para que el profesor sepa de quién es la\nhoja, y el nombre del archivo, que puede ser el del estudiante. Solo el docente dueño del\nexamen la ve (ADR-0028).",
         "operationId": "revision_examenes__examen_id__revision_get",
         "parameters": [
           {
@@ -1633,6 +2005,9 @@
           },
           "401": {
             "description": "Sin sesión, o con un token vencido o que ya no vale (ADR-0025)."
+          },
+          "404": {
+            "description": "El examen no existe o no es del docente de la sesión."
           },
           "422": {
             "content": {

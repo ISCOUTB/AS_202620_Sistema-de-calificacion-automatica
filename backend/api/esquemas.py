@@ -69,7 +69,14 @@ from infraestructura.modelo import (
 #
 # 2.1.0 agrega la clave de un examen (A-04, ADR-0026): leerla, registrarla y habilitarla. Solo
 # agrega rutas, asi que sube la menor.
-VERSION_DEL_CONTRATO = "2.1.0"
+#
+# 3.0.0 da a cada examen un dueño y un identificador propio, distinto de su nombre (ADR-0028):
+# `POST /examenes` lo crea con un nombre y devuelve su identificador (`000001`), y todas las rutas
+# de un examen responden 404 si el examen no existe o es de otro docente. `GET /examenes` lista solo
+# los del docente de la sesión y agrega `nombre`. `GET /examenes/{examen_id}/panel` da las cifras
+# del panel. Sube la mayor porque registrar la clave de un examen que no se creó antes con
+# `POST /examenes` ahora responde 404, donde antes respondía 200.
+VERSION_DEL_CONTRATO = "3.0.0"
 
 EstadoDeHoja = Literal["encolada", "pendiente_de_encolar"]
 
@@ -327,21 +334,98 @@ class SolicitudDeRevision(BaseModel):
 
 
 class ExamenEnRespuesta(BaseModel):
-    """Un examen con clave registrada. **No lleva las respuestas**: para elegir el examen basta con
-    su identificador, y la clave no sale del servidor."""
+    """Un examen del docente con clave registrada. **No lleva las respuestas**: para elegir el examen
+    basta con su identificador y su nombre, y la clave no sale del servidor."""
 
     model_config = ConfigDict(from_attributes=True)
 
-    examen_id: str
+    examen_id: str = Field(description="El identificador que acuña el sistema, como `000001`.")
+    nombre: str = Field(description="El nombre que le dio el docente, como «Parcial 1».")
     habilitada: bool = Field(
         description="Si la clave ya esta habilitada. Sin habilitar, las hojas se leen sin nota."
     )
 
 
 class ExamenesEnRespuesta(BaseModel):
-    """Los examenes con clave registrada, ordenados por identificador."""
+    """Los exámenes del docente de la sesión que tienen clave, ordenados por identificador."""
 
     examenes: list[ExamenEnRespuesta]
+
+
+class SolicitudDeExamen(BaseModel):
+    """El nombre del examen que se quiere crear (ADR-0028). Lo normaliza y lo limita `autoria`;
+    aquí solo se acota lo que puede llegar."""
+
+    nombre: str = Field(min_length=1, max_length=200, description="Como «Parcial 1».")
+
+
+class ExamenCreadoEnRespuesta(BaseModel):
+    """El examen del docente con ese nombre: recién creado (201) o el que ya tenía (200)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    examen_id: str
+    nombre: str
+
+
+class ResumenDelPanelEnRespuesta(BaseModel):
+    """Las cifras de cabecera del panel. Las notas van en décimas, como en el resto del contrato:
+    37 es 3,7."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    hojas_recibidas: int = Field(description="Las que registró la recepción, leídas o no.")
+    hojas_leidas: int
+    hojas_con_nota: int = Field(description="También las de nota provisional.")
+    hojas_sin_nota: int = Field(description="Leídas sin clave habilitada.")
+    hojas_ilegibles: int
+    hojas_en_revision: int = Field(description="Con alguna pregunta que espera al profesor.")
+    preguntas_por_revisar: int
+    aprobados: int
+    promedio_en_decimas: float | None = Field(description="None si ninguna hoja tiene nota.")
+    desviacion_en_decimas: float | None = Field(
+        description="Desviación estándar poblacional de las notas. None si ninguna tiene nota."
+    )
+    nota_aprobatoria_en_decimas: int
+
+
+class MarcasDelExamenEnRespuesta(BaseModel):
+    """Cada pregunta de cada hoja con nota, en una sola categoría según lo que vio la lectura."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    correctas: int
+    incorrectas: int
+    tenues_o_dudosas: int
+    dobles: int
+    en_blanco: int
+    pendientes: int = Field(description="De las dudosas y las dobles, las que esperan al profesor.")
+
+
+class PreguntaDelPanelEnRespuesta(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    numero: int
+    correcta: str
+    aciertos: int
+    hojas: int = Field(description="Hojas con nota que no la anularon.")
+    marcadas: dict[str, int] = Field(description="Cuántas veces quedó marcada cada opción.")
+    en_blanco: int
+    dobles: int
+    dudosas: int
+
+
+class PanelEnRespuesta(BaseModel):
+    """El panel de un examen (RF-05). **Sin códigos de estudiante ni nombres de archivo**."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    examen_id: str
+    nombre: str
+    resumen: ResumenDelPanelEnRespuesta
+    marcas: MarcasDelExamenEnRespuesta
+    notas_en_decimas: list[int] = Field(description="La nota de cada hoja con nota, de menor a mayor.")
+    preguntas: list[PreguntaDelPanelEnRespuesta]
 
 
 class SolicitudDeDistractores(BaseModel):

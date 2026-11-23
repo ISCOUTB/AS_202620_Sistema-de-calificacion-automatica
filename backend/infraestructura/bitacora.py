@@ -79,6 +79,10 @@ class BitacoraDeRecepcion(Protocol):
         """Entradas registradas y nunca confirmadas: hojas almacenadas sin encolar."""
         ...
 
+    def examenes_mencionados(self) -> set[str]:
+        """Cada `examen_id` que aparece en la bitácora (la adopción de ADR-0028)."""
+        ...
+
 
 class LectorDeRecepciones(Protocol):
     """El puerto de solo lectura. `dashboard` depende de esta forma."""
@@ -167,6 +171,22 @@ class BitacoraEnDisco:
 
         return [e for id_, e in recibidas.items() if id_ not in confirmadas]
 
+    def examenes_mencionados(self) -> set[str]:
+        """Cada `examen_id` que aparece en una línea `recibida`: lo usa la adopción de los
+        exámenes anteriores a ADR-0028. Una línea truncada se salta."""
+        if not self.ruta.exists():
+            return set()
+        examenes: set[str] = set()
+        with open(self.ruta, encoding="utf-8", errors="replace") as archivo:
+            for linea in archivo:
+                try:
+                    hecho = json.loads(linea)
+                except ValueError:
+                    continue
+                if isinstance(hecho, dict) and isinstance(hecho.get("examen_id"), str):
+                    examenes.add(hecho["examen_id"])
+        return examenes
+
     def recepciones_del_examen(self, examen_id: str) -> dict[str, RecepcionDeHoja]:
         """Recorre el archivo y solo decodifica las líneas que nombran al examen, como
         `ResultadosEnDisco.hechos_del_examen`. Una línea truncada se salta."""
@@ -228,6 +248,9 @@ class BitacoraEnMemoria:
 
     def pendientes(self) -> list[EntradaDeBitacora]:
         return [e for i, e in self.recibidas.items() if i not in self.confirmadas]
+
+    def examenes_mencionados(self) -> set[str]:
+        return {entrada.examen_id for entrada in self.recibidas.values()}
 
     def recepciones_del_examen(self, examen_id: str) -> dict[str, RecepcionDeHoja]:
         recepciones: dict[str, RecepcionDeHoja] = {}

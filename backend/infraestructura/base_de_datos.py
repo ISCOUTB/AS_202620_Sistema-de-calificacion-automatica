@@ -39,9 +39,11 @@ import psycopg
 from psycopg.types.json import Jsonb
 
 from infraestructura.bitacora import RecepcionDeHoja
+from infraestructura.examenes import DIGITOS_DEL_IDENTIFICADOR
 from infraestructura.modelo import (
     CalificacionDeHoja,
     EntradaDeBitacora,
+    Examen,
     LecturaDeHoja,
     ResolucionDelProfesor,
 )
@@ -54,6 +56,7 @@ __all__ = [
     "BitacoraEnPostgres",
     "ResultadosEnPostgres",
     "RevisionesEnPostgres",
+    "ExamenesEnPostgres",
 ]
 
 # El esquema completo. Es idempotente: cada proceso lo aplica la primera vez que abre la base, así
@@ -94,6 +97,19 @@ CREATE TABLE IF NOT EXISTS revisiones_del_profesor (
     momento     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS revisiones_por_examen ON revisiones_del_profesor (examen_id, id);
+
+-- ADR-0028: cada examen con su dueño. El identificador lo acuña la secuencia (000001, 000002...);
+-- los exámenes anteriores conservan el suyo. Un docente no repite nombre; dos docentes sí.
+CREATE SEQUENCE IF NOT EXISTS examenes_numero;
+CREATE TABLE IF NOT EXISTS examenes (
+    examen_id         TEXT        PRIMARY KEY,
+    nombre            TEXT        NOT NULL,
+    clave_del_nombre  TEXT        NOT NULL,
+    docente           TEXT        NOT NULL,
+    creado_en         TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (docente, clave_del_nombre)
+);
+CREATE INDEX IF NOT EXISTS examenes_por_docente ON examenes (docente, examen_id);
 """
 
 _esquemas_aplicados: set[str] = set()
@@ -230,6 +246,15 @@ class BitacoraEnPostgres:
             for trabajo_id, examen_id, referencia, nombre_archivo, hoja_id, _ in filas
         ]
 
+    def examenes_mencionados(self) -> set[str]:
+        """Cada `examen_id` que aparece en la bitácora: lo usa la adopción de los exámenes
+        anteriores a ADR-0028."""
+        with _conexion(_con_esquema(self.url)) as conexion:
+            filas = conexion.execute(
+                "SELECT DISTINCT examen_id FROM bitacora_de_recepcion WHERE examen_id IS NOT NULL"
+            ).fetchall()
+        return {examen_id for (examen_id,) in filas}
+
     def recepciones_del_examen(self, examen_id: str) -> dict[str, RecepcionDeHoja]:
         """La primera `recibida` de cada hoja del examen: es cuando llegó."""
         with _conexion(_con_esquema(self.url)) as conexion:
@@ -343,3 +368,80 @@ class RevisionesEnPostgres:
                 resolucion_desde(datos) for datos in documento["resoluciones"]
             )
         return {hoja_id: tuple(lista) for hoja_id, lista in por_hoja.items()}
+
+
+class ExamenesEnPostgres:
+    """`RegistroDeExamenes` sobre la tabla `examenes` (ADR-0028). Solo la API escribe.
+
+    La unicidad del nombre por docente la garantiza la restricción `UNIQUE`, no una consulta previa:
+    dos pestañas que crean a la vez el mismo examen terminan con uno solo."""
+
+    def __init__(self, url: str) -> None:
+        self.url = url
+
+    def crear(
+        self, nombre: str, clave_del_nombre: str, docente: str, en: datetime
+    ) -> tuple[Examen, bool]:
+        with _conexion(_con_esquema(self.url)) as conexion:
+            existente = self._del_docente_con_clave(conexion, docente, clave_del_nombre)
+            if existente is not None:
+                return existente, False
+            # Un examen adoptado podría llevar ya un identificador numérico: se salta.
+            while True:
+                siguiente = conexion.execute("SELECT nextval('examenes_numero')").fetchone()
+                assert siguiente is not None  # nextval siempre devuelve una fila
+                (numero,) = siguiente
+                examen_id = f"{numero:0{DIGITOS_DEL_IDENTIFICADOR}d}"
+                fila = conexion.execute(
+                    "INSERT INTO examenes (examen_id, nombre, clave_del_nombre, docente, creado_en)"
+                    " VALUES (%s, %s, %s, %s, %s)"
+                    " ON CONFLICT DO NOTHING"
+                    " RETURNING examen_id, nombre, docente, creado_en",
+                    (examen_id, nombre, clave_del_nombre, docente, en),
+                ).fetchone()
+                if fila is not None:
+                    return Examen(*fila), True
+                # El conflicto pudo ser el nombre (otra petición lo creó a la vez) o el número.
+                existente = self._del_docente_con_clave(conexion, docente, clave_del_nombre)
+                if existente is not None:
+                    return existente, False
+
+    def examen(self, examen_id: str) -> Examen | None:
+        with _conexion(_con_esquema(self.url)) as conexion:
+            fila = conexion.execute(
+                "SELECT examen_id, nombre, docente, creado_en FROM examenes WHERE examen_id = %s",
+                (examen_id,),
+            ).fetchone()
+        return None if fila is None else Examen(*fila)
+
+    def examenes_del_docente(self, docente: str) -> tuple[Examen, ...]:
+        with _conexion(_con_esquema(self.url)) as conexion:
+            filas = conexion.execute(
+                "SELECT examen_id, nombre, docente, creado_en FROM examenes"
+                " WHERE docente = %s ORDER BY examen_id",
+                (docente,),
+            ).fetchall()
+        return tuple(Examen(*fila) for fila in filas)
+
+    def adoptar(self, examen_id: str, docente: str, en: datetime) -> bool:
+        with _conexion(_con_esquema(self.url)) as conexion:
+            clave = examen_id.casefold()
+            if self._del_docente_con_clave(conexion, docente, clave) is not None:
+                clave = f"{clave}#{examen_id}"
+            fila = conexion.execute(
+                "INSERT INTO examenes (examen_id, nombre, clave_del_nombre, docente, creado_en)"
+                " VALUES (%s, %s, %s, %s, %s) ON CONFLICT DO NOTHING RETURNING examen_id",
+                (examen_id, examen_id, clave, docente, en),
+            ).fetchone()
+        return fila is not None
+
+    @staticmethod
+    def _del_docente_con_clave(
+        conexion: psycopg.Connection, docente: str, clave_del_nombre: str
+    ) -> Examen | None:
+        fila = conexion.execute(
+            "SELECT examen_id, nombre, docente, creado_en FROM examenes"
+            " WHERE docente = %s AND clave_del_nombre = %s",
+            (docente, clave_del_nombre),
+        ).fetchone()
+        return None if fila is None else Examen(*fila)

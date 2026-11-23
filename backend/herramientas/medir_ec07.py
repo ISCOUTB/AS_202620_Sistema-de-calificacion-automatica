@@ -55,6 +55,14 @@ try:  # pragma: no cover - la rama que se toma depende del estado del repositori
 except ImportError:
     # Estado anterior a ADR-0025: las rutas no piden sesión.
     HAY_SESION = False
+try:  # pragma: no cover - la rama que se toma depende del estado del repositorio
+    from api.main import obtener_registro_de_examenes
+    from herramientas.sesion import RegistroDeMedicion
+
+    HAY_DUENO = True
+except ImportError:
+    # Estado anterior a ADR-0028: los exámenes no tienen dueño.
+    HAY_DUENO = False
 from infraestructura.almacen import AlmacenEnDisco
 
 try:  # pragma: no cover - la rama que se toma depende del estado del repositorio
@@ -130,6 +138,9 @@ def _cliente(raiz: Path, cola: ColaEnMemoria, propagar: bool) -> TestClient:
     # Se mide la recepción del lote, no la entrada: la medición habla como un docente que ya entró.
     if HAY_SESION:
         app.dependency_overrides[docente_de_la_sesion] = lambda: DOCENTE_DE_MEDICION
+    if HAY_DUENO:
+        registro = RegistroDeMedicion()
+        app.dependency_overrides[obtener_registro_de_examenes] = lambda: registro
     if HAY_BITACORA:
         app.dependency_overrides[obtener_bitacora] = lambda: BitacoraEnDisco(
             raiz / "bitacora-de-recepcion.jsonl"
