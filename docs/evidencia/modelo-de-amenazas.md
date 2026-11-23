@@ -15,8 +15,9 @@
 ## 1. Qué se modeló
 
 Los seis elementos del Nivel 2 (aplicación web, worker, cola, base de datos, almacén de imágenes y
-proveedor de LLM) y sus ocho relaciones. La base de datos y las relaciones 2 y 6 están previstas y
-no existen en el código, así que hoy no tienen amenazas propias: se modelan cuando R-06 las decida.
+proveedor de LLM) y sus ocho relaciones. La base de datos y las relaciones 2 y 6 se modelaron como
+previstas; desde [ADR-0027](../adr/0027-guardar-los-registros-en-postgres-detras-de-los-mismos-puertos.md) existen, y lo que cambian está en la sección
+«La base de datos», más abajo.
 
 Al Nivel 2 se suman tres piezas del despliegue que el C4 no dibuja y que cambian lo que puede pasar:
 el **borde** (Cloudflare y el Traefik del servidor), el **panel** (Dokploy, con las variables de
@@ -231,8 +232,12 @@ equipo, sin datos de ninguna persona; el entorno se borra el 30-nov (R-31).
 - **Pruebas de penetración o auditoría externa:** no se hicieron, y la ficha no las pide.
 - **El borde y el panel por dentro** (Cloudflare, Traefik y Dokploy): son del curso y no los
   configuramos. Se aceptan como están.
-- **La base de datos:** no existe todavía (R-06). Este modelo se repite cuando exista. El OMR, que
-  tampoco existía en la S13, se modeló en la sección 8.
+- **La base de datos** ([ADR-0027](../adr/0027-guardar-los-registros-en-postgres-detras-de-los-mismos-puertos.md)): guarda lo mismo que guardaban
+  los registros `.jsonl` del almacén (la bitácora, los resultados con el código del estudiante y
+  las revisiones), en la red interna del equipo y sin puertos publicados. No abre una superficie
+  nueva: lo que estaba expuesto en el volumen (AM-18) ahora está en sus tablas, y su contraseña va
+  en el panel, como `SESION_SECRETO` (AM-21). El OMR, que tampoco existía en la S13, se modeló en
+  la sección 8.
 
 ## 8. Actualización: la lectura, las notas y la revisión (2026-11-06)
 
