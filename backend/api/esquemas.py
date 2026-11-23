@@ -76,7 +76,12 @@ from infraestructura.modelo import (
 # los del docente de la sesión y agrega `nombre`. `GET /examenes/{examen_id}/panel` da las cifras
 # del panel. Sube la mayor porque registrar la clave de un examen que no se creó antes con
 # `POST /examenes` ahora responde 404, donde antes respondía 200.
-VERSION_DEL_CONTRATO = "3.0.0"
+#
+# 3.1.0 guarda los distractores que el docente aprueba (ADR-0029): `PUT /distractores/guardados`
+# los guarda para una pregunta, `GET` los lista y `DELETE /distractores/guardados/{llave}` los
+# quita. Y guarda las preguntas que el docente agrega (ADR-0030): `GET` y `POST /preguntas`, y
+# `DELETE /preguntas/{llave}`. Solo agrega rutas, así que sube la menor.
+VERSION_DEL_CONTRATO = "3.1.0"
 
 EstadoDeHoja = Literal["encolada", "pendiente_de_encolar"]
 
@@ -490,6 +495,64 @@ class RespuestaDeDistractores(BaseModel):
             "otra vez sobre ellas."
         )
     )
+
+
+
+class DistractorParaGuardar(BaseModel):
+    """Un distractor que el docente aprobó, con el error de procedimiento que representa."""
+
+    expresion: str = Field(min_length=1, max_length=300, description="La opción incorrecta.")
+    error: str = Field(min_length=1, max_length=500, description="El error que la produce.")
+
+
+_LLAVE = (
+    "Cómo reconoce la API la pregunta: el enunciado y la respuesta correcta sin espacios de más. "
+    "Con ella se quita."
+)
+
+
+class PreguntaDeLosDistractores(BaseModel):
+    """La pregunta, como la escribió el docente: el enunciado y la respuesta correcta (ADR-0029).
+    Los espacios de más no cuentan."""
+
+    enunciado: str = Field(min_length=1, max_length=1000, description="Enunciado de la pregunta.")
+    respuesta_correcta: str = Field(
+        min_length=1, max_length=300, description="La respuesta correcta de la clave."
+    )
+
+
+class SolicitudDeGuardarDistractores(PreguntaDeLosDistractores):
+    """Los distractores que el docente aprobó para una pregunta. Reemplazan a los que tuviera
+    guardados para esa misma pregunta."""
+
+    distractores: list[DistractorParaGuardar] = Field(
+        min_length=1,
+        max_length=10,
+        description="De 1 a 3: la hoja tiene cuatro opciones y una es la correcta.",
+    )
+
+
+class DistractoresGuardadosEnRespuesta(BaseModel):
+    """Los distractores que el docente de la sesión guardó para una pregunta."""
+
+    llave: str = Field(description=_LLAVE)
+    enunciado: str
+    respuesta_correcta: str
+    distractores: list[DistractorEnRespuesta]
+    guardado_en: datetime = Field(description="Cuándo se guardaron, en UTC.")
+
+
+class SolicitudDeAgregarPregunta(PreguntaDeLosDistractores):
+    """Una pregunta que el docente agrega a su lista en Pauta (ADR-0030)."""
+
+
+class PreguntaEnRespuesta(BaseModel):
+    """Una pregunta que el docente agregó (ADR-0030), con los espacios normalizados."""
+
+    llave: str = Field(description=_LLAVE)
+    enunciado: str
+    respuesta_correcta: str
+    agregada_en: datetime = Field(description="Cuándo la agregó, en UTC.")
 
 
 class ProveedorNoDisponibleEnRespuesta(BaseModel):

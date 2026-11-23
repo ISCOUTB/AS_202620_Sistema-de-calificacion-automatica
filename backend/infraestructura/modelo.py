@@ -189,6 +189,43 @@ class Examen:
     creado_en: datetime
 
 
+@dataclass(frozen=True)
+class DistractorGuardado:
+    """Un distractor que el docente aprobó, con el error de procedimiento que representa."""
+
+    expresion: str
+    error: str
+
+
+@dataclass(frozen=True)
+class DistractoresGuardados:
+    """Los distractores que un docente guardó para una pregunta (ADR-0029).
+
+    La pregunta es el enunciado y la respuesta correcta tal como los escribió: `autoria` la
+    reconoce por esos dos textos con los espacios normalizados, sea del ejemplo, agregada por el
+    docente (ADR-0030) o escrita en el generador. Guardar otra vez para la misma pregunta reemplaza
+    lo anterior."""
+
+    docente: str
+    enunciado: str
+    respuesta_correcta: str
+    distractores: tuple[DistractorGuardado, ...]
+    guardado_en: datetime
+
+
+@dataclass(frozen=True)
+class PreguntaDelDocente:
+    """Una pregunta que el docente agregó en Pauta (ADR-0030), con los espacios normalizados.
+
+    Es el comienzo del banco de preguntas (RF-06): el enunciado y la respuesta correcta, todavía
+    sin tema y sin ligarse a un examen."""
+
+    docente: str
+    enunciado: str
+    respuesta_correcta: str
+    agregada_en: datetime
+
+
 # ---------------------------------------------------------------------------------------------
 # A-04 · La clave de respuestas. Dueño: `autoria` (ADR-0007). Mientras A-04 no esté construido,
 # la escribe a mano quien prepara un examen sintético, y `infraestructura.claves` la relee.

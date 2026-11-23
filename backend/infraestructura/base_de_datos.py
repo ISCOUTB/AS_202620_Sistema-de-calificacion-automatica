@@ -42,9 +42,12 @@ from infraestructura.bitacora import RecepcionDeHoja
 from infraestructura.examenes import DIGITOS_DEL_IDENTIFICADOR
 from infraestructura.modelo import (
     CalificacionDeHoja,
+    DistractorGuardado,
+    DistractoresGuardados,
     EntradaDeBitacora,
     Examen,
     LecturaDeHoja,
+    PreguntaDelDocente,
     ResolucionDelProfesor,
 )
 from infraestructura.resultados import hecho_de_lectura, hecho_ilegible
@@ -57,6 +60,8 @@ __all__ = [
     "ResultadosEnPostgres",
     "RevisionesEnPostgres",
     "ExamenesEnPostgres",
+    "DistractoresEnPostgres",
+    "PreguntasEnPostgres",
 ]
 
 # El esquema completo. Es idempotente: cada proceso lo aplica la primera vez que abre la base, así
@@ -110,6 +115,29 @@ CREATE TABLE IF NOT EXISTS examenes (
     UNIQUE (docente, clave_del_nombre)
 );
 CREATE INDEX IF NOT EXISTS examenes_por_docente ON examenes (docente, examen_id);
+
+-- ADR-0029: los distractores que cada docente aprobó, uno por docente y pregunta. Guardar otra
+-- vez para la misma pregunta reemplaza la fila.
+CREATE TABLE IF NOT EXISTS distractores_guardados (
+    docente            TEXT        NOT NULL,
+    llave              TEXT        NOT NULL,
+    enunciado          TEXT        NOT NULL,
+    respuesta_correcta TEXT        NOT NULL,
+    distractores       JSONB       NOT NULL,
+    guardado_en        TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (docente, llave)
+);
+
+-- ADR-0030: las preguntas que cada docente agrega en Pauta, el comienzo del banco (RF-06). Una por
+-- docente y pregunta: agregarla otra vez no cambia la fila.
+CREATE TABLE IF NOT EXISTS preguntas_del_docente (
+    docente            TEXT        NOT NULL,
+    llave              TEXT        NOT NULL,
+    enunciado          TEXT        NOT NULL,
+    respuesta_correcta TEXT        NOT NULL,
+    agregada_en        TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (docente, llave)
+);
 """
 
 _esquemas_aplicados: set[str] = set()
@@ -445,3 +473,115 @@ class ExamenesEnPostgres:
             (docente, clave_del_nombre),
         ).fetchone()
         return None if fila is None else Examen(*fila)
+
+
+class DistractoresEnPostgres:
+    """`RegistroDeDistractores` sobre la tabla `distractores_guardados` (ADR-0029). Solo la API
+    escribe. Guardar es un `INSERT ... ON CONFLICT DO UPDATE`: dos pestañas que guardan a la vez
+    dejan una sola fila, la última."""
+
+    def __init__(self, url: str) -> None:
+        self.url = url
+
+    def guardar(self, llave: str, guardados: DistractoresGuardados) -> None:
+        distractores = [
+            {"expresion": d.expresion, "error": d.error} for d in guardados.distractores
+        ]
+        with _conexion(_con_esquema(self.url)) as conexion:
+            conexion.execute(
+                "INSERT INTO distractores_guardados"
+                " (docente, llave, enunciado, respuesta_correcta, distractores, guardado_en)"
+                " VALUES (%s, %s, %s, %s, %s, %s)"
+                " ON CONFLICT (docente, llave) DO UPDATE SET"
+                " enunciado = EXCLUDED.enunciado,"
+                " respuesta_correcta = EXCLUDED.respuesta_correcta,"
+                " distractores = EXCLUDED.distractores,"
+                " guardado_en = EXCLUDED.guardado_en",
+                (
+                    guardados.docente,
+                    llave,
+                    guardados.enunciado,
+                    guardados.respuesta_correcta,
+                    Jsonb(distractores),
+                    guardados.guardado_en,
+                ),
+            )
+
+    def del_docente(self, docente: str) -> list[tuple[str, DistractoresGuardados]]:
+        with _conexion(_con_esquema(self.url)) as conexion:
+            filas = conexion.execute(
+                "SELECT llave, enunciado, respuesta_correcta, distractores, guardado_en"
+                " FROM distractores_guardados WHERE docente = %s ORDER BY guardado_en, llave",
+                (docente,),
+            ).fetchall()
+        return [
+            (
+                llave,
+                DistractoresGuardados(
+                    docente=docente,
+                    enunciado=enunciado,
+                    respuesta_correcta=respuesta_correcta,
+                    distractores=tuple(
+                        DistractorGuardado(d["expresion"], d["error"]) for d in distractores
+                    ),
+                    guardado_en=guardado_en,
+                ),
+            )
+            for llave, enunciado, respuesta_correcta, distractores, guardado_en in filas
+        ]
+
+    def eliminar(self, docente: str, llave: str) -> bool:
+        with _conexion(_con_esquema(self.url)) as conexion:
+            fila = conexion.execute(
+                "DELETE FROM distractores_guardados WHERE docente = %s AND llave = %s"
+                " RETURNING llave",
+                (docente, llave),
+            ).fetchone()
+        return fila is not None
+
+
+class PreguntasEnPostgres:
+    """`RegistroDePreguntas` sobre la tabla `preguntas_del_docente` (ADR-0030). Solo la API
+    escribe. Agregar es un `INSERT ... ON CONFLICT DO NOTHING`: si dos pestañas agregan la misma
+    pregunta a la vez, queda una fila y la segunda recibe False."""
+
+    def __init__(self, url: str) -> None:
+        self.url = url
+
+    def agregar(self, llave: str, pregunta: PreguntaDelDocente) -> bool:
+        with _conexion(_con_esquema(self.url)) as conexion:
+            fila = conexion.execute(
+                "INSERT INTO preguntas_del_docente"
+                " (docente, llave, enunciado, respuesta_correcta, agregada_en)"
+                " VALUES (%s, %s, %s, %s, %s)"
+                " ON CONFLICT (docente, llave) DO NOTHING RETURNING llave",
+                (
+                    pregunta.docente,
+                    llave,
+                    pregunta.enunciado,
+                    pregunta.respuesta_correcta,
+                    pregunta.agregada_en,
+                ),
+            ).fetchone()
+        return fila is not None
+
+    def del_docente(self, docente: str) -> list[tuple[str, PreguntaDelDocente]]:
+        with _conexion(_con_esquema(self.url)) as conexion:
+            filas = conexion.execute(
+                "SELECT llave, enunciado, respuesta_correcta, agregada_en"
+                " FROM preguntas_del_docente WHERE docente = %s ORDER BY agregada_en DESC, llave",
+                (docente,),
+            ).fetchall()
+        return [
+            (llave, PreguntaDelDocente(docente, enunciado, respuesta_correcta, agregada_en))
+            for llave, enunciado, respuesta_correcta, agregada_en in filas
+        ]
+
+    def eliminar(self, docente: str, llave: str) -> bool:
+        with _conexion(_con_esquema(self.url)) as conexion:
+            fila = conexion.execute(
+                "DELETE FROM preguntas_del_docente WHERE docente = %s AND llave = %s"
+                " RETURNING llave",
+                (docente, llave),
+            ).fetchone()
+        return fila is not None

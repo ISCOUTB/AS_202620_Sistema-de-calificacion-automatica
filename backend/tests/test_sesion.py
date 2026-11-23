@@ -107,7 +107,7 @@ def test_la_lista_de_rutas_protegidas_no_esta_vacia():
 
 @pytest.mark.parametrize(("metodo", "ruta"), _rutas_protegidas())
 def test_toda_ruta_que_no_es_publica_pide_la_sesion(cliente, metodo, ruta):
-    camino = ruta.format(examen_id="EXAMEN", hoja_id="h-1", numero=1)
+    camino = ruta.format(examen_id="EXAMEN", hoja_id="h-1", numero=1, llave="0" * 64)
 
     respuesta = cliente.request(metodo, camino)
 

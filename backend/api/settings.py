@@ -43,6 +43,16 @@ RUTA_REVISIONES = os.environ.get("RUTA_REVISIONES", RUTA_REVISIONES_POR_OMISION)
 # El registro de exámenes con su dueño (ADR-0028), cuando no hay base de datos. Con
 # `DATABASE_URL` va a la tabla `examenes` y esta ruta no se usa. Solo la API lo lee y lo escribe.
 RUTA_EXAMENES = os.environ.get("RUTA_EXAMENES", os.path.join(RUTA_ALMACEN, "examenes.json"))
+# Los distractores que cada docente aprobó (ADR-0029), cuando no hay `DATABASE_URL`. Con ella
+# van a la tabla `distractores_guardados` y esta ruta no se usa.
+RUTA_DISTRACTORES_GUARDADOS = os.environ.get(
+    "RUTA_DISTRACTORES_GUARDADOS", os.path.join(RUTA_ALMACEN, "distractores-guardados.json")
+)
+# Las preguntas que cada docente agrega en Pauta (ADR-0030), cuando no hay `DATABASE_URL`. Con ella
+# van a la tabla `preguntas_del_docente` y esta ruta no se usa.
+RUTA_PREGUNTAS_DEL_DOCENTE = os.environ.get(
+    "RUTA_PREGUNTAS_DEL_DOCENTE", os.path.join(RUTA_ALMACEN, "preguntas-del-docente.json")
+)
 
 # A quién se le asignan los exámenes que existían antes de ADR-0028 y no tienen dueño, cuando no
 # se sabe quién habilitó su clave (si se sabe y tiene cuenta, va a ese docente). Tiene que ser un

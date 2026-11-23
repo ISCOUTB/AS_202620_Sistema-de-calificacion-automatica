@@ -10,8 +10,10 @@ import time
 from collections.abc import Iterator
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Annotated
 
 from fastapi import Depends, FastAPI, File, HTTPException, Response, UploadFile
+from fastapi import Path as EnLaRuta
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -21,6 +23,7 @@ from api.esquemas import (
     ArchivoRechazadoEnRespuesta,
     DescartadoEnRespuesta,
     DistractorEnRespuesta,
+    DistractoresGuardadosEnRespuesta,
     EstadoDeLaCacheEnRespuesta,
     EstadoDelPresupuestoDeCargaEnRespuesta,
     EstadoDelPresupuestoEnRespuesta,
@@ -31,6 +34,7 @@ from api.esquemas import (
     HojaEnRevisionEnRespuesta,
     LoteFueraDePresupuestoEnRespuesta,
     PanelEnRespuesta,
+    PreguntaEnRespuesta,
     PresupuestoAgotadoEnRespuesta,
     ProveedorNoDisponibleEnRespuesta,
     RespuestaDeCarga,
@@ -42,9 +46,11 @@ from api.esquemas import (
     RevisionDelExamenEnRespuesta,
     ClaveEnRespuesta,
     SesionEnRespuesta,
+    SolicitudDeAgregarPregunta,
     SolicitudDeClave,
     SolicitudDeDistractores,
     SolicitudDeExamen,
+    SolicitudDeGuardarDistractores,
     SolicitudDeRevision,
     SolicitudDeSesion,
 )
@@ -55,6 +61,8 @@ from api.settings import (
     CARGA_MB_POR_DIA,
     DOCENTE_DE_LOS_EXAMENES_ANTERIORES,
     DOCENTES,
+    RUTA_DISTRACTORES_GUARDADOS,
+    RUTA_PREGUNTAS_DEL_DOCENTE,
     LLM_API_KEY,
     LLM_MODELO,
     LLM_SOLICITUDES_POR_DIA,
@@ -77,6 +85,7 @@ from autoria import (
     CacheDePropuestas,
     ClaveInvalida,
     ClaveYaUsada,
+    DistractoresInvalidos,
     ExamenNoEncontrado,
     ExamenSinClave,
     GeneradorCompatibleConOpenAI,
@@ -84,16 +93,21 @@ from autoria import (
     GeneradorConPresupuesto,
     GeneradorDeDistractores,
     NombreDeExamenInvalido,
+    PreguntaInvalida,
     PreguntaParaDistractores,
+    PreguntaRepetida,
     PresupuestoAgotado,
     PresupuestoDeSolicitudes,
     ProveedorNoDisponible,
     adoptar_examenes_sin_dueno,
+    agregar_pregunta,
     clave_se_puede_cambiar,
     crear_examen,
     examen_del_docente,
     examenes_del_docente,
+    guardar_distractores,
     habilitar_clave,
+    llave_de_la_pregunta,
     proponer_distractores,
     registrar_clave,
 )
@@ -114,14 +128,24 @@ from identidad import (
 from infraestructura.almacen import AlmacenDeImagenes, AlmacenEnDisco
 from infraestructura.base_de_datos import (
     BitacoraEnPostgres,
+    DistractoresEnPostgres,
     ExamenesEnPostgres,
+    PreguntasEnPostgres,
     ResultadosEnPostgres,
     RevisionesEnPostgres,
 )
 from infraestructura.bitacora import BitacoraDeRecepcion, BitacoraEnDisco, LectorDeRecepciones
 from infraestructura.claves import ClaveMalEscrita, ClavesEnDisco
+from infraestructura.distractores_guardados import DistractoresEnDisco, RegistroDeDistractores
+from infraestructura.preguntas_del_docente import PreguntasEnDisco, RegistroDePreguntas
 from infraestructura.examenes import ExamenesEnDisco, RegistroDeExamenes
-from infraestructura.modelo import ClaveDeRespuestas, Examen
+from infraestructura.modelo import (
+    ClaveDeRespuestas,
+    DistractorGuardado,
+    DistractoresGuardados,
+    Examen,
+    PreguntaDelDocente,
+)
 from infraestructura.cola import ESPERA_AL_PUBLICAR_SEGUNDOS, cliente_redis
 from infraestructura.modelo import PENDIENTE_DE_ENCOLAR, ArchivoCargado
 from infraestructura.registro import configurar_registro
@@ -286,6 +310,22 @@ def _adoptar_examenes_anteriores(registro: RegistroDeExamenes) -> None:
             "Exámenes anteriores adoptados",
             extra={"evento": "examenes_adoptados", "examenes": len(adoptados)},
         )
+
+
+def obtener_registro_de_distractores() -> RegistroDeDistractores:
+    """Los distractores que cada docente aprobó (ADR-0029): Postgres con `DATABASE_URL`, un JSON en
+    el volumen sin ella. Por petición y sustituible, como los demás registros."""
+    if DATABASE_URL:
+        return DistractoresEnPostgres(DATABASE_URL)
+    return DistractoresEnDisco(Path(RUTA_DISTRACTORES_GUARDADOS))
+
+
+def obtener_registro_de_preguntas() -> RegistroDePreguntas:
+    """Las preguntas que cada docente agrega en Pauta (ADR-0030): Postgres con `DATABASE_URL`, un
+    JSON en el volumen sin ella."""
+    if DATABASE_URL:
+        return PreguntasEnPostgres(DATABASE_URL)
+    return PreguntasEnDisco(Path(RUTA_PREGUNTAS_DEL_DOCENTE))
 
 
 def obtener_registro_de_examenes() -> RegistroDeExamenes:
@@ -796,6 +836,185 @@ def proponer_distractores_para_una_pregunta(
         ],
         desde_la_cache=con_cache.desde_la_cache,
     )
+
+
+# La llave de una pregunta en la ruta: el sha256 que calcula `llave_de_la_pregunta`.
+LlaveDeLaPregunta = Annotated[
+    str,
+    EnLaRuta(
+        pattern=r"^[0-9a-f]{64}$",
+        description="La llave de la pregunta, como la devuelven las listas.",
+    ),
+]
+
+
+def _guardados_en_respuesta(
+    llave: str, guardados: DistractoresGuardados
+) -> DistractoresGuardadosEnRespuesta:
+    return DistractoresGuardadosEnRespuesta(
+        llave=llave,
+        enunciado=guardados.enunciado,
+        respuesta_correcta=guardados.respuesta_correcta,
+        distractores=[DistractorEnRespuesta.model_validate(d) for d in guardados.distractores],
+        guardado_en=guardados.guardado_en,
+    )
+
+
+@app.put(
+    "/distractores/guardados",
+    summary="Guardar los distractores que el docente aprobó para una pregunta",
+    response_description="Lo que quedó guardado para la pregunta.",
+    responses={
+        **_PIDE_SESION,
+        422: {"description": "Ninguno, más de tres, uno repetido o la respuesta correcta."},
+    },
+)
+def guardar_los_distractores(
+    solicitud: SolicitudDeGuardarDistractores,
+    docente: str = Depends(docente_de_la_sesion),
+    registro: RegistroDeDistractores = Depends(obtener_registro_de_distractores),
+) -> DistractoresGuardadosEnRespuesta:
+    """Guarda, a nombre del docente de la sesión, los distractores que eligió para una pregunta
+    (ADR-0029). Reemplaza los que tuviera guardados para esa misma pregunta.
+
+    **La regla es la de las propuestas** (RF-11): ninguno repite la respuesta correcta ni a otro, y
+    cada uno dice qué error representa. Caben hasta tres, porque la hoja tiene cuatro opciones. Si
+    alguno no cumple, 422 con el motivo y no se toca lo que había."""
+    try:
+        guardados = guardar_distractores(
+            docente,
+            solicitud.enunciado,
+            solicitud.respuesta_correcta,
+            [DistractorGuardado(d.expresion, d.error) for d in solicitud.distractores],
+            datetime.now(timezone.utc),
+            registro,
+        )
+    except DistractoresInvalidos as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    logger.info("Distractores guardados", extra={"evento": "distractores_guardados",
+                                                 "cantidad": len(guardados.distractores)})
+    return _guardados_en_respuesta(
+        llave_de_la_pregunta(solicitud.enunciado, solicitud.respuesta_correcta), guardados
+    )
+
+
+@app.get(
+    "/distractores/guardados",
+    summary="Los distractores que el docente guardó, pregunta por pregunta",
+    response_description="Lo guardado, de lo más antiguo a lo más reciente.",
+    responses=_PIDE_SESION,
+)
+def listar_los_distractores_guardados(
+    docente: str = Depends(docente_de_la_sesion),
+    registro: RegistroDeDistractores = Depends(obtener_registro_de_distractores),
+) -> list[DistractoresGuardadosEnRespuesta]:
+    """Lo que el docente de la sesión guardó, con la pregunta de cada grupo (ADR-0029). Pauta lo
+    pone al final de su lista de preguntas, lo último de último. Lo de otro docente no aparece."""
+    return [_guardados_en_respuesta(llave, g) for llave, g in registro.del_docente(docente)]
+
+
+@app.delete(
+    "/distractores/guardados/{llave}",
+    status_code=204,
+    summary="Quitar los distractores guardados para una pregunta",
+    response_description="Se quitaron.",
+    responses={
+        **_PIDE_SESION,
+        404: {"description": "El docente no tiene distractores guardados para esa pregunta."},
+    },
+)
+def quitar_los_distractores_guardados(
+    llave: LlaveDeLaPregunta,
+    docente: str = Depends(docente_de_la_sesion),
+    registro: RegistroDeDistractores = Depends(obtener_registro_de_distractores),
+) -> Response:
+    """Quita lo que el docente de la sesión guardó para la pregunta de `llave` (ADR-0029). Lo de
+    otro docente responde 404, como lo que no existe."""
+    if not registro.eliminar(docente, llave):
+        raise HTTPException(status_code=404, detail="Esa pregunta no tiene distractores guardados.")
+    logger.info("Distractores quitados", extra={"evento": "distractores_quitados"})
+    return Response(status_code=204)
+
+
+def _pregunta_en_respuesta(llave: str, pregunta: PreguntaDelDocente) -> PreguntaEnRespuesta:
+    return PreguntaEnRespuesta(
+        llave=llave,
+        enunciado=pregunta.enunciado,
+        respuesta_correcta=pregunta.respuesta_correcta,
+        agregada_en=pregunta.agregada_en,
+    )
+
+
+@app.get(
+    "/preguntas",
+    summary="Las preguntas que el docente agregó en Pauta",
+    response_description="Las preguntas, de la más reciente a la más antigua.",
+    responses=_PIDE_SESION,
+)
+def listar_las_preguntas(
+    docente: str = Depends(docente_de_la_sesion),
+    registro: RegistroDePreguntas = Depends(obtener_registro_de_preguntas),
+) -> list[PreguntaEnRespuesta]:
+    """Las preguntas del docente de la sesión (ADR-0030), el comienzo del banco (RF-06). Las de
+    otro docente no aparecen."""
+    return [_pregunta_en_respuesta(llave, p) for llave, p in registro.del_docente(docente)]
+
+
+@app.post(
+    "/preguntas",
+    status_code=201,
+    summary="Agregar una pregunta a la lista del docente",
+    response_description="La pregunta agregada, con su llave.",
+    responses={
+        **_PIDE_SESION,
+        409: {"description": "El docente ya tiene esa pregunta, aunque sea con otros espacios."},
+        422: {"description": "Falta el enunciado o la respuesta correcta."},
+    },
+)
+def agregar_una_pregunta(
+    solicitud: SolicitudDeAgregarPregunta,
+    docente: str = Depends(docente_de_la_sesion),
+    registro: RegistroDePreguntas = Depends(obtener_registro_de_preguntas),
+) -> PreguntaEnRespuesta:
+    """Agrega la pregunta a las del docente de la sesión (ADR-0030), con los espacios
+    normalizados."""
+    try:
+        llave, pregunta = agregar_pregunta(
+            docente,
+            solicitud.enunciado,
+            solicitud.respuesta_correcta,
+            datetime.now(timezone.utc),
+            registro,
+        )
+    except PreguntaInvalida as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    except PreguntaRepetida as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    logger.info("Pregunta agregada", extra={"evento": "pregunta_agregada"})
+    return _pregunta_en_respuesta(llave, pregunta)
+
+
+@app.delete(
+    "/preguntas/{llave}",
+    status_code=204,
+    summary="Eliminar una pregunta de la lista del docente",
+    response_description="Se eliminó.",
+    responses={
+        **_PIDE_SESION,
+        404: {"description": "El docente no tiene esa pregunta."},
+    },
+)
+def eliminar_una_pregunta(
+    llave: LlaveDeLaPregunta,
+    docente: str = Depends(docente_de_la_sesion),
+    registro: RegistroDePreguntas = Depends(obtener_registro_de_preguntas),
+) -> Response:
+    """Elimina la pregunta de `llave` de las del docente de la sesión (ADR-0030). Los distractores
+    guardados para ella no se tocan: se quitan aparte. La de otro docente responde 404."""
+    if not registro.eliminar(docente, llave):
+        raise HTTPException(status_code=404, detail="Esa pregunta no está en su lista.")
+    logger.info("Pregunta eliminada", extra={"evento": "pregunta_eliminada"})
+    return Response(status_code=204)
 
 
 @app.get(

@@ -171,6 +171,71 @@
         "title": "DistractorEnRespuesta",
         "type": "object"
       },
+      "DistractorParaGuardar": {
+        "description": "Un distractor que el docente aprobó, con el error de procedimiento que representa.",
+        "properties": {
+          "error": {
+            "description": "El error que la produce.",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Error",
+            "type": "string"
+          },
+          "expresion": {
+            "description": "La opción incorrecta.",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Expresion",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expresion",
+          "error"
+        ],
+        "title": "DistractorParaGuardar",
+        "type": "object"
+      },
+      "DistractoresGuardadosEnRespuesta": {
+        "description": "Los distractores que el docente de la sesión guardó para una pregunta.",
+        "properties": {
+          "distractores": {
+            "items": {
+              "$ref": "#/components/schemas/DistractorEnRespuesta"
+            },
+            "title": "Distractores",
+            "type": "array"
+          },
+          "enunciado": {
+            "title": "Enunciado",
+            "type": "string"
+          },
+          "guardado_en": {
+            "description": "Cuándo se guardaron, en UTC.",
+            "format": "date-time",
+            "title": "Guardado En",
+            "type": "string"
+          },
+          "llave": {
+            "description": "Cómo reconoce la API la pregunta: el enunciado y la respuesta correcta sin espacios de más. Con ella se quita.",
+            "title": "Llave",
+            "type": "string"
+          },
+          "respuesta_correcta": {
+            "title": "Respuesta Correcta",
+            "type": "string"
+          }
+        },
+        "required": [
+          "llave",
+          "enunciado",
+          "respuesta_correcta",
+          "distractores",
+          "guardado_en"
+        ],
+        "title": "DistractoresGuardadosEnRespuesta",
+        "type": "object"
+      },
       "EstadoDeLaCacheEnRespuesta": {
         "description": "Cuanto se ha usado la cache de propuestas de distractores (ADR-0019).\n\nSon cuentas desde el arranque del proceso: la cache vive en su memoria y se vacia con cada\nreinicio.",
         "properties": {
@@ -678,6 +743,38 @@
           "dudosas"
         ],
         "title": "PreguntaDelPanelEnRespuesta",
+        "type": "object"
+      },
+      "PreguntaEnRespuesta": {
+        "description": "Una pregunta que el docente agregó (ADR-0030), con los espacios normalizados.",
+        "properties": {
+          "agregada_en": {
+            "description": "Cuándo la agregó, en UTC.",
+            "format": "date-time",
+            "title": "Agregada En",
+            "type": "string"
+          },
+          "enunciado": {
+            "title": "Enunciado",
+            "type": "string"
+          },
+          "llave": {
+            "description": "Cómo reconoce la API la pregunta: el enunciado y la respuesta correcta sin espacios de más. Con ella se quita.",
+            "title": "Llave",
+            "type": "string"
+          },
+          "respuesta_correcta": {
+            "title": "Respuesta Correcta",
+            "type": "string"
+          }
+        },
+        "required": [
+          "llave",
+          "enunciado",
+          "respuesta_correcta",
+          "agregada_en"
+        ],
+        "title": "PreguntaEnRespuesta",
         "type": "object"
       },
       "PreguntaEnRevisionEnRespuesta": {
@@ -1195,6 +1292,31 @@
         "title": "SesionEnRespuesta",
         "type": "object"
       },
+      "SolicitudDeAgregarPregunta": {
+        "description": "Una pregunta que el docente agrega a su lista en Pauta (ADR-0030).",
+        "properties": {
+          "enunciado": {
+            "description": "Enunciado de la pregunta.",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Enunciado",
+            "type": "string"
+          },
+          "respuesta_correcta": {
+            "description": "La respuesta correcta de la clave.",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Respuesta Correcta",
+            "type": "string"
+          }
+        },
+        "required": [
+          "enunciado",
+          "respuesta_correcta"
+        ],
+        "title": "SolicitudDeAgregarPregunta",
+        "type": "object"
+      },
       "SolicitudDeClave": {
         "description": "Las respuestas correctas del examen, la de la pregunta 1 primero. Que quepan en la hoja (de 1\na 40, cada una entre A y D) lo decide `autoria`, con un mensaje para el docente.",
         "properties": {
@@ -1267,6 +1389,42 @@
           "nombre"
         ],
         "title": "SolicitudDeExamen",
+        "type": "object"
+      },
+      "SolicitudDeGuardarDistractores": {
+        "description": "Los distractores que el docente aprobó para una pregunta. Reemplazan a los que tuviera\nguardados para esa misma pregunta.",
+        "properties": {
+          "distractores": {
+            "description": "De 1 a 3: la hoja tiene cuatro opciones y una es la correcta.",
+            "items": {
+              "$ref": "#/components/schemas/DistractorParaGuardar"
+            },
+            "maxItems": 10,
+            "minItems": 1,
+            "title": "Distractores",
+            "type": "array"
+          },
+          "enunciado": {
+            "description": "Enunciado de la pregunta.",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Enunciado",
+            "type": "string"
+          },
+          "respuesta_correcta": {
+            "description": "La respuesta correcta de la clave.",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Respuesta Correcta",
+            "type": "string"
+          }
+        },
+        "required": [
+          "enunciado",
+          "respuesta_correcta",
+          "distractores"
+        ],
+        "title": "SolicitudDeGuardarDistractores",
         "type": "object"
       },
       "SolicitudDeRevision": {
@@ -1363,7 +1521,7 @@
   "info": {
     "description": "Interfaz HTTP de QuantIA, sistema de calificación de exámenes de opción múltiple. Hoy cubre el aspecto A-01 (carga de hojas escaneadas para calificación) y el A-06 (propuesta opcional de distractores diagnósticos), con el presupuesto que protege la cuota del proveedor de LLM y su métrica en `GET /metricas` (EC-09). Desde la S13, un presupuesto de carga limita las hojas por lote y los bytes por día (ADR-0022). Desde ADR-0025, todas las rutas salvo `/health`, `/metricas` y `POST /sesion` piden el token de una sesión en `Authorization: Bearer`.",
     "title": "QuantIA",
-    "version": "3.0.0"
+    "version": "3.1.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -1432,6 +1590,122 @@
           }
         ],
         "summary": "Proponer distractores diagnósticos para una pregunta"
+      }
+    },
+    "/distractores/guardados": {
+      "get": {
+        "description": "Lo que el docente de la sesión guardó, con la pregunta de cada grupo (ADR-0029). Pauta lo\npone al final de su lista de preguntas, lo último de último. Lo de otro docente no aparece.",
+        "operationId": "listar_los_distractores_guardados_distractores_guardados_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DistractoresGuardadosEnRespuesta"
+                  },
+                  "title": "Response Listar Los Distractores Guardados Distractores Guardados Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Lo guardado, de lo más antiguo a lo más reciente."
+          },
+          "401": {
+            "description": "Sin sesión, o con un token vencido o que ya no vale (ADR-0025)."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Los distractores que el docente guardó, pregunta por pregunta"
+      },
+      "put": {
+        "description": "Guarda, a nombre del docente de la sesión, los distractores que eligió para una pregunta\n(ADR-0029). Reemplaza los que tuviera guardados para esa misma pregunta.\n\n**La regla es la de las propuestas** (RF-11): ninguno repite la respuesta correcta ni a otro, y\ncada uno dice qué error representa. Caben hasta tres, porque la hoja tiene cuatro opciones. Si\nalguno no cumple, 422 con el motivo y no se toca lo que había.",
+        "operationId": "guardar_los_distractores_distractores_guardados_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SolicitudDeGuardarDistractores"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DistractoresGuardadosEnRespuesta"
+                }
+              }
+            },
+            "description": "Lo que quedó guardado para la pregunta."
+          },
+          "401": {
+            "description": "Sin sesión, o con un token vencido o que ya no vale (ADR-0025)."
+          },
+          "422": {
+            "description": "Ninguno, más de tres, uno repetido o la respuesta correcta."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Guardar los distractores que el docente aprobó para una pregunta"
+      }
+    },
+    "/distractores/guardados/{llave}": {
+      "delete": {
+        "description": "Quita lo que el docente de la sesión guardó para la pregunta de `llave` (ADR-0029). Lo de\notro docente responde 404, como lo que no existe.",
+        "operationId": "quitar_los_distractores_guardados_distractores_guardados__llave__delete",
+        "parameters": [
+          {
+            "description": "La llave de la pregunta, como la devuelven las listas.",
+            "in": "path",
+            "name": "llave",
+            "required": true,
+            "schema": {
+              "description": "La llave de la pregunta, como la devuelven las listas.",
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Llave",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Se quitaron."
+          },
+          "401": {
+            "description": "Sin sesión, o con un token vencido o que ya no vale (ADR-0025)."
+          },
+          "404": {
+            "description": "El docente no tiene distractores guardados para esa pregunta."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Quitar los distractores guardados para una pregunta"
       }
     },
     "/examenes": {
@@ -2063,6 +2337,125 @@
           }
         },
         "summary": "Estado de los presupuestos del proveedor de LLM y de carga, y de la caché"
+      }
+    },
+    "/preguntas": {
+      "get": {
+        "description": "Las preguntas del docente de la sesión (ADR-0030), el comienzo del banco (RF-06). Las de\notro docente no aparecen.",
+        "operationId": "listar_las_preguntas_preguntas_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PreguntaEnRespuesta"
+                  },
+                  "title": "Response Listar Las Preguntas Preguntas Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Las preguntas, de la más reciente a la más antigua."
+          },
+          "401": {
+            "description": "Sin sesión, o con un token vencido o que ya no vale (ADR-0025)."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Las preguntas que el docente agregó en Pauta"
+      },
+      "post": {
+        "description": "Agrega la pregunta a las del docente de la sesión (ADR-0030), con los espacios\nnormalizados.",
+        "operationId": "agregar_una_pregunta_preguntas_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SolicitudDeAgregarPregunta"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreguntaEnRespuesta"
+                }
+              }
+            },
+            "description": "La pregunta agregada, con su llave."
+          },
+          "401": {
+            "description": "Sin sesión, o con un token vencido o que ya no vale (ADR-0025)."
+          },
+          "409": {
+            "description": "El docente ya tiene esa pregunta, aunque sea con otros espacios."
+          },
+          "422": {
+            "description": "Falta el enunciado o la respuesta correcta."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Agregar una pregunta a la lista del docente"
+      }
+    },
+    "/preguntas/{llave}": {
+      "delete": {
+        "description": "Elimina la pregunta de `llave` de las del docente de la sesión (ADR-0030). Los distractores\nguardados para ella no se tocan: se quitan aparte. La de otro docente responde 404.",
+        "operationId": "eliminar_una_pregunta_preguntas__llave__delete",
+        "parameters": [
+          {
+            "description": "La llave de la pregunta, como la devuelven las listas.",
+            "in": "path",
+            "name": "llave",
+            "required": true,
+            "schema": {
+              "description": "La llave de la pregunta, como la devuelven las listas.",
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Llave",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Se eliminó."
+          },
+          "401": {
+            "description": "Sin sesión, o con un token vencido o que ya no vale (ADR-0025)."
+          },
+          "404": {
+            "description": "El docente no tiene esa pregunta."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Eliminar una pregunta de la lista del docente"
       }
     },
     "/sesion": {

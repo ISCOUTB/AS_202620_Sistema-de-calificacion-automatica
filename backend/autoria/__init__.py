@@ -2,7 +2,7 @@
 Responsabilidad: Bancos de preguntas y clave de respuestas, generación opcional de distractores diagnósticos con apoyo de LLM, y habilitación del examen.
 Requisitos: RF-06, RF-07, RF-11
 Importa: infraestructura, identidad
-Posee: PreguntaParaDistractores, DistractorPropuesto, PropuestaDescartada, ResultadoDePropuesta, EstadoDelPresupuesto, EstadoDeLaCache, ClaveDeRespuestas, PreguntaDeLaClave, Habilitacion, ExamenConClave, Examen
+Posee: PreguntaParaDistractores, DistractorPropuesto, PropuestaDescartada, ResultadoDePropuesta, EstadoDelPresupuesto, EstadoDeLaCache, ClaveDeRespuestas, PreguntaDeLaClave, Habilitacion, ExamenConClave, Examen, DistractoresGuardados, PreguntaDelDocente
 """
 
 from autoria.cache import (
@@ -19,6 +19,13 @@ from autoria.distractores import (
     ResultadoDePropuesta,
     proponer_distractores,
 )
+from autoria.distractores_guardados import (
+    DISTRACTORES_POR_PREGUNTA,
+    DistractoresInvalidos,
+    guardar_distractores,
+    llave_de_la_pregunta,
+)
+from autoria.preguntas_del_docente import PreguntaInvalida, PreguntaRepetida, agregar_pregunta
 from autoria.examenes import (
     LARGO_MAXIMO_DEL_NOMBRE,
     ExamenConClave,
@@ -87,6 +94,13 @@ __all__ = [
     "habilitar_clave",
     "proponer_distractores",
     "registrar_clave",
+    "DISTRACTORES_POR_PREGUNTA",
+    "DistractoresInvalidos",
+    "guardar_distractores",
+    "llave_de_la_pregunta",
+    "PreguntaInvalida",
+    "PreguntaRepetida",
+    "agregar_pregunta",
     "SOLICITUDES_POR_DIA",
     "SOLICITUDES_POR_MINUTO",
 ]

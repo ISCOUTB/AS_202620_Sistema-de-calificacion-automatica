@@ -59,6 +59,10 @@ RUTA_SESION = "/sesion"
 RUTA_CLAVE = "/examenes/{examen_id}/clave"
 RUTA_HABILITACION = "/examenes/{examen_id}/clave/habilitacion"
 RUTA_PANEL = "/examenes/{examen_id}/panel"
+RUTA_GUARDADOS = "/distractores/guardados"
+RUTA_GUARDADA = "/distractores/guardados/{llave}"
+RUTA_PREGUNTAS = "/preguntas"
+RUTA_PREGUNTA = "/preguntas/{llave}"
 
 
 @pytest.fixture(scope="module")
@@ -160,7 +164,7 @@ def test_la_version_del_contrato_es_la_declarada_en_el_codigo(contrato_publicado
     assert contrato_publicado["info"]["version"] == VERSION_DEL_CONTRATO
 
 
-def test_el_contrato_declara_las_trece_rutas_que_la_api_expone(contrato_publicado):
+def test_el_contrato_declara_las_diecisiete_rutas_que_la_api_expone(contrato_publicado):
     """Las rutas son lo primero que un consumidor busca; que desaparezca una es el cambio
     incompatible mas obvio que existe.
 
@@ -168,17 +172,22 @@ def test_el_contrato_declara_las_trece_rutas_que_la_api_expone(contrato_publicad
     ADR-0013 promete cuando el proveedor de LLM falla, y un cliente que no sepa que existe la
     trataria como un error inesperado. Desde 1.2.0 se exige tambien su 429, el corte del
     presupuesto de ADR-0015, y la ruta `GET /metricas` que lo publica. Desde 2.0.0, la ruta de
-    entrar (ADR-0025), desde 2.1.0, las dos de la clave (ADR-0026), y desde 3.0.0, crear un examen
-    y su panel (ADR-0028)."""
+    entrar (ADR-0025), desde 2.1.0, las dos de la clave (ADR-0026), desde 3.0.0, crear un examen
+    y su panel (ADR-0028), y desde 3.1.0, guardar, listar y quitar los distractores aprobados
+    (ADR-0029) y las preguntas que agrega el docente (ADR-0030)."""
     rutas = contrato_publicado["paths"]
 
     assert set(rutas) == {
         "/health", RUTA_CARGA, RUTA_DISTRACTORES, RUTA_METRICAS, RUTA_RESULTADOS, RUTA_EXAMENES,
         RUTA_REVISION, RUTA_RESOLVER, RUTA_RECORTE, RUTA_SESION, RUTA_CLAVE, RUTA_HABILITACION,
-        RUTA_PANEL,
+        RUTA_PANEL, RUTA_GUARDADOS, RUTA_GUARDADA, RUTA_PREGUNTAS, RUTA_PREGUNTA,
     }
     assert {"get", "post"} <= set(rutas[RUTA_EXAMENES])
     assert "get" in rutas[RUTA_PANEL]
+    assert {"get", "put"} <= set(rutas[RUTA_GUARDADOS])
+    assert "delete" in rutas[RUTA_GUARDADA]
+    assert {"get", "post"} <= set(rutas[RUTA_PREGUNTAS])
+    assert "delete" in rutas[RUTA_PREGUNTA]
     assert {"get", "put"} <= set(rutas[RUTA_CLAVE])
     assert "post" in rutas[RUTA_HABILITACION]
     assert "get" in rutas[RUTA_REVISION]
