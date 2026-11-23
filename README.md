@@ -24,15 +24,15 @@ En el servidor del laboratorio del curso, desde `deploy/compose.lab.yaml`. El pa
 `despliegue`, que el CI publica solo si las pruebas pasan ([ADR-0021](docs/adr/0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md)).
 Detalle en [Entorno desplegado, en detalle](#entorno-desplegado-en-detalle).
 
-## Evidencia del final: la revisión con la opción ya elegida
+## Evidencia del final
 
-- **Qué cambió (ADR-0024):** una burbuja con 40 o más de confianza cuenta como intención. La
-  pregunta en revisión con una sola llega con esa opción elegida, y no cuenta en la nota hasta que
-  el profesor guarda; la columna del código con una sola da su dígito.
-- **Medido:** en las 3 fotos del prototipo, 25 de 28 preguntas en revisión preseleccionadas bien,
-  3 confusas y 0 equivocadas; 0 sugerencias equivocadas en 1 163 preguntas sintéticas; 0 dígitos
-  del código mal aceptados en 7 200 columnas (`docs/evidencia/preseleccion-omr.md`).
-- **En el celular,** «Tomar foto» abre la cámara desde la pantalla de carga.
+- **Inicio de sesión (ADR-0025):** correo y contraseña de una lista cifrada en el servidor; toda
+  ruta salvo `/health` y `/metricas` responde 401 sin sesión, y una prueba las recorre todas.
+- **La clave desde la aplicación (ADR-0026):** se registra y se habilita en Pauta, a nombre del
+  docente, y no cambia después de la primera nota.
+- **La revisión con la opción ya elegida (ADR-0024):** la única marca con 40 o más de confianza
+  llega elegida y no cuenta hasta guardar. En las 3 fotos, 25 de 28 bien y 0 equivocadas; 0
+  sugerencias equivocadas en 1 163 preguntas sintéticas (`docs/evidencia/preseleccion-omr.md`).
 
 ## Evidencia S14: medición de atributos de calidad
 
