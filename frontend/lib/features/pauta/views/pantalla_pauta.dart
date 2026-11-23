@@ -46,6 +46,7 @@ class PantallaPauta extends StatefulWidget {
     this.consultarClave,
     this.guardarClave,
     this.habilitarClave,
+    this.crearExamen,
     this.alCambiarLaClave,
   });
 
@@ -57,6 +58,9 @@ class PantallaPauta extends StatefulWidget {
   final Future<ClaveDelExamen?> Function(String examenId)? consultarClave;
   final Future<ClaveDelExamen> Function(String examenId, List<String> respuestas)? guardarClave;
   final Future<ClaveDelExamen> Function(String examenId)? habilitarClave;
+
+  /// Crea el examen con el nombre que escribe el docente (ADR-0028).
+  final Future<ExamenCreado> Function(String nombre)? crearExamen;
   final VoidCallback? alCambiarLaClave;
 
   @override
@@ -267,6 +271,7 @@ class _PantallaPautaState extends State<PantallaPauta> {
                 consultarClave: consultar,
                 guardarClave: widget.guardarClave!,
                 habilitarClave: widget.habilitarClave!,
+                crearExamen: widget.crearExamen,
                 alCambiar: widget.alCambiarLaClave,
               ),
               const SizedBox(height: QEspacios.xl),

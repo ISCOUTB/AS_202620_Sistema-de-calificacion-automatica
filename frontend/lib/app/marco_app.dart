@@ -64,6 +64,9 @@ class _MarcoAppState extends State<MarcoApp> {
   /// sección, y lo subido en Carga no aparecía hasta recargar la página.
   final _revisionALaVista = ValueNotifier<int>(0);
 
+  /// Lo mismo para el panel: el worker sigue leyendo hojas, y las cifras se vuelven a pedir.
+  final _panelALaVista = ValueNotifier<int>(0);
+
   /// Avisa que se guardó o se habilitó una clave en Pauta, para que la carga y la revisión
   /// vuelvan a pedir la lista de exámenes: sin esto, uno nuevo no aparecía hasta recargar.
   final _clavesCambiadas = ValueNotifier<int>(0);
@@ -82,6 +85,7 @@ class _MarcoAppState extends State<MarcoApp> {
     _examenParaRevisar.dispose();
     _revisionesGuardadas.dispose();
     _revisionALaVista.dispose();
+    _panelALaVista.dispose();
     _clavesCambiadas.dispose();
     super.dispose();
   }
@@ -97,6 +101,7 @@ class _MarcoAppState extends State<MarcoApp> {
 
   void _mostrar(Seccion seccion) {
     if (seccion == Seccion.revision && _seccion != Seccion.revision) _revisionALaVista.value++;
+    if (seccion == Seccion.panel && _seccion != Seccion.panel) _panelALaVista.value++;
     setState(() => _seccion = seccion);
   }
 
@@ -115,7 +120,13 @@ class _MarcoAppState extends State<MarcoApp> {
   Widget build(BuildContext context) {
     final servicios = widget.servicios;
     final pantallas = [
-      const PantallaPanel(),
+      PantallaPanel(
+        listarExamenes: servicios.listarExamenes,
+        consultarPanel: servicios.consultarPanel,
+        clavesCambiadas: _clavesCambiadas,
+        revisionesGuardadas: _revisionesGuardadas,
+        alMostrarse: _panelALaVista,
+      ),
       PantallaCarga(
         seleccionarArchivos: servicios.seleccionarArchivos,
         tomarFoto: servicios.tomarFoto,
@@ -148,6 +159,7 @@ class _MarcoAppState extends State<MarcoApp> {
         consultarClave: servicios.consultarClave,
         guardarClave: servicios.guardarClave,
         habilitarClave: servicios.habilitarClave,
+        crearExamen: servicios.crearExamen,
         alCambiarLaClave: () => _clavesCambiadas.value++,
       ),
     ];

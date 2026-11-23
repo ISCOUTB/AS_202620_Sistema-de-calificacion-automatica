@@ -3,24 +3,111 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:frontend/common/tema/tema.dart';
 import 'package:frontend/common/widgets/q_aviso_datos_ejemplo.dart';
-import 'package:frontend/features/panel/data/datos_ejemplo_panel.dart';
+import 'package:frontend/features/carga/data/servicio_examenes.dart';
+import 'package:frontend/features/carga/data/servicio_resultados.dart' show ExcepcionDeConsulta;
 import 'package:frontend/features/panel/data/modelos_panel.dart';
 import 'package:frontend/features/panel/views/formato_cifras.dart';
 import 'package:frontend/features/panel/views/pantalla_panel.dart';
 
-final _parcial2 = cursoEjemplo.examenes[0];
-final _parcial1 = cursoEjemplo.examenes[1];
+/// El JSON de `GET /examenes/{examen_id}/panel`, con la forma exacta que publica la API.
+Map<String, dynamic> _json({
+  required String examenId,
+  required String nombre,
+  List<int> notas = const [20, 28, 34, 39, 43, 50],
+  int aprobados = 4,
+  num? promedio = 35.67,
+  num? desviacion = 9.81,
+  Map<String, int> marcas = const {
+    'correctas': 170,
+    'incorrectas': 67,
+    'tenues_o_dudosas': 1,
+    'dobles': 1,
+    'en_blanco': 1,
+    'pendientes': 2,
+  },
+  List<Map<String, dynamic>>? preguntas,
+}) =>
+    {
+      'examen_id': examenId,
+      'nombre': nombre,
+      'resumen': {
+        'hojas_recibidas': notas.length + 1,
+        'hojas_leidas': notas.length,
+        'hojas_con_nota': notas.length,
+        'hojas_sin_nota': 0,
+        'hojas_ilegibles': 0,
+        'hojas_en_revision': marcas['pendientes']! > 0 ? 2 : 0,
+        'preguntas_por_revisar': marcas['pendientes'],
+        'aprobados': aprobados,
+        'promedio_en_decimas': promedio,
+        'desviacion_en_decimas': desviacion,
+        'nota_aprobatoria_en_decimas': 30,
+      },
+      'marcas': marcas,
+      'notas_en_decimas': notas,
+      'preguntas': preguntas ??
+          [
+            {
+              'numero': 1,
+              'correcta': 'A',
+              'aciertos': 6,
+              'hojas': 6,
+              'marcadas': {'A': 6, 'B': 0, 'C': 0, 'D': 0},
+              'en_blanco': 0,
+              'dobles': 0,
+              'dudosas': 0,
+            },
+            {
+              'numero': 2,
+              'correcta': 'B',
+              'aciertos': 2,
+              'hojas': 6,
+              'marcadas': {'A': 0, 'B': 2, 'C': 4, 'D': 0},
+              'en_blanco': 0,
+              'dobles': 0,
+              'dudosas': 0,
+            },
+          ],
+    };
 
-/// Monta el panel a un ancho dado. El alto sobra a propósito: la página se desplaza, y lo que
-/// interesa es que nada se desborde a lo ancho.
-Future<void> _montar(
+final _parcial = PanelDelExamen.desdeJson(_json(examenId: '000001', nombre: 'Parcial 1'));
+final _anterior = PanelDelExamen.desdeJson(_json(
+  examenId: 'PARCIAL-1',
+  nombre: 'PARCIAL-1',
+  notas: const [],
+  aprobados: 0,
+  promedio: null,
+  desviacion: null,
+  marcas: const {
+    'correctas': 0,
+    'incorrectas': 0,
+    'tenues_o_dudosas': 0,
+    'dobles': 0,
+    'en_blanco': 0,
+    'pendientes': 0,
+  },
+  preguntas: const [],
+));
+
+const _examenes = [
+  ExamenConClave(examenId: 'PARCIAL-1', habilitada: true),
+  ExamenConClave(examenId: '000001', nombre: 'Parcial 1', habilitada: true),
+];
+
+/// Monta el panel con servicios sustitutos. El alto sobra a propósito: la página se desplaza, y
+/// lo que interesa es que nada se desborde a lo ancho.
+Future<List<String>> _montar(
   WidgetTester tester, {
   double ancho = 1280,
   bool sinMovimiento = false,
+  List<ExamenConClave> examenes = _examenes,
+  Future<PanelDelExamen> Function(String)? consultar,
+  bool conServicios = true,
 }) async {
-  tester.view.physicalSize = Size(ancho, 900);
+  tester.view.physicalSize = Size(ancho, 3000);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
+  final pedidos = <String>[];
 
   await tester.pumpWidget(
     MaterialApp(
@@ -29,161 +116,217 @@ Future<void> _montar(
         data: MediaQuery.of(context).copyWith(disableAnimations: sinMovimiento),
         child: hijo!,
       ),
-      home: const Scaffold(body: PantallaPanel()),
+      home: Scaffold(
+        body: conServicios
+            ? PantallaPanel(
+                listarExamenes: () async => examenes,
+                consultarPanel: (examenId) async {
+                  pedidos.add(examenId);
+                  if (consultar != null) return consultar(examenId);
+                  return examenId == '000001' ? _parcial : _anterior;
+                },
+              )
+            : const PantallaPanel(),
+      ),
     ),
   );
   await tester.pumpAndSettle();
-}
-
-/// Texto que empieza con la letra de una opción y contiene su porcentaje, como «B · 38 % · …».
-Finder _leyendaDe(AnalisisPregunta analisis, OpcionRespuesta opcion) {
-  final porcentaje = formatearPorcentaje(analisis.porcentaje(opcion));
-  return find.byWidgetPredicate(
-    (widget) =>
-        widget is Text &&
-        (widget.data ?? '').startsWith('${opcion.letra} · ') &&
-        widget.data!.contains(porcentaje),
-  );
+  return pedidos;
 }
 
 void main() {
-  test('Sin estudiantes, el porcentaje de aprobación es 0 y no NaN', () {
-    // La división no protegía el cero, a diferencia de
-    // los otros porcentajes del panel. Sin el cambio, da NaN y esta prueba falla.
-    const vacio = ResumenExamen(
-      promedio: 0,
-      estudiantes: 0,
-      aprobados: 0,
-      hojasRecibidas: 0,
-      revisionPendiente: 0,
-    );
+  group('Los modelos', () {
+    test('Leen el JSON de la API y pasan las notas de décimas a la escala de 0 a 5', () {
+      final resumen = _parcial.resumen;
 
-    expect(vacio.porcentajeAprobacion, 0);
-    expect(formatearPorcentaje(vacio.porcentajeAprobacion), isNot(contains('NaN')));
+      expect(_parcial.notas, [2.0, 2.8, 3.4, 3.9, 4.3, 5.0]);
+      expect(resumen.promedio, closeTo(3.567, 1e-9));
+      expect(resumen.desviacion, closeTo(0.981, 1e-9));
+      expect(resumen.notaAprobatoria, 3.0);
+      expect(resumen.porLeer, 1);
+      expect(formatearPorcentaje(resumen.porcentajeAprobacion, decimales: 1), '66,7\u00a0%');
+      expect(_parcial.marcas.total, 240);
+      expect(_parcial.preguntas[1].distractorMasMarcado, 'C');
+    });
+
+    test('Sin hojas con nota no hay promedio y la aprobación es 0, no NaN', () {
+      expect(_anterior.resumen.promedio, isNull);
+      expect(_anterior.resumen.porcentajeAprobacion, 0);
+    });
+
+    test('Los tramos de notas empiezan en 1,0 y el 5,0 cae en el último', () {
+      final tramos = tramosDeNotas(_parcial.notas);
+
+      expect(tramos.length, 8);
+      expect((tramos.first.desde, tramos.last.hasta), (1.0, 5.0));
+      expect([for (final t in tramos) t.hojas], [0, 0, 1, 1, 1, 1, 1, 1]);
+      // Un 3,0 abre el tramo de aprobados aunque llegue como 2,9999999.
+      expect(tramosDeNotas([3.0, 2.9999999999])[4].hojas, 2);
+    });
+
+    test('Con una nota menor que 1,0 los tramos empiezan en 0,0', () {
+      final tramos = tramosDeNotas([0.4, 4.0]);
+
+      expect(tramos.length, 10);
+      expect(tramos.first.hojas, 1);
+    });
+
+    test('La densidad normal tiene su pico en la media y es simétrica', () {
+      expect(densidadNormal(3, 3, 1), closeTo(0.39894, 1e-5));
+      expect(densidadNormal(2, 3, 1), closeTo(densidadNormal(4, 3, 1), 1e-12));
+    });
   });
 
-  test('Los datos de ejemplo son coherentes entre sí', () {
-    final resumen = _parcial2.resumen;
-    expect(formatearPorcentaje(resumen.porcentajeAprobacion, decimales: 1), '74,4 %');
+  testWidgets('Ya no avisa que la vista usa datos de ejemplo', (tester) async {
+    await _montar(tester);
 
-    // La distribución de la pregunta 7 suma 100 % y da las cifras acordadas con el equipo.
-    final analisis = _parcial2.analisis;
-    expect(analisis.opciones.map(analisis.porcentaje).fold<int>(0, (a, b) => a + b), 100);
-    expect(analisis.porcentaje(analisis.distractor), 48);
-    expect(analisis.porcentaje(analisis.correcta), 38);
+    expect(find.byType(QAvisoDatosEjemplo), findsNothing);
+    expect(find.textContaining('ejemplo'), findsNothing);
+    // Lo de los datos de ejemplo que ya no existe: competencias y fórmulas inventadas.
+    expect(find.textContaining('Regla de la cadena'), findsNothing);
+    expect(find.textContaining('competencias'), findsNothing);
+  });
 
-    // El promedio de aciertos por competencia, ponderado por preguntas, cae en el promedio de
-    // notas: 3,7 sobre 5,0 en el Parcial 2 y 3,3 en el Parcial 1.
-    for (final examen in cursoEjemplo.examenes) {
-      final preguntas = examen.competencias.fold<int>(0, (a, c) => a + c.preguntas);
-      final aciertos = examen.competencias
-          .fold<int>(0, (a, c) => a + c.preguntas * c.porcentajeAciertos);
-      final nota = aciertos / preguntas / 100 * examen.resumen.notaMaxima;
-      expect(nota, closeTo(examen.resumen.promedio, 0.05), reason: examen.nombre);
+  testWidgets('Abre el examen más reciente del docente y pide sus cifras', (tester) async {
+    final pedidos = await _montar(tester);
+
+    expect(pedidos, ['000001']);
+    expect(find.text('Parcial 1'), findsOneWidget);
+  });
+
+  testWidgets('Las métricas muestran las cifras del examen', (tester) async {
+    await _montar(tester);
+
+    expect(find.text('3,6'), findsOneWidget);
+    expect(find.text(formatearPorcentaje(400 / 6, decimales: 1)), findsOneWidget);
+    expect(find.textContaining('4 de 6 con nota de 3,0 o más'), findsOneWidget);
+    expect(find.text('7'), findsOneWidget, reason: 'hojas recibidas');
+    expect(find.text('Falta 1 por leer'), findsOneWidget);
+    expect(find.text('2'), findsWidgets, reason: 'revisión pendiente');
+    expect(find.textContaining('desviación 1,0'), findsOneWidget);
+  });
+
+  testWidgets('La barra de marcas dice con texto cuántas hay de cada tipo', (tester) async {
+    await _montar(tester);
+
+    for (final (nombre, cantidad) in [
+      ('Correctas', 170),
+      ('Incorrectas', 67),
+      ('Marca doble', 1),
+      ('Tenue o dudosa', 1),
+      ('En blanco', 1),
+    ]) {
+      expect(find.text(nombre), findsOneWidget, reason: nombre);
+      final porcentaje = formatearPorcentaje(cantidad * 100 / 240, decimales: 1);
+      expect(find.text('$cantidad · $porcentaje'), findsWidgets, reason: nombre);
+      expect(find.byTooltip('$nombre: $cantidad ($porcentaje)'), findsOneWidget, reason: nombre);
     }
-
-    // La variación del Parcial 2 es la diferencia real con el Parcial 1.
+    expect(find.textContaining('2 de las tenues o dobles esperan su revisión'), findsOneWidget);
     expect(
-      resumen.promedio - _parcial1.resumen.promedio,
-      closeTo(resumen.variacion!, 1e-9),
+      find.bySemanticsLabel(RegExp(r'^Cómo se marcaron las respuestas: Correctas, 170')),
+      findsOneWidget,
     );
   });
 
-  testWidgets('Avisa arriba que la vista usa datos de ejemplo', (tester) async {
+  testWidgets('La distribución de notas tiene la campana y un tooltip por tramo', (tester) async {
     await _montar(tester);
 
-    expect(find.byType(QAvisoDatosEjemplo), findsOneWidget);
-    expect(find.textContaining('Vista con datos de ejemplo'), findsOneWidget);
-    expect(find.textContaining('Todavía no muestra sus exámenes'), findsOneWidget);
-    expect(find.textContaining('(A-0'), findsNothing, reason: 'sin códigos de aspecto');
-  });
-
-  testWidgets('No saluda a un docente ni ofrece acciones de IA fuera del alcance',
-      (tester) async {
-    await _montar(tester);
-
-    expect(find.text('Panel del curso'), findsOneWidget);
-    expect(find.textContaining('Hola'), findsNothing);
-    // ADR-0005: el modelo solo propone distractores; no genera talleres.
-    expect(find.textContaining('taller'), findsNothing);
-    expect(find.byType(FilledButton), findsNothing);
-  });
-
-  testWidgets('Las métricas muestran las cifras de los datos', (tester) async {
-    await _montar(tester);
-    final resumen = _parcial2.resumen;
-
-    expect(find.text(formatearDecimal(resumen.promedio)), findsOneWidget);
-    expect(find.text('+0,4 frente al Parcial 1'), findsOneWidget);
-    expect(find.text(formatearPorcentaje(resumen.porcentajeAprobacion, decimales: 1)),
-        findsOneWidget);
-    expect(find.textContaining('32 de 43'), findsOneWidget);
-    expect(find.text('${resumen.hojasRecibidas}'), findsOneWidget);
-    expect(find.text('de ${resumen.estudiantes}'), findsOneWidget);
-    expect(find.text('${resumen.revisionPendiente}'), findsOneWidget);
-    expect(find.textContaining('menor al 70 %'), findsOneWidget);
-  });
-
-  testWidgets('La leyenda de la distribución tiene texto para cada opción', (tester) async {
-    await _montar(tester);
-    final analisis = _parcial2.analisis;
-
-    for (final opcion in analisis.opciones) {
-      expect(_leyendaDe(analisis, opcion), findsOneWidget, reason: 'opción ${opcion.letra}');
-    }
-    // El papel de cada opción va escrito, no solo en el color de la barra.
-    expect(find.text('B · 38 % · correcta'), findsOneWidget);
-    expect(find.text('C · 48 % · distractor más elegido'), findsOneWidget);
-
-    // La barra se lee con un rótulo que repite la leyenda completa.
-    final semantica = tester.getSemantics(
-      find.bySemanticsLabel(RegExp('^Distribución de las marcas en la pregunta 7')),
+    expect(find.text('Distribución de las notas'), findsOneWidget);
+    expect(find.text('Campana: media 3,57, desviación 0,98'), findsOneWidget);
+    expect(find.text('Aprobado (3,0 o más)'), findsOneWidget);
+    expect(find.text('No aprobado'), findsOneWidget);
+    final una = formatearPorcentaje(100 / 6);
+    expect(find.byTooltip('De 4,5 a 5,0: 1 hoja ($una)'), findsOneWidget);
+    expect(find.byTooltip('De 3,0 a menos de 3,5: 1 hoja ($una)'), findsOneWidget);
+    expect(
+      find.byTooltip('De 1,0 a menos de 1,5: 0 hojas (${formatearPorcentaje(0)})'),
+      findsOneWidget,
     );
-    for (final opcion in analisis.opciones) {
-      expect(semantica.label, contains('${opcion.letra} · '));
-    }
-
-    expect(find.text(analisis.enunciado), findsOneWidget);
-    expect(find.text('6x·cos(x)'), findsOneWidget);
-    expect(find.text('6x·cos(3x²)'), findsOneWidget);
   });
 
-  testWidgets('Las competencias muestran el porcentaje de aciertos en texto', (tester) async {
+  testWidgets('Los aciertos por pregunta señalan la que más costó', (tester) async {
     await _montar(tester);
 
-    for (final competencia in _parcial2.competencias) {
-      expect(find.text(competencia.nombre), findsOneWidget);
-    }
-    expect(find.text('60 %'), findsOneWidget);
-    expect(find.text('8 preguntas · incluye la pregunta 7'), findsOneWidget);
+    final frase = tester.widget<Text>(find.byKey(const Key('pregunta-mas-dificil'))).data!;
+    expect(frase, contains('la pregunta 2'));
+    expect(frase, contains('(2 de 6)'));
+    expect(frase, contains('la incorrecta más marcada fue la C (4 veces)'));
+    expect(
+      find.byWidgetPredicate(
+        (w) => w is Tooltip && (w.message ?? '').startsWith('Pregunta 2: '),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Ver como tabla'));
+    await tester.pumpAndSettle();
+    expect(find.byType(DataTable), findsOneWidget);
   });
 
-  testWidgets('Elegir otro examen cambia el conjunto de datos', (tester) async {
-    await _montar(tester);
+  testWidgets('Elegir otro examen pide sus cifras y cambia el conjunto de datos', (tester) async {
+    final pedidos = await _montar(tester);
 
-    await tester.tap(find.text(_parcial2.titulo));
+    await tester.tap(find.text('Parcial 1'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text(_parcial1.nombre));
+    await tester.tap(find.text('PARCIAL-1'));
     await tester.pumpAndSettle();
 
-    expect(find.text(_parcial1.titulo), findsOneWidget);
-    expect(find.textContaining('28 de 43'), findsOneWidget);
-    expect(find.textContaining('32 de 43'), findsNothing);
-    expect(find.text(_parcial1.analisis.enunciado), findsOneWidget);
+    expect(pedidos, ['000001', 'PARCIAL-1']);
+    expect(find.text('—'), findsOneWidget, reason: 'sin promedio');
+    expect(find.text('Aún no hay hojas con nota'), findsOneWidget);
+    expect(find.textContaining('4 de 6'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
   testWidgets('Sin animaciones, el cambio de examen es inmediato', (tester) async {
     await _montar(tester, sinMovimiento: true);
 
-    await tester.tap(find.text(_parcial2.titulo));
+    await tester.tap(find.text('Parcial 1'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text(_parcial1.nombre));
-    await tester.pump();
-    await tester.pump();
+    await tester.tap(find.text('PARCIAL-1'));
+    await tester.pumpAndSettle();
 
-    expect(find.textContaining('28 de 43'), findsOneWidget);
-    expect(find.textContaining('32 de 43'), findsNothing);
+    expect(find.textContaining('4 de 6'), findsNothing);
+  });
+
+  testWidgets('Sin exámenes, dice cómo crear el primero', (tester) async {
+    final pedidos = await _montar(tester, examenes: const []);
+
+    expect(pedidos, isEmpty);
+    expect(find.text('Todavía no tiene exámenes'), findsOneWidget);
+  });
+
+  testWidgets('Sin los servicios, no inventa cifras', (tester) async {
+    await _montar(tester, conServicios: false);
+
+    expect(find.text('El panel necesita el servidor'), findsOneWidget);
+    expect(find.text('3,6'), findsNothing);
+  });
+
+  testWidgets('Si las cifras no llegan, lo dice y deja volver a intentar', (tester) async {
+    var falla = true;
+    await _montar(
+      tester,
+      consultar: (examenId) async {
+        if (falla) throw const ExcepcionDeConsulta('Ese examen no existe en su cuenta.');
+        return _parcial;
+      },
+    );
+
+    expect(find.text('Ese examen no existe en su cuenta.'), findsOneWidget);
+    falla = false;
+    await tester.tap(find.text('Volver a intentar'));
+    await tester.pumpAndSettle();
+    expect(find.text('3,6'), findsOneWidget);
+  });
+
+  testWidgets('El botón de actualizar vuelve a pedir las cifras', (tester) async {
+    final pedidos = await _montar(tester);
+
+    await tester.tap(find.byTooltip('Actualizar las cifras'));
+    await tester.pumpAndSettle();
+
+    expect(pedidos, ['000001', '000001']);
   });
 
   for (final ancho in [390.0, 1280.0]) {
@@ -191,11 +334,10 @@ void main() {
       await _montar(tester, ancho: ancho);
       expect(tester.takeException(), isNull);
 
-      // También con el menú de exámenes abierto y con el otro conjunto de datos.
-      await tester.tap(find.text(_parcial2.titulo));
+      await tester.tap(find.text('Parcial 1'));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      await tester.tap(find.text(_parcial1.nombre));
+      await tester.tap(find.text('PARCIAL-1'));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
     });

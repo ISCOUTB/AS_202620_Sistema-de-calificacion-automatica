@@ -8,6 +8,7 @@ import '../features/carga/data/tomar_foto.dart' as foto;
 import '../features/carga/data/servicio_examenes.dart' as examenes;
 import '../features/carga/data/servicio_carga.dart' as carga;
 import '../features/carga/data/servicio_resultados.dart' as resultados;
+import '../features/panel/data/servicio_panel.dart' as panel;
 import '../features/pauta/data/servicio_clave.dart' as clave;
 import '../features/pauta/data/servicio_distractores.dart' as distractores;
 import '../features/revision/data/servicio_revision.dart' as revision;
@@ -38,6 +39,8 @@ class ServiciosApp {
     this.consultarClave,
     this.guardarClave,
     this.habilitarClave,
+    this.crearExamen,
+    this.consultarPanel,
     this.tomarFoto,
   });
 
@@ -76,6 +79,8 @@ class ServiciosApp {
       guardarClave: (examenId, respuestas) =>
           clave.guardarClave(examenId, respuestas, cliente: cliente),
       habilitarClave: (examenId) => clave.habilitarClave(examenId, cliente: cliente),
+      crearExamen: (nombre) => examenes.crearExamen(nombre, cliente: cliente),
+      consultarPanel: (examenId) => panel.consultarPanel(examenId, cliente: cliente),
     );
   }
 
@@ -122,4 +127,11 @@ class ServiciosApp {
   final Future<clave.ClaveDelExamen> Function(String examenId, List<String> respuestas)?
       guardarClave;
   final Future<clave.ClaveDelExamen> Function(String examenId)? habilitarClave;
+
+  /// Crea el examen con el nombre que escribe el docente y le da su identificador (ADR-0028).
+  /// Opcional: sin él, la clave se registra con el identificador escrito, como antes.
+  final Future<examenes.ExamenCreado> Function(String nombre)? crearExamen;
+
+  /// Las cifras del panel de un examen (RF-05). Opcional: sin él, el panel no muestra cifras.
+  final Future<panel.PanelDelExamen> Function(String examenId)? consultarPanel;
 }

@@ -134,7 +134,18 @@ class _PantallaRevisionState extends State<PantallaRevision> {
 
   void _alPedirExamen() {
     final pedido = widget.examenPedido?.value;
-    if (pedido != null && pedido != _examen.text) _examen.text = pedido;
+    if (pedido == null) return;
+    final texto = _textoDelExamen(pedido);
+    if (texto != _examen.text) _examen.text = texto;
+  }
+
+  /// Lo que muestra la lista para un identificador («Parcial 1 · 000001», ADR-0028), o el
+  /// identificador si la lista no ha llegado o no lo trae.
+  String _textoDelExamen(String examenId) {
+    for (final examen in _examenes ?? const <ExamenConClave>[]) {
+      if (examen.examenId == examenId) return examen.etiqueta;
+    }
+    return examenId;
   }
 
   /// Vuelve a pedir la revisión del examen elegido, salvo que ya venga en camino la de un examen

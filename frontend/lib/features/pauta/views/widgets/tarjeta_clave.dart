@@ -6,12 +6,18 @@ import '../../../../common/tema/tokens.dart';
 import '../../../../common/widgets/q_tarjeta.dart';
 import '../../../../common/widgets/q_titulo_seccion.dart';
 import '../../../carga/data/servicio_examenes.dart';
+import '../../../carga/data/servicio_resultados.dart' show ExcepcionDeConsulta;
 import '../../../revision/data/servicio_revision.dart' show fechaLegible;
 import '../../data/servicio_clave.dart';
 
 /// La clave de un examen (A-04, ADR-0026): escribirla en la cuadrícula o pegar las respuestas,
 /// guardarla y habilitarla. Mientras ninguna hoja del examen tenga nota se puede cambiar; después
 /// queda fija, porque las notas no se recalculan solas.
+///
+/// Con [crearExamen] (ADR-0028), el docente escribe el **nombre** del examen («Parcial 1») y no su
+/// identificador: si ya tiene uno con ese nombre se carga su clave, y si no, el examen se crea al
+/// guardar la clave y el sistema le da su identificador (`000001`). Dos docentes pueden usar el
+/// mismo nombre. Sin [crearExamen], lo escrito es el identificador, como antes de ADR-0028.
 class TarjetaClaveDelExamen extends StatefulWidget {
   const TarjetaClaveDelExamen({
     super.key,
@@ -19,6 +25,7 @@ class TarjetaClaveDelExamen extends StatefulWidget {
     required this.guardarClave,
     required this.habilitarClave,
     this.listarExamenes,
+    this.crearExamen,
     this.alCambiar,
   });
 
@@ -26,6 +33,9 @@ class TarjetaClaveDelExamen extends StatefulWidget {
   final Future<ClaveDelExamen> Function(String examenId, List<String> respuestas) guardarClave;
   final Future<ClaveDelExamen> Function(String examenId) habilitarClave;
   final Future<List<ExamenConClave>> Function()? listarExamenes;
+
+  /// Crea el examen con su nombre, o devuelve el que el docente ya tenía con ese nombre.
+  final Future<ExamenCreado> Function(String nombre)? crearExamen;
 
   /// Avisa que se guardó o se habilitó una clave, para que la carga refresque su lista.
   final VoidCallback? alCambiar;
@@ -41,7 +51,13 @@ class _TarjetaClaveDelExamenState extends State<TarjetaClaveDelExamen> {
   Timer? _espera;
 
   List<ExamenConClave> _examenes = const [];
+
+  /// Lo escrito en el campo cuando se buscó la clave: el nombre, o el identificador sin
+  /// [TarjetaClaveDelExamen.crearExamen].
   String? _examenVisto;
+
+  /// El identificador del examen que se muestra. Nulo en un examen nuevo, que todavía no existe.
+  String? _examenId;
   ClaveDelExamen? _guardada;
   bool _cargando = false;
   bool _ocupado = false;
@@ -84,9 +100,29 @@ class _TarjetaClaveDelExamenState extends State<TarjetaClaveDelExamen> {
   /// recién guardado aparezca sin recargar la página.
   void _pedirExamenes() {
     widget.listarExamenes?.call().then((lista) {
-      if (mounted) setState(() => _examenes = lista);
+      if (!mounted) return;
+      setState(() => _examenes = lista);
+      // Si se escribió el nombre antes de que llegara la lista, puede que el examen ya exista.
+      final visto = _examenVisto;
+      if (visto != null && _examenId == null && _idDe(visto) != null) _cargar(visto);
     }, onError: (_) {});
   }
+
+  bool get _porNombre => widget.crearExamen != null;
+
+  /// El identificador de lo escrito: el mismo texto sin [TarjetaClaveDelExamen.crearExamen]; con
+  /// él, el del examen del docente que se llama así, o nulo si todavía no existe.
+  String? _idDe(String escrito) {
+    if (!_porNombre) return escrito;
+    for (final examen in _examenes) {
+      if (claveDelNombre(examen.nombre) == claveDelNombre(escrito)) return examen.examenId;
+    }
+    return null;
+  }
+
+  bool _escritoValido(String escrito) => _porNombre
+      ? escrito.isNotEmpty && escrito.length <= largoMaximoDelNombre
+      : identificadorValido(escrito);
 
   @override
   void dispose() {
@@ -103,20 +139,26 @@ class _TarjetaClaveDelExamenState extends State<TarjetaClaveDelExamen> {
     _espera?.cancel();
     setState(() {
       _examenVisto = null;
+      _examenId = null;
       _guardada = null;
     });
-    if (identificadorValido(examen)) {
+    if (_escritoValido(examen)) {
       _espera = Timer(const Duration(milliseconds: 400), () => _cargar(examen));
     }
   }
 
   Future<void> _cargar(String examen) async {
+    final examenId = _idDe(examen);
     setState(() {
-      _cargando = true;
+      _cargando = examenId != null;
       _examenVisto = examen;
+      _examenId = examenId;
+      if (examenId == null) _mostrar(null);
     });
+    // Un examen nuevo no tiene clave que buscar: se crea al guardarla.
+    if (examenId == null) return;
     try {
-      final clave = await widget.consultarClave(examen);
+      final clave = await widget.consultarClave(examenId);
       if (!mounted || _examenVisto != examen) return;
       setState(() => _mostrar(clave));
     } on ExcepcionDeClave catch (error) {
@@ -190,16 +232,40 @@ class _TarjetaClaveDelExamenState extends State<TarjetaClaveDelExamen> {
   }
 
   Future<void> _guardar() async {
-    final examen = _examenVisto!;
+    final nombre = _examenVisto!;
+    var examenId = _examenId;
     setState(() => _ocupado = true);
     try {
-      final guardada = await widget.guardarClave(examen, [for (final r in _visibles) r!]);
+      if (examenId == null) {
+        final creado = await widget.crearExamen!(nombre);
+        if (!mounted) return;
+        examenId = creado.examenId;
+        setState(() => _examenId = creado.examenId);
+        if (!creado.creado) {
+          // Ya tenía un examen con ese nombre (la lista no había llegado). Su clave no se pisa sin
+          // que el docente la vea.
+          final existente = await widget.consultarClave(creado.examenId);
+          if (!mounted) return;
+          if (existente != null) {
+            setState(() => _mostrar(existente));
+            _avisar('Ya tenía un examen llamado «$nombre». Se cargó su clave: revísela.');
+            return;
+          }
+        }
+      }
+      final guardada = await widget.guardarClave(examenId, [for (final r in _visibles) r!]);
       if (!mounted) return;
       setState(() => _guardada = guardada);
-      _avisar('Clave guardada. Habilítela para calificar con ella.');
+      _avisar(
+        _porNombre
+            ? 'Clave de «$nombre» guardada (examen $examenId). Habilítela para calificar con ella.'
+            : 'Clave guardada. Habilítela para calificar con ella.',
+      );
       _pedirExamenes();
       widget.alCambiar?.call();
     } on ExcepcionDeClave catch (error) {
+      if (mounted) _avisar(error.mensaje);
+    } on ExcepcionDeConsulta catch (error) {
       if (mounted) _avisar(error.mensaje);
     } finally {
       if (mounted) setState(() => _ocupado = false);
@@ -208,6 +274,7 @@ class _TarjetaClaveDelExamenState extends State<TarjetaClaveDelExamen> {
 
   Future<void> _habilitar() async {
     final examen = _examenVisto!;
+    final examenId = _examenId!;
     final confirmado = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -231,7 +298,7 @@ class _TarjetaClaveDelExamenState extends State<TarjetaClaveDelExamen> {
     if (confirmado != true || !mounted) return;
     setState(() => _ocupado = true);
     try {
-      final habilitada = await widget.habilitarClave(examen);
+      final habilitada = await widget.habilitarClave(examenId);
       if (!mounted) return;
       setState(() => _guardada = habilitada);
       _avisar('Clave habilitada.');
@@ -251,6 +318,9 @@ class _TarjetaClaveDelExamenState extends State<TarjetaClaveDelExamen> {
     if (_cargando) return 'Buscando la clave…';
     if (_examenVisto == null) return null;
     final guardada = _guardada;
+    if (guardada == null && _porNombre && _examenId == null) {
+      return 'Examen nuevo: se crea al guardar la clave.';
+    }
     if (guardada == null) return 'Sin clave registrada.';
     final base = guardada.habilitada
         ? 'Habilitada por ${guardada.habilitadaPor} el ${fechaLegible(guardada.habilitadaEn!)}.'
@@ -264,7 +334,7 @@ class _TarjetaClaveDelExamenState extends State<TarjetaClaveDelExamen> {
   Widget build(BuildContext context) {
     final textos = Theme.of(context).textTheme;
     final examen = _examen.text.trim();
-    final invalido = examen.isNotEmpty && !identificadorValido(examen);
+    final invalido = examen.isNotEmpty && !_escritoValido(examen);
     final lista = _examenVisto != null && !_cargando;
     final editable = lista && _cambiable && !_ocupado;
     final faltante = _primeraFaltante;
@@ -289,12 +359,15 @@ class _TarjetaClaveDelExamenState extends State<TarjetaClaveDelExamen> {
                 child: TextField(
                   controller: _examen,
                   decoration: InputDecoration(
-                    labelText: 'Examen',
-                    hintText: 'Por ejemplo, CALC-2026-03',
+                    labelText: _porNombre ? 'Nombre del examen' : 'Examen',
+                    hintText: _porNombre ? 'Por ejemplo, Parcial 1' : 'Por ejemplo, CALC-2026-03',
+                    helperText: _porNombre && _examenId != null ? 'Examen $_examenId' : null,
                     prefixIcon: const Icon(Icons.assignment_outlined),
-                    errorText: invalido
-                        ? 'Solo letras sin acento, dígitos, guiones y guiones bajos.'
-                        : null,
+                    errorText: !invalido
+                        ? null
+                        : _porNombre
+                            ? 'Hasta $largoMaximoDelNombre caracteres.'
+                            : 'Solo letras sin acento, dígitos, guiones y guiones bajos.',
                     errorMaxLines: 2,
                   ),
                 ),
@@ -320,8 +393,8 @@ class _TarjetaClaveDelExamenState extends State<TarjetaClaveDelExamen> {
                 Text('Con clave:', style: textos.bodySmall),
                 for (final e in _examenes)
                   ActionChip(
-                    label: Text(e.examenId),
-                    onPressed: () => _examen.text = e.examenId,
+                    label: Text(e.nombre),
+                    onPressed: () => _examen.text = e.nombre,
                   ),
               ],
             ),

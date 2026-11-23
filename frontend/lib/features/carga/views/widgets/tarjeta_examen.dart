@@ -73,7 +73,7 @@ class TarjetaExamen extends StatelessWidget {
               textInputAction: TextInputAction.done,
               decoration: InputDecoration(
                 labelText: 'Examen',
-                hintText: 'Por ejemplo, CALC-2026-02',
+                hintText: 'Por ejemplo, 000001',
                 helperText: alReintentar == null
                     ? null
                     : 'No se pudo cargar la lista. Escriba el nombre exacto.',
@@ -104,14 +104,21 @@ List<DropdownMenuEntry<String>> _filtrar(List<DropdownMenuEntry<String>> entrada
 }
 
 /// El examen elegido de la lista, sin importar mayúsculas: «prototipo-r05» es PROTOTIPO-R05.
-/// Nulo si lo escrito no es un examen de la lista.
+/// Vale lo que muestra la lista («Parcial 1 · 000001»), el identificador o el nombre, que no se
+/// repite entre los exámenes de un mismo docente (ADR-0028). Nulo si no es un examen de la lista.
 ExamenConClave? examenElegido(String escrito, List<ExamenConClave> examenes) {
   final texto = escrito.trim();
   for (final examen in examenes) {
-    if (examen.examenId == texto) return examen;
+    if (examen.etiqueta == texto || examen.examenId == texto) return examen;
+  }
+  final buscado = texto.toLowerCase();
+  for (final examen in examenes) {
+    if (examen.etiqueta.toLowerCase() == buscado || examen.examenId.toLowerCase() == buscado) {
+      return examen;
+    }
   }
   for (final examen in examenes) {
-    if (examen.examenId.toLowerCase() == texto.toLowerCase()) return examen;
+    if (claveDelNombre(examen.nombre) == claveDelNombre(texto)) return examen;
   }
   return null;
 }
@@ -134,7 +141,7 @@ class _Lista extends StatelessWidget {
     final escrito = controlador.text.trim().toLowerCase();
     final elegido = examenElegido(controlador.text, examenes);
     final sinCoincidencias = escrito.isNotEmpty &&
-        !examenes.any((examen) => examen.examenId.toLowerCase().contains(escrito));
+        !examenes.any((examen) => examen.etiqueta.toLowerCase().contains(escrito));
 
     final String? ayuda;
     if (examenes.isEmpty) {
@@ -163,7 +170,7 @@ class _Lista extends StatelessWidget {
         for (final examen in examenes)
           DropdownMenuEntry(
             value: examen.examenId,
-            label: examen.examenId,
+            label: examen.etiqueta,
             trailingIcon: examen.habilitada
                 ? null
                 : Text(

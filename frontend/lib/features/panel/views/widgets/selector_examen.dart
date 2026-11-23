@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import '../../../../common/tema/tema.dart';
 import '../../../../common/tema/tokens.dart';
 import '../../../../common/widgets/q_tarjeta.dart';
-import '../../data/modelos_panel.dart';
+import '../../../carga/data/servicio_examenes.dart';
 
-/// Tarjeta del examen activo. Toda la tarjeta abre el menú con los exámenes del periodo, así el
+/// Tarjeta del examen activo. Toda la tarjeta abre el menú con los exámenes del docente, así el
 /// objetivo táctil es la franja completa y no solo la flecha de la derecha.
 class SelectorExamen extends StatelessWidget {
   const SelectorExamen({
@@ -15,9 +15,9 @@ class SelectorExamen extends StatelessWidget {
     required this.alElegir,
   });
 
-  final List<ExamenPanel> examenes;
-  final ExamenPanel actual;
-  final ValueChanged<ExamenPanel> alElegir;
+  final List<ExamenConClave> examenes;
+  final ExamenConClave actual;
+  final ValueChanged<ExamenConClave> alElegir;
 
   @override
   Widget build(BuildContext context) {
@@ -40,7 +40,7 @@ class SelectorExamen extends StatelessWidget {
           MenuItemButton(
             onPressed: () => alElegir(examen),
             leadingIcon: Icon(
-              examen.id == actual.id ? Icons.check_outlined : null,
+              examen.examenId == actual.examenId ? Icons.check_outlined : null,
               size: 20,
               color: QColores.cobaltoOscuro,
             ),
@@ -54,7 +54,9 @@ class SelectorExamen extends StatelessWidget {
                   children: [
                     Text(examen.nombre, style: textos.titleSmall),
                     Text(
-                      examen.tema,
+                      examen.habilitada
+                          ? 'Examen ${examen.examenId}'
+                          : 'Examen ${examen.examenId} · clave sin habilitar',
                       style: textos.bodySmall,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -104,7 +106,7 @@ class SelectorExamen extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        actual.titulo,
+                        actual.nombre,
                         style: textos.titleMedium,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
