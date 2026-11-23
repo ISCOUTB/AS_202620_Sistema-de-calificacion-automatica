@@ -22,11 +22,7 @@
 #     Environment y nunca en el repositorio (RNF-11).
 #
 # Qué no está aquí, y por qué:
-#   - Postgres. `docker-compose.yml` lo declara para corresponder con el Nivel 2 de ADR-0002, pero
-#     ningún módulo lo usa: no hay esquema, ni migraciones, ni cliente en `requirements.txt`. Un
-#     contenedor sin uso solo gastaría cuota. La base de datos que cierre R-06 cabe aquí como
-#     quinto contenedor, con su ADR y el código que la use. Cuando entre, el `healthcheck` de la
-#     API tendrá que comprobarla.
+#   - (Postgres ya está: entró con ADR-0027 como quinto contenedor, `db`, abajo.)
 #   - La compilación de Flutter. Su imagen ocupa unos 3 GB y el servidor tiene 2 compilaciones
 #     para 23 equipos: el CI compila el sitio y aquí solo se copia (deploy/sitio/Dockerfile).
 #
@@ -36,14 +32,25 @@
 # contenedor, leída del cgroup cada 0,1 s: es la que no se puede liberar (la caché de archivos el
 # kernel la suelta antes de matar el proceso), y `docker stats` muestrea tan lento que se salta
 # los picos. Cada límite deja margen sobre su pico (en Redis, además, para sus 32 MB de datos).
-# Suman 576 MB: los 448 MB que quedan de la cuota son para lo que todavía no existe, la base de
-# datos de R-06 y el worker cuando A-02 lea las marcas. Si se cambia un límite, se vuelve a medir.
+# Sumaban 576 MB; con la base de datos de ADR-0027 (192 MB) suman 768 MB de 1 GB y 5 de 6
+# contenedores. El límite de `db` no está medido todavía: es el de la imagen en reposo con
+# `shared_buffers` en 32 MB, con margen. Si se cambia un límite, se vuelve a medir.
 
 services:
   api:
     build: &backend
       context: ../backend
     restart: unless-stopped
+    # Al arrancar, la API pasa a la base lo que había en los `.jsonl` del volumen, una sola vez
+    # (ADR-0027): `--si-hace-falta` no hace nada si la bitácora de la base ya tiene datos. Así nadie
+    # tiene que correr la migración a mano en el servidor. Si falla, la API arranca igual.
+    command:
+      - sh
+      - -c
+      - >-
+        python -m herramientas.migrar_a_postgres --si-hace-falta
+        || echo "La migración a Postgres falló; la API arranca igual.";
+        exec uvicorn api.main:app --host 0.0.0.0 --port 8000
     environment:
       # Cableado interno: el nombre del servicio de la cola y la carpeta donde se monta el volumen
       # están en este mismo archivo, así que van como literales y no como variables. Si se pudieran
@@ -92,6 +99,10 @@ services:
       # seguro porque el contenedor no publica puertos: solo Traefik y los servicios del equipo
       # llegan a él. Uvicorn lee esta variable por su cuenta, así que el Dockerfile no cambia.
       FORWARDED_ALLOW_IPS: "*"
+      # La base de datos (ADR-0027): con ella, la bitácora, los resultados y las revisiones van a
+      # Postgres y las tres RUTA_* de arriba dejan de usarse. Las hojas y las claves siguen en el
+      # volumen. La contraseña va solo en Dokploy → Environment (RNF-11).
+      DATABASE_URL: postgresql://quantia:${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD en Dokploy → Environment}@db:5432/quantia
     expose:
       - "8000"
     volumes:
@@ -102,6 +113,8 @@ services:
     depends_on:
       redis:
         condition: service_started
+      db:
+        condition: service_healthy
     # Traefik no enruta hacia un contenedor cuyo healthcheck no está en `healthy`, así que este
     # bloque decide cuándo empieza a responder la URL pública después de cada despliegue.
     # `start_interval` hace que durante el arranque se pruebe cada 2 s y no cada 30: sin él, la URL
@@ -139,11 +152,13 @@ services:
       REDIS_URL: redis://redis:6379/0
       RUTA_ALMACEN: /app/almacen_imagenes
       NOMBRE_COLA: ${NOMBRE_COLA:-procesamiento}
-      # La clave de cada examen y el registro de lo que se leyó (A-02 y A-03), en el volumen de
-      # las hojas, como la bitácora: fuera de él se perderían al recrear el contenedor. Son
-      # archivos hasta R-06, y la clave se copia a mano porque A-04 todavía no la registra.
+      # La clave de cada examen, en el volumen de las hojas: fuera de él se perdería al recrear el
+      # contenedor. La registra la aplicación (ADR-0026). RUTA_RESULTADOS solo se usa sin base de
+      # datos.
       RUTA_CLAVES: /app/almacen_imagenes/claves-de-respuestas
       RUTA_RESULTADOS: /app/almacen_imagenes/resultados-de-lectura.jsonl
+      # Con la base de datos, los resultados van a Postgres (ADR-0027). La misma que en `api`.
+      DATABASE_URL: postgresql://quantia:${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD en Dokploy → Environment}@db:5432/quantia
     # Desde ADR-0020 el worker abre la imagen de cada trabajo, y desde A-02 la lee, así que monta
     # el mismo volumen donde la API la guardó.
     volumes:
@@ -153,6 +168,8 @@ services:
     # API ya quedó arriba recibiendo hojas como pendientes.
     depends_on:
       redis:
+        condition: service_healthy
+      db:
         condition: service_healthy
     # Sin healthcheck: no atiende peticiones y ya reintenta solo cuando la cola falla
     # (worker/main.py). Un estado `unhealthy` no lo reiniciaría ni lo vería nadie.
@@ -205,6 +222,37 @@ services:
           cpus: "0.25"
           memory: 64M
 
+  db:
+    # La base de datos (ADR-0027): la bitácora de recepción, los resultados de lectura y las
+    # revisiones del profesor, cada hecho una fila. El esquema lo crea la propia aplicación la
+    # primera vez que se conecta (`infraestructura/base_de_datos.py`), así que no hay migraciones
+    # que correr a mano. Sin `ports`: solo `api` y `worker` llegan a ella, por la red del equipo.
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: quantia
+      POSTGRES_DB: quantia
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD en Dokploy → Environment}
+    # Pocas conexiones (la aplicación abre una por operación y la cierra) y poca caché compartida,
+    # para que quepa en el límite de abajo.
+    command: ["postgres", "-c", "shared_buffers=32MB", "-c", "max_connections=30"]
+    expose:
+      - "5432"
+    volumes:
+      - datos_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quantia -d quantia"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+      start_interval: 1s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 192M
+
   web:
     # El sitio: Flutter web ya compilado por el CI, servido por nginx sin privilegios en el puerto
     # 8080. La URL de la API se hornea al compilar (Flutter web no lee variables en ejecución),
@@ -235,3 +283,6 @@ volumes:
   almacen_imagenes:
   # AOF de la cola.
   datos_cola:
+  # Los datos de Postgres (ADR-0027). Igual que los demás, el servidor los borra después del
+  # 30-nov-2026.
+  datos_db:

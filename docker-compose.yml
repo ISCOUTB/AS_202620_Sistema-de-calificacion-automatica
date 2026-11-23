@@ -17,6 +17,13 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-omr}
     volumes:
       - datos_postgres:/var/lib/postgresql/data
+    # La API y el worker esperan a que acepte conexiones (ADR-0027): sin esto, el primer
+    # registro podría llegar antes de que la base esté lista.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-omr}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   api:
     build: &backend-build
@@ -26,7 +33,10 @@ services:
       - "${BACKEND_PORT:-8000}:8000"
     environment:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/omr}
+      # La base de datos (ADR-0027): con ella, la bitácora, los resultados y las revisiones van a
+      # Postgres y RUTA_BITACORA, RUTA_RESULTADOS y RUTA_REVISIONES dejan de usarse. Vacía
+      # (DATABASE_URL= en el .env), todo vuelve a los archivos del volumen.
+      DATABASE_URL: ${DATABASE_URL-postgresql://postgres:postgres@postgres:5432/omr}
       RUTA_ALMACEN: ${RUTA_ALMACEN:-/app/almacen_imagenes}
       ALLOWED_ORIGIN: ${ALLOWED_ORIGIN:-http://localhost:8080}
       # Nombre de la cola: el mismo valor que lee `worker`, abajo. Si se cambia aquí y no
@@ -63,7 +73,7 @@ services:
       redis:
         condition: service_healthy
       postgres:
-        condition: service_started
+        condition: service_healthy
 
   worker:
     build: *backend-build
@@ -71,7 +81,7 @@ services:
     restart: unless-stopped
     environment:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/omr}
+      DATABASE_URL: ${DATABASE_URL-postgresql://postgres:postgres@postgres:5432/omr}
       RUTA_ALMACEN: ${RUTA_ALMACEN:-/app/almacen_imagenes}
       # El mismo valor que lee `api`, arriba. RUTA_BITACORA no va aquí: `worker/main.py` no
       # la lee, y declarar una variable que el servicio ignora es configuración muerta.
@@ -87,7 +97,7 @@ services:
       redis:
         condition: service_healthy
       postgres:
-        condition: service_started
+        condition: service_healthy
 
   frontend:
     build:

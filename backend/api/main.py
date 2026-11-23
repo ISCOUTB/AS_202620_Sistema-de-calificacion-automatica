@@ -58,6 +58,7 @@ from api.settings import (
     NOMBRE_COLA,
     REDIS_URL,
     RUTA_ALMACEN,
+    DATABASE_URL,
     RUTA_BITACORA,
     RUTA_CLAVES,
     RUTA_RESULTADOS,
@@ -95,6 +96,11 @@ from identidad import (
     leer_sesion,
 )
 from infraestructura.almacen import AlmacenDeImagenes, AlmacenEnDisco
+from infraestructura.base_de_datos import (
+    BitacoraEnPostgres,
+    ResultadosEnPostgres,
+    RevisionesEnPostgres,
+)
 from infraestructura.bitacora import BitacoraDeRecepcion, BitacoraEnDisco, LectorDeRecepciones
 from infraestructura.claves import CatalogoDeClaves, ClaveMalEscrita, ClavesEnDisco
 from infraestructura.modelo import ClaveDeRespuestas
@@ -156,25 +162,33 @@ def obtener_almacen() -> AlmacenDeImagenes:
 
 def obtener_bitacora() -> BitacoraDeRecepcion:
     """Dependencia de la bitácora de recepción (ADR-0006). Por petición y sustituible, por las
-    mismas dos razones que el almacén."""
+    mismas dos razones que el almacén. Con `DATABASE_URL`, en Postgres (ADR-0027)."""
+    if DATABASE_URL:
+        return BitacoraEnPostgres(DATABASE_URL)
     return BitacoraEnDisco(Path(RUTA_BITACORA))
 
 
 def obtener_lector_de_recepciones() -> LectorDeRecepciones:
     """La misma bitácora, vista solo para leer cómo llegó cada hoja (la revisión la usa para el
     nombre del archivo y la hora). Por petición y sustituible, como las demás."""
+    if DATABASE_URL:
+        return BitacoraEnPostgres(DATABASE_URL)
     return BitacoraEnDisco(Path(RUTA_BITACORA))
 
 
 def obtener_lector_de_resultados() -> LectorDeResultados:
     """Dependencia del registro de resultados que escribe el worker (ADR-0023). Por petición y
-    sustituible, como el almacén y la bitácora."""
+    sustituible, como el almacén y la bitácora. Con `DATABASE_URL`, en Postgres (ADR-0027)."""
+    if DATABASE_URL:
+        return ResultadosEnPostgres(DATABASE_URL)
     return ResultadosEnDisco(Path(RUTA_RESULTADOS))
 
 
 def obtener_revisiones() -> RevisionesDelProfesor:
     """Dependencia del registro de lo que resuelve el profesor (RF-08). Solo la API lo escribe.
-    Por petición y sustituible, como los otros registros."""
+    Por petición y sustituible, como los otros registros. Con `DATABASE_URL`, en Postgres."""
+    if DATABASE_URL:
+        return RevisionesEnPostgres(DATABASE_URL)
     return RevisionesEnDisco(Path(RUTA_REVISIONES))
 
 

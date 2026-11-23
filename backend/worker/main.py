@@ -45,6 +45,7 @@ import redis.exceptions
 
 from calificacion import ClaveIncompatible, ClaveNoHabilitada, calificar
 from infraestructura.almacen import RUTA_ALMACEN_POR_OMISION, AlmacenDeImagenes, AlmacenEnDisco
+from infraestructura.base_de_datos import ResultadosEnPostgres
 from infraestructura.claves import (
     RUTA_CLAVES_POR_OMISION,
     ClaveMalEscrita,
@@ -106,6 +107,9 @@ RUTA_ALMACEN = os.environ.get("RUTA_ALMACEN", RUTA_ALMACEN_POR_OMISION)
 # regla detiene el worker con un mensaje claro, en vez de dejar ilegible cada hoja.
 RUTA_CLAVES = os.environ.get("RUTA_CLAVES", RUTA_CLAVES_POR_OMISION)
 RUTA_RESULTADOS = os.environ.get("RUTA_RESULTADOS", RUTA_RESULTADOS_POR_OMISION)
+# Con base de datos, los resultados van a Postgres y RUTA_RESULTADOS deja de usarse (ADR-0027).
+# La misma variable y el mismo criterio que en `api/settings.py`.
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
 UMBRAL_DE_CONFIANZA = comprobar_umbral_de_confianza(
     int(os.environ.get("OMR_UMBRAL_DE_CONFIANZA", "70"))
 )
@@ -133,9 +137,18 @@ def ejecutar() -> None:
     cliente = cliente_redis()
     almacen = AlmacenEnDisco(Path(RUTA_ALMACEN))
     claves = ClavesEnDisco(Path(RUTA_CLAVES))
-    resultados = ResultadosEnDisco(Path(RUTA_RESULTADOS))
+    resultados: RegistroDeResultados = (
+        ResultadosEnPostgres(DATABASE_URL)
+        if DATABASE_URL
+        else ResultadosEnDisco(Path(RUTA_RESULTADOS))
+    )
     logger.info(
-        "Worker escuchando la cola", extra={"evento": "worker_iniciado", "cola": NOMBRE_COLA}
+        "Worker escuchando la cola",
+        extra={
+            "evento": "worker_iniciado",
+            "cola": NOMBRE_COLA,
+            "resultados_en": "postgres" if DATABASE_URL else "disco",
+        },
     )
     recuperar = True
     while True:

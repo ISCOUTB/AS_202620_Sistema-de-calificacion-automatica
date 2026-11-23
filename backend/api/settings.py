@@ -40,6 +40,11 @@ RUTA_CLAVES = os.environ.get("RUTA_CLAVES", RUTA_CLAVES_POR_OMISION)
 # Lo que resuelve el profesor en las preguntas en revisión (RF-08). Solo la API lo escribe y lo lee.
 RUTA_REVISIONES = os.environ.get("RUTA_REVISIONES", RUTA_REVISIONES_POR_OMISION)
 
+# La base de datos (ADR-0027). Con ella, la bitácora, los resultados y las revisiones van a
+# Postgres y las tres RUTA_* de arriba dejan de usarse; sin ella, siguen siendo archivos. Las
+# imágenes y las claves son archivos en los dos casos. El worker lee la misma variable.
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
+
 # Proveedor de LLM que propone distractores diagnósticos (RF-11, ADR-0013). Habla el protocolo de
 # chat de OpenAI, así que cambiar de proveedor es cambiar estas tres variables y no el código. Sin
 # clave, la ruta de distractores responde 503 y el resto de la API funciona igual, porque RF-11 es
