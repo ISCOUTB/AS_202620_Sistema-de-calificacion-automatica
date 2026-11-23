@@ -270,8 +270,9 @@ un elemento concreto, con sus límites, se puede comprobar en vez de suponer.
 
 Lo que [ADR-0025](../adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md) cambió en el Nivel 2 del C4:
 
-- **La relación 1 pide sesión:** todas las rutas salvo `/health`, `/metricas` y `POST /sesion`
-  exigen un token firmado de un docente de la lista.
+- **La relación 1 pide sesión:** todas las rutas de la API salvo `/health`, `/metricas` y
+  `POST /sesion` exigen un token firmado de un docente de la lista. `/docs`, `/redoc` y
+  `/openapi.json`, de FastAPI, también quedan abiertas: publican el contrato y ningún dato.
 - **La aplicación web tiene un secreto más y una lista de cuentas:** `SESION_SECRETO` y `DOCENTES`,
   en el panel, con las contraseñas cifradas con scrypt.
 - **El sitio guarda el token** en el almacenamiento del navegador.
@@ -279,11 +280,11 @@ Lo que [ADR-0025](../adr/0025-identificar-al-docente-con-una-sesion-firmada-y-un
 
 | ID | STRIDE | Elemento del C4 | Amenaza | P | I | Prioridad | Mitigación | Dueño | Estado |
 |---|---|---|---|---|---|---|---|---|---|
-| **AM-02**, reducida | Suplantación, manipulación y divulgación | Relación 1 | Lo que queda: cualquier docente con cuenta ve todos los exámenes, con el código del estudiante, y resuelve revisiones de cualquiera, porque no hay cursos | Baja | Medio | **2** | Sin cuenta, todas esas rutas responden 401, y `test_sesion.py` las recorre todas; cada resolución queda con el correo de la sesión | Equipo, con A-04 y EC-06 | **Aceptada** con la misma condición: ninguna hoja real antes de los cursos |
+| **AM-02**, reducida | Suplantación, manipulación y divulgación | Relación 1 | Lo que queda: cualquier docente con cuenta ve todos los exámenes, con el código del estudiante, y resuelve revisiones de cualquiera, porque no hay cursos. La prioridad vale mientras solo haya hojas sintéticas; con hojas reales el impacto sería alto | Baja | Medio | **2** | Sin cuenta, todas esas rutas responden 401, y `test_sesion.py` las recorre todas; cada resolución queda con el correo de la sesión | Equipo, con A-04 y EC-06 | **Aceptada** con la misma condición: ninguna hoja real antes de los cursos |
 | **AM-08**, en parte | Repudio | Almacén de imágenes: la bitácora y el registro de revisiones | Nadie puede probar quién cargó un lote | Alta | Bajo | **3** | Cada revisión queda con el correo del docente de la sesión, no con un nombre escrito a mano (`test_ruta_revision.py`). La carga pide sesión, pero la bitácora no guarda quién | Sebastián | **Hecha** para las revisiones; **aceptada** para la carga hasta la primera nota real |
 | **AM-19** | Suplantación | Relación 1: `POST /sesion` | Probar contraseñas hasta acertar: la entrada no limita los intentos | Baja | Alto | **3** | Las contraseñas tienen al menos 10 caracteres y se verifican con scrypt, unos 50 ms por intento; un correo sin cuenta cuesta lo mismo que una contraseña equivocada y responde igual; cada rechazo queda en el registro como `entrada_rechazada`, sin el correo | Equipo | **Aceptada** (R-38): la reabren intentos seguidos en el registro |
 | **AM-20** | Divulgación | Sitio: el token en el navegador | Un script en la página lee el token del almacenamiento del navegador y lo usa hasta que vence | Baja | Medio | **2** | El sitio no muestra HTML de terceros ni de usuarios; el token vence a las 12 horas, y quitar la cuenta o cambiar el secreto lo invalida | Equipo | **Aceptada** (R-40) |
-| **AM-17**, reducida | Manipulación | Almacén de imágenes: las claves | Lo que queda: quien llega al volumen puede cambiar el archivo de una clave | Baja | Alto | **3** | Desde [ADR-0026](../adr/0026-registrar-y-habilitar-la-clave-desde-la-aplicacion.md) la clave se registra desde la aplicación, con sesión, y no se cambia después de la primera nota; la habilitación queda con el correo de quien la hizo (`test_ruta_clave.py`) | Equipo | **Aceptada**: al volumen solo se llega desde el panel |
+| **AM-17**, reducida | Manipulación | Almacén de imágenes: las claves | Lo que queda: quien llega al volumen puede cambiar el archivo de una clave | Baja | Alto | **3** | Desde [ADR-0026](../adr/0026-registrar-y-habilitar-la-clave-desde-la-aplicacion.md) la clave se registra desde la aplicación, con sesión, y solo se cambia mientras ninguna hoja del examen tenga nota; la habilitación queda con el correo de quien la hizo (`test_ruta_clave.py`) | Equipo | **Aceptada**: al volumen solo se llega desde el panel |
 | **AM-21** | Divulgación | Aplicación web: variables de entorno en el panel | Quien entra al panel ve `SESION_SECRETO` y puede firmar tokens a nombre de cualquier docente de la lista | Baja | Alto | **3** | Al panel entran el equipo y el docente con su correo institucional, como con la `LLM_API_KEY` (AM-13); cambiar el secreto cierra todas las sesiones | Equipo | **Aceptada**, como AM-13 |
 
 **Por qué AM-02 no se cierra del todo.** La sesión dice quién es el docente, no qué cursos son
