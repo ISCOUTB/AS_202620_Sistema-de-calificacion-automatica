@@ -6,7 +6,7 @@ Este documento registra el uso de herramientas de IA durante el desarrollo del p
 
 Este registro documenta IA como herramienta de construcción (apoyo para redactar, diseñar y documentar). El modelo de lenguaje que el sistema usa para proponer distractores diagnósticos (RF-11, función opcional que no interviene en la calificación) es IA como componente del sistema: se documenta en el aspecto A-06 y en su evaluación (`docs/evidencia/evaluacion-distractores.md`), no aquí.
 
-**La entrada más reciente es la [26](#entrada-26), los exámenes por docente y el Panel** (2026-11-23): cada examen con su dueño y un identificador que acuña el sistema, y el Panel con las cifras reales del examen ([ADR-0028](adr/0028-dar-a-cada-examen-un-dueno-y-un-identificador-distinto-de-su-nombre.md)), construidos con Claude en dos sesiones. **Lo rechazado, con su motivo técnico:** una columna `docente` en las tres tablas, porque obligaba a migrar filas y a tocar al worker; y prefijar el identificador con el correo, que viajaría en las rutas, la cola y el almacén. **Lo corregido al ejecutar:** el sitio se había escrito sin correr Flutter, y al correrlo fallaron dos pruebas, una por un desborde real del Panel a 390 px; `mypy` dio 12 errores de tipos. **Lo aceptado:** ADR-0028, el mismo 404 para un examen ajeno y uno inexistente, y la adopción de los exámenes anteriores por quien habilitó su clave.
+**La entrada más reciente es la [28](#entrada-28), la lista de Pauta con las preguntas del docente** (2026-11-23): al probar en local lo de la entrada 27, Sebastián pidió «+» para agregar preguntas y ver al final de la lista las que tienen distractores guardados ([ADR-0030](adr/0030-empezar-el-banco-con-las-preguntas-que-agrega-el-docente.md)), construido con Claude. **Lo rechazado, con su motivo técnico:** que la agregada viva solo en la pantalla, que se pierde al recargar; y que «+» vacíe el formulario, que no deja cargar varias. **Lo aceptado:** ADR-0030, la tabla `preguntas_del_docente`, y en ADR-0029 listar y quitar lo guardado en vez de buscarlo pregunta por pregunta.
 
 **La entrada [21](#entrada-21) es la de la lectura de las hojas y su calificación** (2026-11-02 a 2026-11-06): A-02 y A-03 con la revisión manual de las preguntas dudosas (RF-08), el prototipo de R-05, las mediciones de EC-01 a EC-04 y ADR-0023, construidos con Claude. **Lo rechazado, con su motivo técnico:** detectar los círculos y ordenarlos, como traía el prompt de partida, porque uno que no se detecta corre a todos los siguientes sin aviso; un umbral para toda la hoja, porque con la sombra de una foto las burbujas vacías salían llenas; la burbuja más llena como respuesta, porque elige entre candidatas (RF-03); la hoja A4, porque impresa en carta pierde las marcas de abajo; el resultado en la bitácora, porque tendría dos escritores; y mostrar la respuesta correcta en la revisión, porque las rutas son públicas. **Lo corregido al ejecutar:** el brillo del grafito se detectaba contando puntos claros, que se perdían con un poco de desenfoque; la resolución mínima subió de 3,5 a 7,5 px/mm; y al documentar, un PNG de 120 KB mataba al worker por memoria en cada reinicio (AM-16), y se cerró con un tope por encabezado y con que la muerte del worker cuente como un intento. **Lo aceptado:** ADR-0023, aceptado por el equipo el 6-nov, las fotos preparadas en el navegador, las notas sin el código del estudiante y RF-08 antes de A-05, solo con hojas sintéticas (AM-02).
 
@@ -723,3 +723,44 @@ Fecha, actividad realizada, herramienta utilizada, respuesta obtenida (resumen),
 - **Justificación:** dos lecciones.
   - **Lo que no se ejecutó no está probado:** el sitio se había revisado con un analizador de sintaxis, y los dos fallos solo aparecieron al correr las pruebas.
   - **Los puertos volvieron a cumplir:** el dueño se agregó con un registro nuevo detrás de un puerto, sin tocar al worker ni a las tablas que ya tenían datos.
+
+### Entrada 27
+
+- **Fecha:** 2026-11-23
+- **Actividad realizada:** guardar los distractores que el docente aprueba y regenerar una sola propuesta descartada, pedidos por Sebastián después de usar Pauta: lo elegido se perdía, y «Pedir otras propuestas» reemplazaba todas.
+- **Herramienta utilizada:** Claude Code en el computador de Sebastián.
+- **Prompt utilizado (resumen):** que debajo de las propuestas haya un botón para guardar las aprobadas, porque no había persistencia, y que al descartar una aparezca a su izquierda un botón para regenerar solo esa.
+- **Respuesta obtenida (resumen):**
+  - Dos preguntas antes de construir: dónde guardar (en el servidor o en el navegador) y dónde verlo después (al volver a la pregunta o en una lista aparte). Sebastián eligió el servidor y volver a la pregunta.
+  - El registro con sus tres adaptadores, la regla, las dos rutas, la pantalla y ADR-0029, con las pruebas escritas antes del código.
+- **Quién hizo qué con lo generado:** Sebastián revisó y subió el servidor, el sitio y los documentos.
+- **Qué se aceptó:**
+  - **Un registro por docente y pregunta,** reconocida por su texto como en la caché, porque el banco de preguntas (RF-06) no existe.
+  - **La misma regla que filtra las propuestas** al guardar, y hasta tres por pregunta, las que caben en la hoja.
+  - **Regenerar con `cantidad: 1` y `otras: true`:** la caché guarda aparte cada cantidad, así que no pisa las propuestas de la pregunta.
+- **Qué se rechazó:**
+  - **Guardar en el navegador:** se pierde al cambiar de computador y no queda a nombre del docente.
+  - **Guardar dentro de la caché:** vive en la memoria del proceso, vence a las 24 horas y es de todos los docentes.
+  - **Una lista aparte de todo lo guardado:** Sebastián prefirió verlo al volver a la pregunta.
+- **Justificación:** preguntar antes de construir evitó elegir por el docente dónde vive su trabajo, que era lo único que el pedido no decía.
+
+### Entrada 28
+
+- **Fecha:** 2026-11-23
+- **Actividad realizada:** la lista de preguntas de Pauta con las que agrega el docente y, al final, las que tienen distractores guardados; pedida por Sebastián al probar en local lo de la entrada 27.
+- **Herramienta utilizada:** Claude Code en el computador de Sebastián.
+- **Prompt utilizado (resumen):** un botón «+» para seguir agregando preguntas; que al guardar los distractores la pregunta quede al final de la lista con las propuestas aceptadas, porque no se sabía dónde se guardaban; y que al deshacerlo vuelva a donde estaba o arriba.
+- **Respuesta obtenida (resumen):**
+  - Cuatro preguntas antes de construir: qué hace «+», si una pregunta agregada se guarda aunque no tenga distractores, qué muestra la pregunta guardada al final y cómo se deshace. Sebastián eligió una fila en la lista, guardarla siempre en el servidor, mostrar los distractores y «Quitar» en la fila.
+  - ADR-0030 con su registro, su tabla y tres rutas; en ADR-0029, listar y quitar lo guardado en lugar de buscarlo por pregunta; la lista nueva en Pauta; con las pruebas escritas antes del código.
+  - Al probarlo en el navegador, Sebastián vio que al elegir otra pregunta seguían en el generador los distractores de la anterior. Se corrigió con una prueba que primero falló: elegir otra pregunta vacía el generador o muestra lo guardado de esa, y una respuesta que llega tarde para la anterior se descarta.
+- **Quién hizo qué con lo generado:** Sebastián revisó y subió el servidor, el sitio y los documentos.
+- **Qué se aceptó:**
+  - **Un registro de las preguntas de cada docente,** reconocidas como los distractores guardados, sin tema ni examen todavía.
+  - **Las agregadas arriba, las de ejemplo por su número y las guardadas al final,** y al quitar lo guardado, cada una a su lugar.
+  - **Elegir una pregunta guardada muestra sus distractores sin consultar al modelo,** así que verlos ya no gasta cupo.
+- **Qué se rechazó:**
+  - **Que la agregada viva solo en la pantalla:** se perdía al recargar si no tenía distractores guardados.
+  - **Que «+» vacíe el formulario del generador:** no deja cargar varias preguntas antes de generar.
+  - **Buscar lo guardado pregunta por pregunta** (la ruta de la entrada 27): con la lista ya no hace falta, y obligaba a consultar al modelo para verlo.
+- **Justificación:** probar en local antes de subir mostró lo que las pruebas no: que al guardar no se veía dónde quedaba.

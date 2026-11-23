@@ -60,7 +60,7 @@ La documentación vive en `docs/`. Esta tabla dice dónde está cada cosa.
 
 | Qué | Dónde |
 |---|---|
-| La arquitectura completa | [arc42](docs/arc42/arc42-template-ES.md) · [C4, Niveles 1 a 3](docs/c4/doc-c4.md) · [28 ADR](docs/adr/) |
+| La arquitectura completa | [arc42](docs/arc42/arc42-template-ES.md) · [C4, Niveles 1 a 3](docs/c4/doc-c4.md) · [30 ADR](docs/adr/) |
 | Los aspectos y su trazabilidad | [`docs/aspectos.md`](docs/aspectos.md#tabla-de-trazabilidad) |
 | La lectura y la calificación: EC-01 a EC-04 | [`medicion-lectura-omr.md`](docs/evidencia/medicion-lectura-omr.md) · [`medicion-s14.md`](docs/evidencia/medicion-s14.md), tres repeticiones |
 | La preselección en la revisión | [`preseleccion-omr.md`](docs/evidencia/preseleccion-omr.md) |
@@ -367,7 +367,7 @@ se omite.
 Diez son la **prueba de contrato** ([`backend/tests/test_contrato.py`](backend/tests/test_contrato.py)),
 y verifican que el documento de `docs/contrato/openapi.json` y la API que corre no se puedan
 separar: que el archivo versionado sea exactamente el que genera la aplicación de hoy, que su
-número de versión sea el declarado en el código, que sigan estando las trece rutas (y que la de
+número de versión sea el declarado en el código, que sigan estando las diecisiete rutas (y que la de
 distractores publique su 503 y su 429), que la
 respuesta de carga exija sus cuatro campos, que los estados publicados sean los dos del dominio,
 que la revisión no publique la respuesta correcta,
@@ -417,10 +417,12 @@ la lista de exámenes, las notas junto a cada archivo y la pantalla de revisión
   se avisan sin dar el lote por perdido ni por recibido; y un 5xx dice que algunas hojas pudieron
   entrar, sin invitar a reintentar. Cuatro de ellas prueban el servicio contra un `MockClient`,
   incluido que el examen viaje codificado en la ruta.
-- **Pauta y distractores (27):** el 503 y el 429 se muestran como advertencias con el mensaje de
+- **Pauta y distractores (66):** el 503 y el 429 se muestran como advertencias con el mensaje de
   la API; con el límite por minuto hay cuenta regresiva, y con el diario no se ofrece repetir y el
-  botón de pedir vuelve cuando pasa la espera. Diez de ellas prueban el servicio contra un
-  `MockClient`, código por código, y una, que «Pedir otras propuestas» manda `otras: true`.
+  botón de pedir vuelve cuando pasa la espera. Veintitrés de ellas prueban los servicios contra un
+  `MockClient`, código por código, y una, que «Pedir otras propuestas» manda `otras: true`. Desde
+  ADR-0029, «Regenerar» aparece solo en la descartada y cambia solo esa tarjeta, y la pregunta con
+  distractores guardados pasa al final de la lista; desde ADR-0030, «+» agrega una pregunta arriba.
 - **Panel (19):** abre el examen más reciente del docente y pide sus cifras; las métricas, la barra
   de marcas, la distribución de notas con la campana y los aciertos por pregunta salen de la API;
   elegir otro examen o actualizar vuelve a pedirlas; sin exámenes, sin servidor o si las cifras no
@@ -543,6 +545,8 @@ El desarrollo sigue Aspect Driven Development (ADD): cada funcionalidad se decla
 | [0026](docs/adr/0026-registrar-y-habilitar-la-clave-desde-la-aplicacion.md) | Registrar y habilitar la clave desde la aplicación | aceptado |
 | [0027](docs/adr/0027-guardar-los-registros-en-postgres-detras-de-los-mismos-puertos.md) | Guardar los registros en Postgres detrás de los mismos puertos | aceptado |
 | [0028](docs/adr/0028-dar-a-cada-examen-un-dueno-y-un-identificador-distinto-de-su-nombre.md) | Dar a cada examen un dueño y un identificador distinto de su nombre | aceptado |
+| [0029](docs/adr/0029-guardar-los-distractores-que-el-docente-aprueba.md) | Guardar los distractores que el docente aprueba | aceptado |
+| [0030](docs/adr/0030-empezar-el-banco-con-las-preguntas-que-agrega-el-docente.md) | Empezar el banco con las preguntas que agrega el docente | aceptado |
 
 Las decisiones de un ADR aceptado no se editan ni se borran: si una decisión cambia, se escribe uno nuevo y el anterior pasa a estado *reemplazado por*. Los ajustes menores que no son de arquitectura, como un enlace roto, se permiten dejando constancia ([ADR-0014](docs/adr/0014-dejar-constancia-del-ajuste-de-enlaces-en-adr-0007.md)).
 
@@ -552,7 +556,7 @@ Las decisiones de un ADR aceptado no se editan ni se borran: si una decisión ca
   estadísticas por curso), A-04 (la clave desde la aplicación) y A-06 (distractores diagnósticos)
   construidos de punta a punta; A-05, en parte: la entrada con sesión y cada examen con su dueño,
   sin los cursos
-- [x] Documentación completa: arc42 (las doce secciones), C4 Niveles 1, 2 y 3, y ADR 0001 a 0028
+- [x] Documentación completa: arc42 (las doce secciones), C4 Niveles 1, 2 y 3, y ADR 0001 a 0030
 - [x] Escenarios de calidad: EC-01 a EC-04 medidos tres veces sobre hojas sintéticas, y EC-07 a
   EC-09 medidos
 - [x] Monolito modular con cola y worker (ADR-0002): acuse, reintentos y lista de fallidos
@@ -562,6 +566,8 @@ Las decisiones de un ADR aceptado no se editan ni se borran: si una decisión ca
 - [x] Inicio de sesión (ADR-0025) y la clave registrada y habilitada en la aplicación (ADR-0026)
 - [x] La bitácora, los resultados y las revisiones en Postgres (ADR-0027)
 - [x] Cada examen con su dueño y el Panel con las cifras reales del examen (ADR-0028)
+- [x] Los distractores que el docente aprueba, guardados a su nombre (ADR-0029)
+- [x] Las preguntas que agrega el docente, guardadas a su nombre: el comienzo del banco (ADR-0030)
 - [x] Distractores con un modelo de lenguaje, detrás de un puerto, con caché y presupuesto
   (ADR-0013, ADR-0015 y ADR-0019)
 - [x] Contrato de la API versionado y su prueba en el pipeline; análisis estático y de dependencias
@@ -577,7 +583,7 @@ Las decisiones de un ADR aceptado no se editan ni se borran: si una decisión ca
 docs/
 ├── arc42/
 │   └── arc42-template-ES.md                            # documento de arquitectura (arc42)
-├── adr/                                                # 0001 a 0028; el 0001, reemplazado por el 0002, y del 0009 al 0012, por el 0021
+├── adr/                                                # 0001 a 0030; el 0001, reemplazado por el 0002, y del 0009 al 0012, por el 0021
 ├── c4/
 │   └── doc-c4.md                                       # modelo C4 (Niveles 1, 2 y 3)
 ├── contrato/
