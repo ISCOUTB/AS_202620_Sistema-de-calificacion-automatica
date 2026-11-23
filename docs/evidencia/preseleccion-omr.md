@@ -44,7 +44,7 @@ dos intenciones, así que llega sin nada elegido.
 confianza, y toda marca real en 50 o más. El caso más ajustado es la pregunta 34 de la foto con
 sombra: la B llena (100) y la D borrada (35). La lectura la manda a revisión por el borrón, y llega
 con la B elegida. Las preguntas 1 a 12 de la foto inclinada son marcas completas que la lectura no
-ve bien por el brillo; casi todas quedaron entre 50 y 64, y llegan con la opción marcada.
+ve bien por el brillo; todas quedaron entre 50 y 64, y llegan con la opción marcada.
 
 **10 de las 25 preseleccionadas estaban en 50 exacto**, el valor que pone la lectura cuando no ve
 bien una burbuja (por brillo o porque su contorno quedó tapado). En las tres fotos eran marcas
@@ -91,7 +91,7 @@ sin que nadie lo vea. Por eso tenía que dar cero, y se midió con una herramien
 difíciles son la mayoría a propósito, porque lo que se pone a prueba es la regla, no un examen
 típico. Las fotos salen de las mismas condiciones que en la sección 2.
 
-| Caso | Frecuencia | Lo correcto |
+| Caso | Frecuencia (redondeada) | Lo correcto |
 |---|---|---|
 | Clara | 17 % | El dígito |
 | Tenue, media burbuja, chulo, X o con brillo | 7 % cada uno | El dígito |
