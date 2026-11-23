@@ -43,6 +43,8 @@ from typing import Any
 
 import httpx
 
+from herramientas.sesion import encabezados_de_sesion
+
 API_DESPLEGADA = "https://quantia-utb-api.onrender.com"
 API_LOCAL = "http://127.0.0.1:8000"
 RAIZ_DEL_REPOSITORIO = Path(__file__).resolve().parent.parent.parent
@@ -173,7 +175,7 @@ def medir(url: str, solicitudes: int, pausa: float) -> dict[str, Any]:
     preguntas = _preguntas()
     resultados: list[dict[str, Any]] = []
     salud: list[dict[str, Any]] = []
-    with httpx.Client() as cliente:
+    with httpx.Client(headers=encabezados_de_sesion()) as cliente:
         salud.append(_salud(cliente, url, "antes"))
         metricas_antes = _metricas(cliente, url)
         inicio = _ahora()

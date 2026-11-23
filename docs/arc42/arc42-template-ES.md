@@ -312,7 +312,8 @@ política global.
 > presupuesto del proveedor de LLM (ADR-0015). Desde el 6-nov lo están **A-02 (la lectura de la
 > hoja) y A-03 (su calificación, con la revisión manual)**, salvo las estadísticas del Panel
 > ([ADR-0023](../adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md)).
-> A-04 (el registro de la clave) y A-05 (la identidad) siguen *Declarados*.
+> A-04 (el registro de la clave) sigue *Declarado*, y A-05 (la identidad), *Construido en parte*:
+> la entrada con sesión de [ADR-0025](../adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md), sin cursos todavía.
 
 ## 5.1 Whitebox Overall System
 
@@ -330,7 +331,7 @@ los dos documentos juntos:
 
 | Contenedor | Responsabilidad (C4 Nivel 2) | Tecnología | Estado de implementación |
 |---|---|---|---|
-| **Aplicación web** *(lado servidor)* | Autenticación, cursos, preguntas, exámenes, carga de escaneos y consulta de resultados; inicia los trabajos de procesamiento. | FastAPI (`backend/api/main.py`), Uvicorn (servicio `api`). | Expone `GET /health`, `POST /examenes/{examen_id}/hojas` (RF-01, aspecto A-01), `POST /distractores` (RF-11, aspecto A-06) y `GET /metricas` (EC-09, ADR-0015). Desde A-02 y A-03, cinco rutas más (contrato 1.8.0): `GET /examenes` (los exámenes que tienen clave, sin las respuestas), `GET /examenes/{examen_id}/resultados` (la nota de cada hoja, sin el código del estudiante), `GET /examenes/{examen_id}/revision`, `POST /examenes/{examen_id}/hojas/{hoja_id}/revision` (RF-08) y el recorte de cada pregunta en revisión. Lee el registro de resultados que escribe el worker y es el único que escribe el de revisiones ([ADR-0023](../adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md)). Los cursos, las preguntas y la clave siguen sin ruta (A-04, A-05). Desde [ADR-0019](../adr/0019-guardar-en-cache-las-propuestas-de-distractores.md) guarda en su memoria, 24 horas, las propuestas del proveedor para cada pregunta, y [ADR-0018](../adr/0018-dar-a-la-hoja-una-identidad-propia-y-derivar-su-estado-de-la-bitacora.md) le da a cada hoja aceptada una identidad propia (`hoja_id`). |
+| **Aplicación web** *(lado servidor)* | Autenticación, cursos, preguntas, exámenes, carga de escaneos y consulta de resultados; inicia los trabajos de procesamiento. | FastAPI (`backend/api/main.py`), Uvicorn (servicio `api`). | Expone `GET /health`, `POST /examenes/{examen_id}/hojas` (RF-01, aspecto A-01), `POST /distractores` (RF-11, aspecto A-06) y `GET /metricas` (EC-09, ADR-0015). Desde A-02 y A-03, cinco rutas más (contrato 1.8.0): `GET /examenes` (los exámenes que tienen clave, sin las respuestas), `GET /examenes/{examen_id}/resultados` (la nota de cada hoja, sin el código del estudiante), `GET /examenes/{examen_id}/revision`, `POST /examenes/{examen_id}/hojas/{hoja_id}/revision` (RF-08) y el recorte de cada pregunta en revisión. Desde [ADR-0025](../adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md), `POST /sesion` da el token de una sesión, y todas las rutas salvo `/health`, `/metricas` y esa lo piden (contrato 2.0.0). Desde [ADR-0026](../adr/0026-registrar-y-habilitar-la-clave-desde-la-aplicacion.md), `GET` y `PUT /examenes/{examen_id}/clave` y `POST .../clave/habilitacion` (contrato 2.1.0). Lee el registro de resultados que escribe el worker y es el único que escribe el de revisiones ([ADR-0023](../adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md)). Los cursos, las preguntas y la clave siguen sin ruta (A-04, A-05). Desde [ADR-0019](../adr/0019-guardar-en-cache-las-propuestas-de-distractores.md) guarda en su memoria, 24 horas, las propuestas del proveedor para cada pregunta, y [ADR-0018](../adr/0018-dar-a-la-hoja-una-identidad-propia-y-derivar-su-estado-de-la-bitacora.md) le da a cada hoja aceptada una identidad propia (`hoja_id`). |
 | **Interfaz web** *(parte de «Aplicación web» en el C4)* | Presenta al docente el dashboard, la carga de escaneos y la resolución de marcas ambiguas. | Flutter compilado a web, servido por nginx (servicio `frontend`). | Cuatro pantallas, una carpeta por funcionalidad en `frontend/lib/features/`, con el estado de conexión en la barra superior. **Carga** (A-01) elige el examen de la lista de los que tienen clave, prepara las fotos antes de subirlas y muestra la nota de cada hoja a medida que el worker la lee (A-02, A-03). **Revisión** muestra el recorte de cada pregunta dudosa y guarda lo que resuelve el docente (RF-08). **Pauta y distractores** (A-06) llama a la API. El **Panel** y la clave de Pauta muestran datos de ejemplo bajo un aviso visible, porque las estadísticas de RF-05 y A-04 no están construidos. |
 | **Worker de procesamiento** | Ejecuta el OMR, calcula calificaciones y genera alertas de revisión. | Proceso Python (`backend/worker/main.py`), misma imagen que la aplicación web. | Consume la cola y confirma que la hoja encolada por `ingesta` le llegó, registrando en log su identificador, examen, archivo y referencia. **Desde A-02 y A-03 ejecuta el pipeline `omr → calificacion`** (`leer_y_calificar`): lee la hoja, busca la clave del examen por un puerto, califica, guarda un recorte de cada pregunta dudosa en el almacén y deja el resultado en el registro de resultados, del que es el único escritor ([ADR-0023](../adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md)). En EC-04 usó todo su cuarto de CPU y el 81 % de su memoria. Desde la S11 procesa cada trabajo una sola vez aunque la cola lo entregue dos veces ([ADR-0016](../adr/0016-acotar-la-espera-de-la-cola-y-hacer-idempotente-al-worker.md)), y sigue siendo la misma imagen y el mismo código que la API por decisión, no por omisión ([ADR-0017](../adr/0017-no-extraer-ningun-modulo-del-monolito-todavia.md)); en el servidor del laboratorio corre en su propio contenedor ([ADR-0021](../adr/0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md)). Desde el taller de mensajería consume con acuse, reintentos y lista de fallidos, y abre la imagen de cada hoja ([ADR-0020](../adr/0020-entregar-los-trabajos-al-menos-una-vez-con-reintentos-y-lista-de-fallidos.md)). |
 | **Cola de trabajos** | Desacopla la aplicación web del procesamiento OMR. | Redis 7, adaptador FIFO en `infraestructura/cola.py` (RPUSH/BLPOP). | Implementado y probado contra un Redis real (`backend/tests/test_encolado.py`); sigue siendo, según su propio docstring, «el germen» de lo que EC-07 exige, no una cola de producción con reintentos o acuses de recibo. Desde la S11 la API la espera 2 s y el worker 10 s, sin reintentos ocultos del cliente ([ADR-0016](../adr/0016-acotar-la-espera-de-la-cola-y-hacer-idempotente-al-worker.md)); el acuse de recibo sigue pendiente (R-22). Desde el taller de mensajería, el mensaje tiene contrato versionado ([`trabajo-v1.schema.json`](../contrato/trabajo-v1.schema.json)) y la entrega es al menos una vez: listas en curso y de fallidos y un conjunto de reintentos en el mismo Redis ([ADR-0020](../adr/0020-entregar-los-trabajos-al-menos-una-vez-con-reintentos-y-lista-de-fallidos.md), R-22 cerrado). |
@@ -347,13 +348,13 @@ importación que declara el docstring de cada `__init__.py` y que hace cumplir
 
 | Módulo | Responsabilidad | Requisitos | Importa (declarado) | Estado de implementación |
 |---|---|---|---|---|
-| **ingesta** | Recepción y validación de archivos escaneados (individual o en lote) y encolado del procesamiento. | RF-01 | `infraestructura`, `identidad` | **Implementado** (`recepcion.py`): valida extensión *y* firma de bytes por archivo, no aborta el lote ante un archivo inválido ni ante un fallo de la cola (ADR-0006), y por cada hoja almacena, acuña el trabajo, registra en la bitácora y solo entonces publica. Expone `recibir_lote`, `motivo_de_rechazo` y `EXTENSIONES_ACEPTADAS` como interfaz pública vía `__all__`. Aún no verifica el `examen_id` contra nada (hueco conocido: depende de `autoria`, A-04) ni la autorización del docente (depende de `identidad`, A-05). |
+| **ingesta** | Recepción y validación de archivos escaneados (individual o en lote) y encolado del procesamiento. | RF-01 | `infraestructura`, `identidad` | **Implementado** (`recepcion.py`): valida extensión *y* firma de bytes por archivo, no aborta el lote ante un archivo inválido ni ante un fallo de la cola (ADR-0006), y por cada hoja almacena, acuña el trabajo, registra en la bitácora y solo entonces publica. Expone `recibir_lote`, `motivo_de_rechazo` y `EXTENSIONES_ACEPTADAS` como interfaz pública vía `__all__`. Aún no verifica el `examen_id` contra nada (hueco conocido: depende de `autoria`, A-04) ni que el docente pueda cargar en ese examen: desde [ADR-0025](../adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md) la API pide una sesión, pero todavía no hay cursos (EC-06). |
 | **infraestructura** | Persistencia, almacenamiento de imágenes, bitácora de recepción y adaptador de la cola de trabajos. | Transversal | ninguno | **Parcialmente implementado.** `cola.py` (acuñar, publicar y desencolar sobre Redis, con `ColaNoDisponible` como traducción de los errores de redis-py al dominio), `almacen.py` (puerto `AlmacenDeImagenes` + adaptador `AlmacenEnDisco`), `bitacora.py` (puerto `BitacoraDeRecepcion` + adaptadores `BitacoraEnDisco` y `BitacoraEnMemoria`, ADR-0006) y `modelo.py` (el modelo de datos compartido: `ArchivoCargado`, `HojaAceptada`, `ArchivoRechazado`, `ResultadoRecepcion`, `EntradaDeBitacora`) ya tienen código. Desde A-02 y A-03, tres puertos más con sus adaptadores en disco: `claves.py` (`FuenteDeClaves` para el worker y `CatalogoDeClaves` para la lista de exámenes), `resultados.py` (`RegistroDeResultados` y `LectorDeResultados`) y `revisiones.py` (`RegistroDeRevisiones` y `LectorDeRevisiones`); y `modelo.py` declara también la clave, la lectura y la nota, que son de `autoria`, `omr` y `calificacion`. Sigue sin persistencia estructurada (Postgres sin esquema) y sin política de retención (R-06, RNF-14 abiertos). |
-| **autoria** | Bancos de preguntas y clave de respuestas, generación opcional de distractores diagnósticos con LLM, y habilitación del examen. | RF-06, RF-07, RF-11 | `infraestructura`, `identidad` | **Implementado en parte** (aspecto A-06): `distractores.py` (los tipos, el puerto `GeneradorDeDistractores` y la regla de qué propuestas llegan al profesor) y `proveedor_llm.py` (el adaptador al proveedor, [ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)), y desde el segundo corte `presupuesto.py` (el presupuesto de solicitudes al proveedor, [ADR-0015](../adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md)). Desde A-03, `examenes.py` (la lista de exámenes que tienen clave, sin las respuestas), y es la dueña de la clave y su habilitación, que hoy se escriben a mano. El banco y el registro de la clave desde la aplicación siguen sin código (aspecto A-04). |
+| **autoria** | Bancos de preguntas y clave de respuestas, generación opcional de distractores diagnósticos con LLM, y habilitación del examen. | RF-06, RF-07, RF-11 | `infraestructura`, `identidad` | **Implementado en parte** (aspecto A-06): `distractores.py` (los tipos, el puerto `GeneradorDeDistractores` y la regla de qué propuestas llegan al profesor) y `proveedor_llm.py` (el adaptador al proveedor, [ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)), y desde el segundo corte `presupuesto.py` (el presupuesto de solicitudes al proveedor, [ADR-0015](../adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md)). Desde A-03, `examenes.py` (la lista de exámenes que tienen clave, sin las respuestas), y es la dueña de la clave y su habilitación. Desde [ADR-0026](../adr/0026-registrar-y-habilitar-la-clave-desde-la-aplicacion.md), `registro_de_claves.py` (registrar y habilitar la clave desde la aplicación, y cuándo se puede cambiar). El banco de preguntas sigue sin código (aspecto A-04, RF-06). |
 | **omr** | Detección de marcas y cálculo del nivel de confianza; clasificación de ambigüedad. | RF-02, RF-03 | `infraestructura`, `identidad` | **Implementado** (aspecto A-02, [ADR-0023](../adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md)): `formato.py` (la hoja v1), `plantilla.py` (la hoja imprimible), `vision.py` (el único archivo con OpenCV), `decision.py` (la confianza de cada burbuja, la regla de cada pregunta y, desde [ADR-0024](../adr/0024-preseleccionar-en-la-revision-la-unica-intencion.md), la única intención que se preselecciona), `lectura.py` (`leer_hoja` y `leer_hoja_con_recortes`, funciones puras) y `errores.py` (los motivos de una hoja ilegible). |
 | **calificacion** | Comparación contra la clave habilitada por el profesor y cálculo de notas; recálculo tras revisión manual. | RF-04, RF-08 | `infraestructura`, `identidad`, `omr` | **Implementado** (aspecto A-03): `nota.py` (`calificar`, el veredicto de cada resolución, `nota_vigente`) y `revision.py` (`resolver_preguntas`, el caso de uso de RF-08). Recibe la lectura como tipo de `modelo.py`, así que hoy no importa `omr`. |
 | **dashboard** | Presentación de resultados y agregaciones por curso, examen y pregunta. | RF-05 | `infraestructura`, `identidad`, `calificacion` | **Implementado en parte** (aspecto A-03): `resultados.py` (la nota vigente de cada hoja, sin el código del estudiante) y `revision.py` (las preguntas en revisión con su recorte, sin la respuesta correcta). Las agregaciones por curso y por pregunta siguen sin código. |
-| **identidad** | Autenticación, roles y aislamiento de datos por curso. | RF-09, RF-10 | `infraestructura` | Paquete vacío (aspecto A-05, declarado). |
+| **identidad** | Autenticación, roles y aislamiento de datos por curso. | RF-09, RF-10 | `infraestructura` | **Implementado en parte** ([ADR-0025](../adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md)): `contrasenas.py` (scrypt), `sesiones.py` (el token firmado y su vencimiento) y `docentes.py` (la lista `DOCENTES` y la entrada). Solo lo usa `api`, en `POST /sesion` y en la dependencia de cada ruta. Los roles y el aislamiento por curso siguen sin código (EC-06). |
 
 `api/main.py` es la traducción entre HTTP y dominio: entrega sus dependencias (almacén, bitácora,
 cliente de cola) vía `Depends` y las construye la primera vez que se piden, no al importar,
@@ -367,13 +368,14 @@ importa `autoria`, `ingesta` e `infraestructura` (los valores por omisión de lo
 las rutas de los registros); `ingesta` importa `infraestructura`; `worker/main.py` importa `omr`,
 `calificacion` e `infraestructura`; `dashboard` importa `calificacion` e `infraestructura`;
 `calificacion` y `omr` importan `infraestructura`; y `autoria/examenes.py` importa
-`infraestructura.claves`. `identidad` sigue sin código, así que nadie la importa todavía.
+`infraestructura.claves`. A `identidad` solo la importa `api`, desde ADR-0025: ningún módulo del
+dominio la necesita todavía.
 
 ## 5.3 Level 3
 
 Los aspectos **A-01**, **A-02**, **A-03** y **A-06** tienen estructura interna suficiente para
-bajar a Nivel 3; `identidad` sigue vacío y `autoria` no tiene todavía el registro de la clave (ver
-5.2).
+bajar a Nivel 3; `identidad` tiene desde ADR-0025 la autenticación, que la API usa como un servicio,
+y `autoria` registra la clave desde ADR-0026, sin el banco de preguntas (ver 5.2).
 
 **Dentro de `ingesta` (aspecto A-01):**
 
@@ -433,7 +435,8 @@ bajar a Nivel 3; `identidad` sigue vacío y `autoria` no tiene todavía el regis
 | `RegistroDeResultados` y `LectorDeResultados` | El worker escribe; `dashboard` y `calificacion` leen | `ResultadosEnDisco`, de solo agregado con `fsync` por línea |
 | `RegistroDeRevisiones` y `LectorDeRevisiones` | `calificacion` escribe desde la API; `dashboard` lee | `RevisionesEnDisco`, igual |
 
-A-04 y A-05 se documentan a Nivel 3 cuando tengan código, según [`../aspectos.md`](../aspectos.md).
+A-04 se documenta a Nivel 3 cuando tenga código, según [`../aspectos.md`](../aspectos.md). Lo que ya
+existe de A-05 está en el Nivel 3 del C4, como el componente `identidad` de la aplicación web.
 
 ---
 
@@ -444,8 +447,9 @@ A-04 y A-05 se documentan a Nivel 3 cuando tengan código, según [`../aspectos.
 > [EC-08](#ec-08), en 6.4), desde el segundo corte la ráfaga contra esa ruta ([EC-09](#ec-09),
 > en 6.5), y desde el 6-nov la lectura y la calificación de una hoja (A-02 y A-03, en 6.8) y la
 > resolución manual de una pregunta dudosa (RF-08, en 6.9). Lo que sigue bloqueado, el registro y la
-> habilitación de un examen (A-04) y todo lo que pide un docente autenticado (A-05), está en 6.3
-> con lo que falta para desbloquearlo.
+> banco de preguntas (A-04) y el aislamiento por curso (A-05), está en 6.3 con lo que falta para
+> desbloquearlo. Desde ADR-0025, la entrada con sesión está en 6.10, y desde ADR-0026, el registro
+> y la habilitación de la clave, en 6.11.
 
 ## 6.1 Arranque y verificación de salud
 
@@ -538,8 +542,8 @@ están en la [tabla de consistencia](../evidencia/consistencia-y-cache.md), fila
 
 | Escenario | Recorre | Verifica | Bloqueado por |
 |---|---|---|---|
-| Registro y habilitación de un examen | RF-06 → RF-07 | EC-05 | `autoria` sin el banco ni el registro de la clave (aspecto A-04). Desde A-03 la clave existe como dato y se lee por un puerto, pero se escribe a mano; los distractores ya están construidos (6.4) |
-| Resolución manual con un docente autenticado | RF-08, RF-10 | EC-06 | `identidad` vacío (A-05). La resolución ya funciona (6.9), con un nombre que nadie verifica |
+| Registro del banco de preguntas | RF-06 | EC-05 | `autoria` sin el banco (aspecto A-04). La clave y su habilitación ya se registran desde la aplicación (6.11), y los distractores están construidos (6.4) |
+| Resolución manual limitada a los docentes del curso | RF-08, RF-10 | EC-06 | Sin cursos (A-04, A-05). Desde ADR-0025 la resolución pide sesión y queda a nombre del docente que entró (6.9 y 6.10), pero cualquier docente con cuenta resuelve cualquier examen |
 | Estadísticas por pregunta y por curso | RF-05 | Ninguno declarado | El Panel sigue con datos de ejemplo; las notas por hoja ya se publican (6.8) |
 
 **Salieron de esta tabla el 6-nov:** la detección de marcas, la calificación de un lote y la
@@ -836,8 +840,8 @@ de EC-01 a EC-04 salen de `herramientas/medir_lectura.py` y `herramientas/medir_
 ## 6.9 Revisión manual de una pregunta (RF-08 · A-03)
 
 El docente resuelve las preguntas que la lectura dejó por revisar. Mira el recorte de la fila y dice
-qué marcó el estudiante; el sistema decide si es correcto. Se construyó antes de A-05, así que el
-nombre que escribe el docente no se verifica (AM-02, [11.1](#111-amenazas-aceptadas-s13)).
+qué marcó el estudiante; el sistema decide si es correcto. Desde [ADR-0025](../adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md) las tres rutas piden
+sesión, y cada resolución queda a nombre del docente que entró.
 
 ```mermaid
 sequenceDiagram
@@ -851,17 +855,17 @@ sequenceDiagram
     API->>D: revision_del_examen
     D->>R: el último hecho de cada hoja y las revisiones
     D-->>API: las hojas con preguntas por revisar, sin la respuesta correcta
-    API-->>S: cada pregunta con lo que se ve en sus burbujas y la opción sugerida
+    API-->>S: cada hoja con el código del estudiante, y cada pregunta con sus burbujas y la opción sugerida
     S->>API: GET .../hojas/{hoja}/preguntas/{n}/recorte
     API->>D: referencia_del_recorte, sacada del registro
     API-->>S: la fila en PNG, sin el código del estudiante
-    P->>S: confirma o cambia lo preseleccionado, elige en las confusas y escribe su nombre
-    S->>API: POST /examenes/{id}/hojas/{hoja}/revision
+    P->>S: confirma o cambia lo preseleccionado y elige en las confusas
+    S->>API: POST /examenes/{id}/hojas/{hoja}/revision, con el token de la sesión
     API->>C: resolver_preguntas
     C->>R: la calificación de la hoja
     C->>C: ¿cada pregunta sigue por revisar? veredicto con la clave guardada y nota vigente
-    C->>R: registro de revisiones: una resolución por pregunta, con el nombre y la hora
-    API->>API: revision_guardada en el log, sin el nombre
+    C->>R: registro de revisiones: una resolución por pregunta, con el correo de la sesión y la hora
+    API->>API: revision_guardada en el log, sin el correo
     API-->>S: la hoja con la nota recalculada y revisada
     S->>S: pasa a la siguiente hoja por revisar
 ```
@@ -876,8 +880,9 @@ sequenceDiagram
 3. **La nota automática no se borra.** Cada resolución es un hecho nuevo, la última de cada pregunta
    manda, y la nota vigente se recalcula sobre la calificación de la hoja. Si la hoja se vuelve a
    leer y la pregunta ya no está por revisar, la resolución deja de aplicarse.
-4. **Quién y cuándo (RF-10).** Cada resolución lleva el nombre que escribió el docente y la hora. El
-   log dice que se guardó una revisión, pero no el nombre.
+4. **Quién y cuándo (RF-10).** Cada resolución lleva el correo del docente de la sesión y la hora; la
+   solicitud no lo trae ([ADR-0025](../adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md)). El log dice que se guardó una revisión, pero no
+   quién.
 5. **La única intención llega elegida ([ADR-0024](../adr/0024-preseleccionar-en-la-revision-la-unica-intencion.md)).** Si exactamente una
    burbuja de una pregunta en revisión llega al corte de intención (40), la revisión la trae como
    `opcion_sugerida` y la pantalla la muestra elegida, igual que una elección del docente; con dos
@@ -887,18 +892,84 @@ sequenceDiagram
    primero las que faltan por revisar y después las revisadas, cada grupo de la más nueva a la
    más vieja.
 
-**Qué no cubre.** Que el nombre sea de quien dice ser, y que solo el docente del curso pueda
-resolver: las rutas son públicas hasta A-05. Como la respuesta trae la nota recalculada, alguien
-podría deducir la clave probando opciones. Por eso vale solo con hojas sintéticas (AM-02).
+**Qué no cubre.** Que solo el docente del curso pueda resolver: sin cursos (EC-06), cualquier
+docente con cuenta resuelve cualquier examen, y como la respuesta trae la nota recalculada, podría
+deducir la clave probando opciones. Por eso sigue valiendo solo con hojas sintéticas (AM-02).
 
 **Pruebas que lo verifican:** `test_calificacion.py` (el veredicto, la última resolución, la que ya
 no aplica), `test_revisiones.py` (el registro, incluida una línea truncada) y `test_ruta_revision.py`
-(las tres rutas, que la revisión no publica la clave ni el código, y que lo que no cuadra se rechaza
-sin escribir nada); en el sitio, `revision_test.dart` y `servicio_revision_test.dart`. La
+(las tres rutas, que la revisión no publica la clave y sí el código, que quien resuelve es el
+docente de la sesión, y que lo que no cuadra se rechaza sin escribir nada); en el sitio, `revision_test.dart` y `servicio_revision_test.dart`. La
 [evidencia con las fotos del prototipo](../evidencia/medicion-lectura-omr.md#4-la-revisión-manual-con-las-fotos-del-prototipo-rf-08)
 muestra una hoja que pasa de 3,9 a 4,0, y la
 [evidencia de la preselección](../evidencia/preseleccion-omr.md) cuenta cómo llegan las 28 preguntas
 en revisión de esas fotos: 25 preseleccionadas con lo que se marcó, 3 confusas y ninguna equivocada.
+
+## 6.10 Entrar y usar una ruta protegida (RF-09 · A-05)
+
+Desde [ADR-0025](../adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md), el docente entra con su correo y su contraseña, y el sitio manda el token en cada
+petición.
+
+```mermaid
+sequenceDiagram
+    actor P as Profesor o TA
+    participant S as Sitio
+    participant API as api
+    participant I as identidad
+    P->>S: correo y contraseña
+    S->>API: POST /sesion
+    API->>I: autenticar contra la lista DOCENTES
+    I-->>API: el correo, o nada
+    API-->>S: el token y su vencimiento, o 401 sin decir qué falló
+    S->>S: guarda el token (localStorage o sessionStorage)
+    S->>API: GET /examenes, con Authorization: Bearer
+    API->>I: leer_sesion: firma, vencimiento y correo todavía en la lista
+    API-->>S: 200, o 401 y el sitio vuelve a la entrada
+```
+
+1. **Falla cerrado.** Sin `SESION_SECRETO` o sin `DOCENTES`, `POST /sesion` responde 503 y nadie
+   entra; `/health` sigue igual.
+2. **El servidor no guarda las sesiones.** Comprueba cada token contra la lista vigente: quitar a un
+   docente de `DOCENTES` y desplegar lo saca, y cambiar el secreto cierra todas las sesiones.
+3. **El registro** dice `sesion_iniciada` o `entrada_rechazada`, sin el correo.
+
+**Qué no cubre.** Los cursos (EC-06) y un límite de intentos de entrada (R-38).
+
+**Pruebas que lo verifican:** `test_sesion.py` (recorre todas las rutas de la aplicación y exige 401
+sin sesión) y `test_identidad.py`; en el sitio, `app_test.dart`, `pantalla_entrada_test.dart` y
+`servicios_con_sesion_test.dart`.
+
+## 6.11 Registrar y habilitar la clave de un examen (RF-07 · A-04)
+
+Desde [ADR-0026](../adr/0026-registrar-y-habilitar-la-clave-desde-la-aplicacion.md), el docente escribe la clave en la pantalla de pauta y la habilita a su nombre.
+
+```mermaid
+sequenceDiagram
+    actor P as Profesor o TA
+    participant S as Sitio, pantalla de pauta
+    participant API as api
+    participant A as autoria
+    participant C as claves
+    P->>S: llena la cuadrícula, o pega las respuestas y las confirma
+    S->>API: PUT /examenes/{id}/clave, con el token de la sesión
+    API->>A: registrar_clave: de 1 a 40, entre A y D, y ninguna hoja con nota
+    A->>C: guardar, sin habilitar (temporal y os.replace)
+    API-->>S: la clave guardada, o 422 o 409 con el motivo
+    P->>S: Habilitar, y confirma
+    S->>API: POST /examenes/{id}/clave/habilitacion
+    API->>A: habilitar_clave, a nombre del docente de la sesión
+    A->>C: guardar con quién y cuándo
+    S->>S: la carga y la revisión vuelven a pedir la lista de exámenes
+```
+
+1. **Se cambia mientras ninguna hoja tenga nota.** Las notas no se recalculan solas: después, 409.
+2. **Cambiarla la deja sin habilitar,** porque la habilitación certifica unas respuestas.
+3. **El worker no cambia:** lee el mismo archivo, en la misma forma.
+
+**Qué no cubre.** El banco de preguntas (RF-06) ni los pesos distintos de 1.
+
+**Pruebas que lo verifican:** `test_registro_de_claves.py` y `test_ruta_clave.py`; en el sitio,
+`clave_test.dart`, `servicio_clave_test.dart` y `app_test.dart`.
 
 ---
 
@@ -961,14 +1032,15 @@ flowchart TB
 | Contenedor | Imagen | Límite de memoria y CPU | Notas |
 |---|---|---|---|
 | `web` | [`deploy/sitio/Dockerfile`](../../deploy/sitio/Dockerfile): `nginxinc/nginx-unprivileged:alpine` con el sitio compilado | 32 MB, 0,25 | El CI compila el sitio con `BACKEND_URL=https://api-calificacion.iscoutb.dev`; si la URL cambia, hay que recompilar. En `master` la imagen sirve una página provisional, y en la rama `despliegue`, el sitio. `revision.txt` dice qué commit de `master` está desplegado. |
-| `api` | `backend/Dockerfile` | 384 MB, 0,50 | Lee `ALLOWED_ORIGIN` (el origen del sitio, el único que acepta CORS), `LLM_URL_BASE`, `LLM_MODELO` y `LLM_API_KEY` ([ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)), y el presupuesto `LLM_SOLICITUDES_POR_MINUTO` (6) y `LLM_SOLICITUDES_POR_DIA` (150), que vive en la memoria de su único proceso de uvicorn y se vacía cada vez que el contenedor se recrea ([ADR-0015](../adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md), R-18). Desde A-02 y A-03 lee también `RUTA_RESULTADOS`, `RUTA_CLAVES` y `RUTA_REVISIONES`, tres rutas del volumen que el compose fija. Su *healthcheck* en `/health` decide cuándo Traefik le manda tráfico. |
+| `api` | `backend/Dockerfile` | 384 MB, 0,50 | Lee `ALLOWED_ORIGIN` (el origen del sitio, el único que acepta CORS), `LLM_URL_BASE`, `LLM_MODELO` y `LLM_API_KEY` ([ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md)), y el presupuesto `LLM_SOLICITUDES_POR_MINUTO` (6) y `LLM_SOLICITUDES_POR_DIA` (150), que vive en la memoria de su único proceso de uvicorn y se vacía cada vez que el contenedor se recrea ([ADR-0015](../adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md), R-18). Desde A-02 y A-03 lee también `RUTA_RESULTADOS`, `RUTA_CLAVES` y `RUTA_REVISIONES`, tres rutas del volumen que el compose fija. Desde [ADR-0025](../adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md), `SESION_SECRETO`, `DOCENTES` y `SESION_HORAS` (12), las de la entrada con sesión. Su *healthcheck* en `/health` decide cuándo Traefik le manda tráfico. |
 | `worker` | La misma imagen, con `python -m worker.main` | 96 MB, 0,25 | Espera a que Redis esté sano. Abre cada imagen del volumen (ADR-0020) y, desde A-02 y A-03, la lee y la califica con OpenCV, con la clave de `RUTA_CLAVES` y el resultado en `RUTA_RESULTADOS` ([ADR-0023](../adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md)). El umbral es `OMR_UMBRAL_DE_CONFIANZA` (70 si no se fija; fuera de 51 a 100 no arranca), y el corte de intención, `OMR_CORTE_DE_INTENCION` (40 si no se fija; fuera de 31 a 50 no arranca, [ADR-0024](../adr/0024-preseleccionar-en-la-revision-la-unica-intencion.md)). Medido en local con estos límites: 78 MiB de memoria de trabajo en un lote de 200 hojas, y todo su cuarto de CPU mientras procesa. |
 | `redis` | `redis:7-alpine` | 64 MB, 0,25 | AOF con `appendfsync everysec`, sin instantáneas RDB, `maxmemory 32mb` y `noeviction`. |
 
 Suman 576 MB de 1 GB y 4 de los 6 contenedores de la cuota. Los límites salen de medir el compose:
 están en la sección 5 de [`despliegue-iscoutb.md`](../evidencia/despliegue-iscoutb.md).
 
-`ALLOWED_ORIGIN` y `LLM_API_KEY` se escriben en el panel, en *Environment*. Dokploy genera con ellas
+`ALLOWED_ORIGIN`, `LLM_API_KEY`, `SESION_SECRETO` y `DOCENTES` se escriben en el panel, en
+*Environment*. Dokploy genera con ellas
 `deploy/.env` al desplegar y el compose las lee como `${VARIABLE}`: no hay secretos versionados.
 
 **URL declaradas:** el sitio, https://calificacion.iscoutb.dev; la API,
@@ -1008,11 +1080,11 @@ servicio y las del frontend con Flutter 3.44.3.
 - **Redespliegue condicionado (pieza 6):** solo se despliega lo que pasó el CI, pero cada push a
   `master` que lo pasa redespliega, también uno de documentación: el contenedor del sitio se recrea
   porque cambia `revision.txt`.
-- **Un endpoint de carga sin autenticación:** ver R-14. Desde A-03, también las notas y la revisión
-  manual: ver AM-02 en [11.1](#111-amenazas-aceptadas-s13).
-- **La clave de cada examen se copia a mano al volumen** hasta A-04: ver R-35.
-- **Una ruta de distractores sin autenticación, que gasta cuota del proveedor:** ver R-17. Desde el
-  segundo corte, acotada por un presupuesto en memoria (ADR-0015): ver R-18 y R-19.
+- **Las rutas piden sesión desde ADR-0025**, y `SESION_SECRETO` y `DOCENTES` van en el panel: sin
+  ellas nadie entra. Lo que queda de AM-02, sin cursos: ver [11.1](#111-amenazas-aceptadas-s13).
+- **La clave de cada examen se registra desde la aplicación** desde ADR-0026 (R-35 cerrado).
+- **La ruta de distractores gasta cuota del proveedor:** la acota un presupuesto en memoria desde el
+  segundo corte (ADR-0015), ver R-18 y R-19, y pide sesión desde ADR-0025.
 - **Divergencias conocidas entre esta documentación y lo desplegado:** ver R-20.
 - **El costo** que nos corresponde del servidor está en
   [`docs/despliegue/costo-mensual.md`](../despliegue/costo-mensual.md).
@@ -1255,10 +1327,10 @@ de su significado, que es lo que convierte un glosario en lenguaje ubicuo.
 | **Habilitación del examen** | Autoría | `Habilitacion` (quién y cuándo), dentro de `ClaveDeRespuestas`; su invariante, que ningún examen se califica sin ella (RF-07), lo hace cumplir `calificar` |
 | **Nota** | Calificación | `CalificacionDeHoja`, con `nota_en_decimas` de 0 a 50 (A-03) |
 | **Nota provisional** | Calificación | El campo `provisional`: queda una pregunta por revisar o el código del estudiante incompleto (ADR-0002) |
-| **Pregunta por revisar** y **resolución del docente** | Calificación | El veredicto `por_revisar` de `ResultadoDePregunta`, y `ResolucionDelProfesor`, con la opción que vio el docente, su nombre y la hora (RF-08) |
+| **Pregunta por revisar** y **resolución del docente** | Calificación | El veredicto `por_revisar` de `ResultadoDePregunta`, y `ResolucionDelProfesor`, con la opción que vio el docente, su correo y la hora (RF-08, ADR-0025) |
 | **Recorte** | OMR | La fila de una pregunta en revisión, en PNG y sin el código del estudiante, que `vision.recortar_fila` saca de la hoja enderezada |
 | **Curso** | Identidad | Sin código todavía (A-05) |
-| **Docente / TA** | Identidad | Hoy implícito: el `examen_id` de la ruta HTTP no se verifica contra nadie |
+| **Docente / TA** | Identidad | Una entrada de `DOCENTES`, con su correo y su contraseña cifrada; en cada petición, el correo de su `Sesion` ([ADR-0025](../adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md)). Sin rol ni curso todavía |
 
 ### Tres decisiones de vocabulario que conviene poder defender
 
@@ -1284,7 +1356,7 @@ Dos desajustes conocidos, que se anotan en vez de esconderse:
 
 - **El estudiante no tiene nombre en el código.** Es el titular de los datos (RNF-12) y el
   afectado por un error de lectura, pero no es usuario del sistema (RNF-05), así que no aparece
-  como entidad. Cuando A-05 llegue habrá que decidir si merece una, o si sigue siendo solo el
+  como entidad. Cuando A-05 tenga cursos habrá que decidir si merece una, o si sigue siendo solo el
   contenido de una hoja.
 - **«Examen» se usa hoy como un identificador opaco.** `examen_id` viaja en la ruta HTTP y en el
   almacén, pero no existe ninguna entidad Examen: la creará `autoria` en A-04. Hasta entonces el
@@ -1346,10 +1418,11 @@ eso se trata aparte, en [«Entidades previstas»](#entidades-previstas-sin-const
 | `ResolucionDelProfesor` | `calificacion` | [`backend/infraestructura/modelo.py`](../../backend/infraestructura/modelo.py) | 341 |
 | `ResultadoDeHoja` | `dashboard` | [`backend/dashboard/resultados.py`](../../backend/dashboard/resultados.py) | 43 |
 | `ResultadosDelExamen` | `dashboard` | [`backend/dashboard/resultados.py`](../../backend/dashboard/resultados.py) | 64 |
-| `BurbujaEnRevision` | `dashboard` | [`backend/dashboard/revision.py`](../../backend/dashboard/revision.py) | 41 |
-| `PreguntaEnRevision` | `dashboard` | [`backend/dashboard/revision.py`](../../backend/dashboard/revision.py) | 50 |
-| `HojaEnRevision` | `dashboard` | [`backend/dashboard/revision.py`](../../backend/dashboard/revision.py) | 67 |
-| `RevisionDelExamen` | `dashboard` | [`backend/dashboard/revision.py`](../../backend/dashboard/revision.py) | 81 |
+| `BurbujaEnRevision` | `dashboard` | [`backend/dashboard/revision.py`](../../backend/dashboard/revision.py) | 44 |
+| `PreguntaEnRevision` | `dashboard` | [`backend/dashboard/revision.py`](../../backend/dashboard/revision.py) | 53 |
+| `HojaEnRevision` | `dashboard` | [`backend/dashboard/revision.py`](../../backend/dashboard/revision.py) | 70 |
+| `RevisionDelExamen` | `dashboard` | [`backend/dashboard/revision.py`](../../backend/dashboard/revision.py) | 86 |
+| `Sesion` | `identidad` | [`backend/identidad/sesiones.py`](../../backend/identidad/sesiones.py) | 22 |
 
 **Por qué el dueño de las cinco es `ingesta` y no `infraestructura`, si las cinco clases están
 declaradas en `infraestructura/modelo.py`.** La ruta y la línea son de dónde vive la
@@ -1447,9 +1520,9 @@ arriba se complete por adición y no se reescriba cuando esos aspectos se especi
 |---|---|---|---|
 | Marca detectada y su nivel de confianza | `omr` | A-02 | **Construida**: pasó a la tabla de arriba (las cuatro `Lectura…`) |
 | Nota / resultado de calificación | `calificacion` | A-03 | **Construida**: `ResultadoDePregunta`, `CalificacionDeHoja` y `ResolucionDelProfesor`, referidas por `hoja_id`. La nota vigente de cada hoja se recalcula con las resoluciones (ADR-0018, ADR-0023) |
-| Banco de preguntas y clave de respuestas | `autoria` | A-04 | **La clave, construida como dato** (`ClaveDeRespuestas`, `PreguntaDeLaClave` y `Habilitacion`), escrita a mano; el banco, pendiente |
+| Banco de preguntas y clave de respuestas | `autoria` | A-04 | **La clave, construida** (`ClaveDeRespuestas`, `PreguntaDeLaClave` y `Habilitacion`), registrada y habilitada desde la aplicación ([ADR-0026](../adr/0026-registrar-y-habilitar-la-clave-desde-la-aplicacion.md)); el banco, pendiente |
 | Distractor diagnóstico (RF-11, opcional) | `autoria` | A-06 | **Construido en la S9**: pasó a la tabla de arriba (`DistractorPropuesto` y las otras tres de `autoria`) |
-| Usuario, rol y curso | `identidad` | A-05 | Pendiente |
+| Usuario, rol y curso | `identidad` | A-05 | **El docente, construido** como entrada de `DOCENTES` y `Sesion` ([ADR-0025](../adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md)); el rol y el curso, pendientes |
 
 Que el dueño previsto de la nota sea `calificacion` y no `omr` ni `dashboard` es deliberado:
 `calificacion` es el único módulo cuyo `__init__.py` declara la responsabilidad de «cálculo de
@@ -1533,7 +1606,8 @@ su frontera, y a V-5, la prueba.
 **Lo que cambió con A-02 y A-03.** `omr`, `calificacion` y `dashboard` declaran su línea `Posee:`
 desde que tienen código, así que ya son cuatro de los siete módulos; faltan `ingesta`,
 `infraestructura` (dueña de `Trabajo`) e `identidad`, y la prueba de V-5 sigue sin escribirse. V-3
-y V-4 crecieron, como dicen sus apartados. Ninguna se cerró.
+y V-4 crecieron, como dicen sus apartados. Ninguna se cerró. **Con ADR-0025**, `identidad` declara
+`Posee: Sesion`: son cinco de los siete, y faltan `ingesta` e `infraestructura`.
 
 #### V-1 · `api` y `worker` importan el dominio sin declarar frontera
 
@@ -1702,9 +1776,9 @@ C4**, que describen cómo el sistema se comunica con actores externos, no cómo 
 | [A-01](../aspectos.md#a-01) | **Ingesta** | `ingesta` | `ArchivoCargado`, `HojaAceptada`, `ArchivoRechazado`, `ResultadoRecepcion`, `EntradaDeBitacora` | [Rel. 1](../c4/doc-c4.md#relaciones): Profesor/TA → Sistema |
 | [A-02](../aspectos.md#a-02) | **OMR** | `omr` | `LecturaDeBurbuja`, `LecturaDePregunta`, `LecturaDelCodigo`, `LecturaDeHoja` | Ninguna: proceso interno |
 | [A-03](../aspectos.md#a-03) | **Calificación** y **Dashboard** | `calificacion` decide la nota; `dashboard` la presenta | `ResultadoDePregunta`, `CalificacionDeHoja`, `ResolucionDelProfesor`; y en `dashboard`, `ResultadoDeHoja`, `ResultadosDelExamen` y las cuatro de la revisión | [Rel. 2](../c4/doc-c4.md#relaciones): Sistema → Profesor/TA |
-| [A-04](../aspectos.md#a-04) | **Autoría** | `autoria` | La clave como dato (`ClaveDeRespuestas`, `PreguntaDeLaClave`, `Habilitacion`, escrita a mano hasta A-04) y `ExamenConClave`; el banco, previsto | [Rel. 1](../c4/doc-c4.md#relaciones): Profesor/TA → Sistema |
+| [A-04](../aspectos.md#a-04) | **Autoría** | `autoria` | La clave (`ClaveDeRespuestas`, `PreguntaDeLaClave`, `Habilitacion`), registrada desde la aplicación ([ADR-0026](../adr/0026-registrar-y-habilitar-la-clave-desde-la-aplicacion.md)), y `ExamenConClave`; el banco, previsto | [Rel. 1](../c4/doc-c4.md#relaciones): Profesor/TA → Sistema |
 | [A-06](../aspectos.md#a-06) | **Autoría** | `autoria` | `PreguntaParaDistractores`, `DistractorPropuesto`, `PropuestaDescartada`, `ResultadoDePropuesta`, `EstadoDelPresupuesto` (segundo corte) | [Rel. 3](../c4/doc-c4.md#relaciones): Sistema → Proveedor de LLM |
-| [A-05](../aspectos.md#a-05) | **Identidad** | `identidad` (previsto) | Usuario, rol, curso (previsto) | [Rel. 1 y 2](../c4/doc-c4.md#relaciones): transversal a ambas |
+| [A-05](../aspectos.md#a-05) | **Identidad** | `identidad` | `Sesion` y la lista `DOCENTES` ([ADR-0025](../adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md)); rol y curso, previstos | [Rel. 1 y 2](../c4/doc-c4.md#relaciones): transversal a ambas |
 
 **Por qué A-03 abarca dos contextos.** Su enunciado es «calificación contra la clave y
 **publicación de resultados**», y sus requisitos incluyen RF-05, las estadísticas por pregunta. La
@@ -1721,8 +1795,8 @@ estadísticas y las alertas de revisión es la responsabilidad que §8.1 le asig
 | **OMR** | [A-02](../aspectos.md#a-02) | Construido |
 | **Calificación** | [A-03](../aspectos.md#a-03) | Construido |
 | **Dashboard** | [A-03](../aspectos.md#a-03), en su mitad de publicación (RF-05) | Construido en parte: las notas por hoja y la revisión; faltan las estadísticas del Panel |
-| **Autoría** | [A-04](../aspectos.md#a-04) y [A-06](../aspectos.md#a-06) | A-04 declarado, con la clave ya como dato; A-06 construido |
-| **Identidad** | [A-05](../aspectos.md#a-05) | Declarado |
+| **Autoría** | [A-04](../aspectos.md#a-04) y [A-06](../aspectos.md#a-06) | A-04 construido en parte: la clave y su habilitación, sin el banco; A-06 construido |
+| **Identidad** | [A-05](../aspectos.md#a-05) | Construido en parte: la entrada con sesión ([ADR-0025](../adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md)); faltan los roles y los cursos |
 | **Infraestructura** | Ninguno, y es correcto que así sea | Interviene en A-01, A-02 y A-03 |
 
 **Por qué Infraestructura no tiene aspecto propio, y no es un olvido.** Es el único contexto de
@@ -1781,28 +1855,29 @@ el worker, el despliegue y el pipeline. Las amenazas, cada una con su prioridad,
 dueño y su estado, están en el [modelo de amenazas](../evidencia/modelo-de-amenazas.md); esta sección fija las reglas que las
 mitigan y dónde se aplican.
 
-**Los límites de confianza.** Hasta que exista `identidad` (A-05), todo lo que llega a la API es de
-cualquiera: la URL es pública, y la IP del servidor también, así que se puede llegar sin pasar por
-Cloudflare. Lo único que sale de nuestra red es la llamada a Groq. Lo que entra a `master` y pasa el
+**Los límites de confianza.** Desde [ADR-0025](../adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md), a la API solo pasa lo que trae el token de una
+sesión: `/health`, `/metricas` y `POST /sesion` siguen siendo de cualquiera, y la IP del servidor es
+pública, así que se puede llegar sin pasar por Cloudflare. Lo único que sale de nuestra red es la llamada a Groq. Lo que entra a `master` y pasa el
 CI se despliega solo. Y el almacén está en un disco que comparten 23 equipos.
 
 | Regla | Dónde se aplica hoy |
 |---|---|
-| **Toda ruta pública tiene un tope**, porque cualquiera puede llamarla | La carga: 20 MB por hoja, 250 hojas por lote, 256 MB por día y 100 MB por petición ([ADR-0022](../adr/0022-poner-un-presupuesto-de-carga-delante-del-almacen.md)). Los distractores: 1 000 caracteres de enunciado, 6 solicitudes por minuto y 150 por día ([ADR-0015](../adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md)) |
+| **Toda ruta que gasta disco o cuota tiene un tope**, aunque pida sesión | La carga: 20 MB por hoja, 250 hojas por lote, 256 MB por día y 100 MB por petición ([ADR-0022](../adr/0022-poner-un-presupuesto-de-carga-delante-del-almacen.md)). Los distractores: 1 000 caracteres de enunciado, 6 solicitudes por minuto y 150 por día ([ADR-0015](../adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md)) |
 | **Lo que entra se juzga por su contenido, no por su nombre** | La firma de los primeros bytes de cada hoja; el nombre del archivo pasa por `nombre_seguro` y lleva un UUID delante, así que no puede escribir fuera del directorio del examen (`infraestructura/almacen.py`). Desde A-02, el worker lee el tamaño en el encabezado antes de decodificar: un PNG de 120 KB y 10 000 × 10 000 px lo mataba por memoria ([AM-16](../evidencia/modelo-de-amenazas.md#8-actualización-la-lectura-las-notas-y-la-revisión-2026-11-06)). Y el recorte de una pregunta se busca por la referencia que guardó el worker, nunca por una ruta que mande el cliente |
-| **Lo que se publica no lleva el código del estudiante ni la clave** | Las notas, la revisión y los recortes salen sin el código; la revisión y la lista de exámenes, sin la respuesta correcta; y el log, sin el código ni el nombre de quien revisa (`test_ruta_resultados.py`, `test_ruta_revision.py`, `test_leer_y_calificar.py`) |
+| **Lo que se publica no lleva la clave, y el código del estudiante solo va con sesión** | La revisión trae el código, para saber de quién es cada hoja, y pide sesión ([ADR-0025](../adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md)); las notas y los recortes salen sin él; la revisión y la lista de exámenes, sin la respuesta correcta, que solo publica `GET /examenes/{examen_id}/clave` a quien entró ([ADR-0026](../adr/0026-registrar-y-habilitar-la-clave-desde-la-aplicacion.md)); y el log, sin el código ni el correo de quien entra o revisa (`test_ruta_resultados.py`, `test_ruta_revision.py`, `test_leer_y_calificar.py`, `test_sesion.py`) |
 | **Lo que sale de nuestra red es lo mínimo** | A Groq solo van el enunciado y la respuesta correcta (RNF-13, `PreguntaParaDistractores`), por HTTPS validado con un almacén de certificados al día (`certifi` 2026.10.18) |
 | **Lo que vuelve del modelo es dato, no instrucción** | Instrucciones del sistema separadas del enunciado, respuesta en JSON con forma fija, la regla que descarta repeticiones, texto de Flutter y no HTML en el sitio, y la habilitación del docente antes de usar nada (RF-07) |
-| **Ningún secreto en el repositorio** | La `LLM_API_KEY` se escribe en el panel y Dokploy la pone en `deploy/.env` al desplegar (RNF-11); el barrido de `HEAD` y del historial del 31-oct no encontró ninguna |
+| **Solo entra quien tiene cuenta** | Todas las rutas salvo `/health`, `/metricas` y `POST /sesion` piden un token firmado que vence a las 12 horas, de un correo que siga en `DOCENTES`; las contraseñas, con scrypt; y una prueba recorre todas las rutas de la aplicación ([ADR-0025](../adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md), `test_sesion.py`) |
+| **Ningún secreto en el repositorio** | La `LLM_API_KEY`, `SESION_SECRETO` y `DOCENTES` se escriben en el panel y Dokploy las pone en `deploy/.env` al desplegar (RNF-11); el barrido de `HEAD` y del historial del 31-oct no encontró ninguna |
 | **Cada contenedor con el mínimo privilegio** | `api` y `worker` como `appuser`; `web` con `nginx-unprivileged`; sin puertos publicados, modo privilegiado ni montajes del servidor; límites de memoria y CPU ([7.1](#71-las-seis-piezas-del-despliegue)) |
 | **Solo se despliega lo que pasó el CI, incluido el análisis de dependencias** | El job `dependencias` (OSV-Scanner) va antes de `publicar-despliegue`; las acciones van fijadas por hash y las dependencias se instalan con `--require-hashes` |
 | **Cada mitigación tiene una prueba que falla sin ella**, como en 8.4 | `test_presupuesto_de_carga.py`, `test_presupuesto.py`, `test_recepcion.py` (el nombre con rutas) y `test_proveedor_llm.py` (la respuesta sin la forma esperada) |
 
-**Lo que todavía no existe:** la autenticación y la autorización por curso (A-05). Hasta entonces, la
-amenaza AM-02 está aceptada con una condición: ninguna hoja real entra antes
-([11.1](#111-amenazas-aceptadas-s13)). Desde A-03 cubre más: cualquiera con la URL ve las notas de
-un examen (sin el código del estudiante) y puede resolver una revisión con cualquier nombre, o
-deducir la clave probando opciones. La condición sigue siendo la misma.
+**Lo que todavía no existe:** la autorización por curso (EC-06) y un límite de intentos de entrada
+(R-38). Por la primera, la amenaza AM-02 sigue aceptada con la misma condición, ninguna hoja real
+([11.1](#111-amenazas-aceptadas-s13)): ya no la aprovecha cualquiera con la URL, pero cualquier
+docente con cuenta ve todos los exámenes, con el código del estudiante, y podría deducir la clave
+probando opciones en una revisión.
 
 ## 8.7 Privacidad y datos personales
 
@@ -1811,13 +1886,14 @@ Cumple RNF-12 a RNF-15. El detalle, contrastado con el código, está en la
 
 | | |
 |---|---|
-| **Qué datos personales se tratan** | La imagen de cada hoja, con el nombre o el código que escribió el estudiante y sus marcas; el nombre del archivo, que es el del estudiante si el docente los nombra así, en la bitácora y en la ruta del almacén; y la IP del docente, en el registro de acceso. Desde A-02 y A-03, **las calificaciones y el código del estudiante**, en el registro de resultados (nunca en el log ni en una ruta); el recorte de las filas dudosas, sin el código; y **el nombre que escribe el docente** al resolver una revisión, en el registro de revisiones y en la ruta de revisión, que muestra quién resolvió cada pregunta (no en el log). No hay cuentas, correos ni base de datos, y a Groq no va nada de esto (RNF-13) |
+| **Qué datos personales se tratan** | La imagen de cada hoja, con el nombre o el código que escribió el estudiante y sus marcas; el nombre del archivo, que es el del estudiante si el docente los nombra así, en la bitácora y en la ruta del almacén; y la IP del docente, en el registro de acceso. Desde A-02 y A-03, **las calificaciones y el código del estudiante**, en el registro de resultados (nunca en el log, y en una ruta solo en la de revisión, que pide sesión); el recorte de las filas dudosas, sin el código; y **quién resolvió** cada pregunta de una revisión, en el registro de revisiones y en la ruta de revisión (no en el log): desde [ADR-0025](../adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md), el correo del docente de la sesión. **Los correos de los docentes** viven en la variable `DOCENTES` del panel, con su contraseña cifrada. No hay base de datos, y a Groq no va nada de esto (RNF-13) |
 | **Quién es el responsable** | La universidad. QuantIA es una herramienta con la que el docente califica en su nombre |
 | **Con qué base** | La Ley 1581 de 2012 y el Decreto 1377 de 2013, compilado en el Decreto 1074 de 2015: la autorización que el estudiante da a la universidad (artículo 9), con la finalidad académica de evaluarlo. Ninguno es un dato sensible (artículo 5) |
 | **Cuánto tiempo** | Hoy nada lo borra, y el servidor borra los volúmenes después del 30-nov. La retención de RNF-14 (borrar o anonimizar al cerrar el periodo de revisión de nota) es parte del ADR que cierra R-06 |
 | **Hoy** | Solo hojas sintéticas, sin datos de ninguna persona |
 
-**Antes de la primera hoja real:** `identidad` (A-05); confirmar con la universidad que su
+**Antes de la primera hoja real:** los cursos y su aislamiento (EC-06), que completan A-05; confirmar
+con la universidad que su
 autorización cubre calificar con esta herramienta; la retención de RNF-14; y una indicación en la
 pantalla de carga para nombrar los archivos sin datos del estudiante.
 
@@ -1856,13 +1932,15 @@ pagó caro en las secciones 5 y 6 antes de tener que reescribirlas contra el có
 con la condición que debe cumplirse para redactarlo:
 
 - **Autorización por curso:** cómo se aplica el aislamiento de RNF-05 y QG-4 de forma uniforme en
-  todos los módulos. Depende de A-05, que hoy es un paquete vacío. La seguridad de lo que ya existe
+  todos los módulos. Depende de que existan cursos: `identidad` tiene la autenticación desde
+  ADR-0025, no los roles. La seguridad de lo que ya existe
   salió de esta lista en la S13: es la [sección 8.6](#86-seguridad).
 - **Auditoría de calificaciones y de aprobaciones de clave:** registro de quién modificó una nota
   y cuándo (RF-10, RNF-15), extendido a quién aprobó una clave de respuestas y cuándo (RF-07,
   [ADR-0004](../adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md)). Desde RF-08 ya
-  hay registro de cada resolución y de la habilitación de cada clave, con un nombre y una hora,
-  pero el nombre no se verifica: se escribe cuando A-05 diga quién es quién.
+  hay registro de cada resolución y de la habilitación de cada clave, con un nombre y una hora;
+  desde ADR-0025, el de cada resolución es el correo de la sesión, y desde ADR-0026, también el de
+  la habilitación de cada clave.
 - **Ciclo de vida de los datos personales:** retención y eliminación de escaneos conforme a
   RNF-14. Hoy nada borra lo que se guarda; lo cierra el ADR de persistencia que resuelve R-06. Qué
   datos se tratan y con qué base ya está en la [sección 8.7](#87-privacidad-y-datos-personales).
@@ -1917,6 +1995,8 @@ constancia en el commit y en esta sección ([0014](../adr/0014-dejar-constancia-
 | [0022](../adr/0022-poner-un-presupuesto-de-carga-delante-del-almacen.md) | Poner un presupuesto de carga delante del almacén | **aceptado** | 2026-10-31 | [EC-07](#ec-07) |
 | [0023](../adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md) | Leer las hojas en posiciones fijas y mandar a revisión lo que no se ve bien | **aceptado** | 2026-11-05 | [EC-01](#ec-01), [EC-02](#ec-02), [EC-03](#ec-03), [EC-04](#ec-04) |
 | [0024](../adr/0024-preseleccionar-en-la-revision-la-unica-intencion.md) | Preseleccionar en la revisión la única intención | **aceptado** | 2026-11-19 | [EC-01](#ec-01), [EC-02](#ec-02) |
+| [0025](../adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md) | Identificar al docente con una sesión firmada y una lista de cuentas | **aceptado** | 2026-11-21 | [EC-06](#ec-06) |
+| [0026](../adr/0026-registrar-y-habilitar-la-clave-desde-la-aplicacion.md) | Registrar y habilitar la clave desde la aplicación | **aceptado** | 2026-11-22 | [EC-05](#ec-05) |
 
 **Por qué 0002 reemplaza a 0001.** La revisión de coherencia previa al corte 1 encontró que
 EC-03 y EC-04 no se pueden cumplir a la vez con procesamiento síncrono(200 hojas × 5 s son
@@ -2072,6 +2152,14 @@ una sola marca a la vista y el docente tenía que elegirla a mano. También rela
 estudiante, que con 0023 exigía una marca segura en cada columna: ahora basta una sola intención,
 medida con cero dígitos mal aceptados en 7 200 columnas.
 
+**Por qué 0025 no reemplaza a ninguno.** Nadie había decidido cómo se entra: ADR-0002 declaró
+`identidad`, y ADR-0023 dejó para A-05 quién resuelve cada revisión. 0025 llena ese hueco sin
+cambiar ninguna decisión anterior, y guarda sus secretos en el panel de ADR-0021, junto a la clave
+de Groq.
+
+**Por qué 0026 tampoco reemplaza a ninguno.** Escribe desde la aplicación la clave que ADR-0023 dejó
+como dato escrito a mano, en la misma forma, y usa la sesión de 0025 para saber quién la habilita.
+
 **Decisiones previstas (aún no tomadas):**
 
 - La verificación automática de equivalencias en las propuestas de distractores, con SymPy, que
@@ -2088,6 +2176,8 @@ medida con cero dígitos mal aceptados en 7 200 columnas.
   fijó 70 con hojas sintéticas y las fotos del prototipo, y dejó cada corte como una constante con
   nombre: calibrar es cambiar un número y volver a medir. [ADR-0024](../adr/0024-preseleccionar-en-la-revision-la-unica-intencion.md)
   sumó el corte de intención (40), que se calibra junto con el umbral.
+- Los roles y el aislamiento por curso (EC-06), cuando existan cursos (A-04). ADR-0025 dejó la
+  autenticación.
 - Si EC-05 necesita una medida de tiempo de revisión, y con qué valor — ver ADR-0004.
 - Si la calificación de riesgo técnico de EC-05 en el árbol de utilidad (hoy *Alto*) debe
   bajar, ahora que el riesgo dejó de ser de cómputo simbólico y pasó a ser de criterio humano.
@@ -2282,6 +2372,10 @@ corte.
 | **Medida de respuesta** | **100% de los exámenes habilitados tienen una habilitación registrada**, con la identidad de quien la hizo y la fecha. *(Medida de tiempo de revisión: pendiente de que el equipo decida si aplica — ver [ADR-0004](../adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md).)* |
 | **Relacionado** | QG-1 · RF-06, RF-07 · [ADR-0004](../adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md) · [ADR-0005](../adr/0005-acotar-el-llm-a-la-generacion-de-distractores-diagnosticos.md) · Aspecto [A-04](../aspectos.md#a-04) |
 
+**Hoy** ([ADR-0026](../adr/0026-registrar-y-habilitar-la-clave-desde-la-aplicacion.md)): cada clave habilitada desde la aplicación queda con el correo del docente de la
+sesión y la hora, así que la medida se cumple por construcción para esas claves; una escrita a mano
+no pasa por ahí. El banco de preguntas del estímulo sigue sin construir.
+
 > **Nota.** Esta versión del escenario reemplaza a la anterior, que medía una validación
 > simbólica automática con SymPy, incluido un tiempo objetivo de «≤5 segundos por pregunta»
 > pensado para una operación de cómputo. La retroalimentación del profesor confirmó que esa
@@ -2309,6 +2403,11 @@ priorización original.
 | **Respuesta** | El sistema deniega la operación, no revela la existencia ni el contenido del recurso, y registra el intento. |
 | **Medida de respuesta** | **100% de los intentos de acceso cruzado son denegados** en la batería de pruebas de autorización, que cubre todas las rutas que exponen datos de curso. |
 | **Relacionado** | QG-4 · RF-09 · RNF-05, RNF-12 · Aspecto [A-05](../aspectos.md#a-05) |
+
+**Hoy** ([ADR-0025](../adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md)): está construida la primera mitad, que solo entre quien tiene cuenta, y
+`test_sesion.py` recorre todas las rutas de la aplicación y exige 401 sin sesión. La medida pide
+más, que se niegue el acceso **cruzado entre cursos**, y sin cursos todavía no hay batería que lo
+mida.
 
 <a id="ec-07"></a>
 
@@ -2386,10 +2485,10 @@ priorización original.
 | **R-11** | **La aprobación manual de la clave puede pasar por alto una equivalencia algebraica no evidente** entre un distractor y la respuesta correcta, ahora que no hay verificación simbólica automática ([ADR-0004](../adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md)). | Alto | Revisar el examen bajo presión de tiempo, sea la clave propia o con distractores propuestos por el modelo, sin apoyo visual para comparar expresiones. | Diseñar la pantalla de aprobación para mostrar las expresiones simplificadas o graficadas una junto a otra, facilitando la comparación visual sin exigir cómputo simbólico obligatorio. Si la tasa de error resulta alta en la práctica, reevaluar con un ADR nuevo. **Medido en la S9:** La evaluación de EC-08 no encontró ninguna propuesta equivalente a la respuesta correcta en 120 (calificación del equipo, confirmada con un prototipo fuera del sistema); la corrida de prueba previa sí mostró una: `sin(2x)` para `2·sin(x)·cos(x)`. El filtro de las propuestas solo detecta repeticiones textuales; el criterio para reabrir la verificación automática está en [ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md). |
 | **R-12** | **Cerrado en la S9:** RF-11 se construyó como el aspecto A-06 (`autoria` y `POST /distractores`), con su escenario EC-08 medido. | Cerrado | No aplica. | Ver [A-06](../aspectos.md#a-06) y [ADR-0013](../adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md). |
 | **R-13** | **Cerrado con [ADR-0021](../adr/0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md):** en el servidor del laboratorio los contenedores no se duermen, y `/health` respondió con p95 de 0,53 s desde fuera de la universidad ([evidencia](../evidencia/despliegue-iscoutb.md)). Era el **arranque en frío de Render, medido en 12,5 s, por encima del techo de 10 s de EC-07** y de los 5 s que espera el sitio al consultar `/health`. Medido el 27-sep en `docs/evidencia/medicion-arranque-en-frio.json`: `GET /health` en frío 12,5 s frente a p95 de 0,13 s en caliente; un lote de 20 hojas de 200 KB, 13,5 s y 24,0 s en frío frente a p95 de 1,3 s en caliente. | Cerrado | Que pasen más de 15 minutos sin tráfico antes de que llegue una carga. | Mitigado con un monitor gratuito (UptimeRobot) que consulta `/health` cada 5 minutos y mantiene la instancia despierta; eso consume entre 720 y 744 de las 750 horas compartidas del workspace (ver R-15). Detalle completo en el taller ([`docs/despliegue/taller-despliegue-api.md`](../despliegue/taller-despliegue-api.md)). |
-| **R-14** | **Endpoint de carga público sin autenticación.** `POST /examenes/{id}/hojas` está desplegado y accesible por su URL pública; `identidad` sigue sin construir (5.2), así que nada impide que alguien fuera del curso cargue archivos al almacén de la demostración. Desde ADR-0021 lo cargado ya no se borra en cada despliegue: queda en el volumen hasta el 30-nov, en un disco que comparten 23 equipos. | Medio | Publicar la URL de la API antes de construir `identidad` (aspecto A-05). | Aceptado para la demostración de la S8 porque solo se cargan hojas sintéticas (ADR-0012) y el disco es efímero. Construir `identidad` antes de cualquier uso con datos reales. **Desde la S13** es la amenaza AM-02, aceptada con esa condición ([11.1](#111-amenazas-aceptadas-s13)), y lo que alguien puede cargar tiene tope: 250 hojas por lote, 256 MB por día y 100 MB por petición ([ADR-0022](../adr/0022-poner-un-presupuesto-de-carga-delante-del-almacen.md), AM-01). |
+| **R-14** | **Cerrado con [ADR-0025](../adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md): la carga pide sesión.** Era: **endpoint de carga público sin autenticación.** `POST /examenes/{id}/hojas` está desplegado y accesible por su URL pública; `identidad` sigue sin construir (5.2), así que nada impide que alguien fuera del curso cargue archivos al almacén de la demostración. Desde ADR-0021 lo cargado ya no se borra en cada despliegue: queda en el volumen hasta el 30-nov, en un disco que comparten 23 equipos. | Medio | Publicar la URL de la API antes de construir `identidad` (aspecto A-05). | Aceptado para la demostración de la S8 porque solo se cargan hojas sintéticas (ADR-0012) y el disco es efímero. Construir `identidad` antes de cualquier uso con datos reales. **Desde la S13** es la amenaza AM-02, aceptada con esa condición ([11.1](#111-amenazas-aceptadas-s13)), y lo que alguien puede cargar tiene tope: 250 hojas por lote, 256 MB por día y 100 MB por petición ([ADR-0022](../adr/0022-poner-un-presupuesto-de-carga-delante-del-almacen.md), AM-01). |
 | **R-15** | **Cerrado con ADR-0021:** el entorno ya no depende de la capa gratuita de Render; la dependencia ahora es el servidor del curso (R-31). Era la **dependencia de la capa gratuita de Render, cuyas condiciones pueden cambiar sin aviso.** Las 750 horas de servicio web son compartidas por todo el workspace, y el monitor que mitiga R-13 ya consume entre 720 y 744 de esas 750: quedan entre 6 horas (mes de 31 días) y 30 (mes de 30) de margen. Se suman el límite de 5 GB de ancho de banda y 500 minutos de build. | Cerrado | Agotar el cupo compartido en la semana de sustentación, con más tráfico del habitual, o que Render cambie las condiciones de su capa gratuita. | Punto de ruptura por recurso documentado en [`docs/despliegue/costo-mensual.md`](../despliegue/costo-mensual.md). Verificar la capa gratuita vigente antes de cada sustentación, como pide la guía del curso. |
 | **R-16** | **Cerrado con ADR-0021:** en el panel del servidor del laboratorio cada integrante entra con su correo institucional, y el manual registra a los cuatro. Era que **solo una persona podía operar el workspace de Render** (el plan gratuito da un único puesto); si Sebastián no está disponible, nadie más del equipo puede redesplegar, cambiar variables o revisar logs en Render. Es el criterio 7 de la guía del curso: «¿Puede operarlo el equipo entero? Si solo una persona sabe redesplegarlo, eso es un riesgo de la sección 11 de arc42, no un detalle.» | Cerrado | Que Sebastián no esté disponible cuando el equipo necesite redesplegar o depurar algo en producción. | El entorno completo se recrea desde `render.yaml` (Blueprint) en la cuenta de cualquier integrante; los pasos quedan en el README, «Cómo se despliega». No depende de configuración manual guardada solo en la cuenta de Sebastián. |
-| **R-17** | **La ruta `POST /distractores` es pública y sin autenticación** en el entorno desplegado, y cada solicitud gasta cuota del proveedor de LLM. | Bajo | Que alguien fuera del curso la use en bucle y agote la cuota diaria de la capa gratuita de Groq (1 000 solicitudes y 200 000 tokens por día para el modelo, consultado el 4-oct-2026 en https://console.groq.com/docs/rate-limits). | Sin tarjeta, el peor caso es agotar la cuota y nunca una factura (RNF-16): la ruta responde 503 y nada más se afecta (EC-08). Se cierra con `identidad` (A-05), igual que R-14. **Mitigado en el segundo corte** ([ADR-0015](../adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md)): la línea base mostró que una ráfaga de 20 agotaba el límite por minuto para todos (8 cortes por cuota); con un presupuesto de 6 por minuto y 150 por día, lo que no cabe se responde con 429 sin gastar cuota ([EC-09](#ec-09)). |
+| **R-17** | **Cerrado con [ADR-0025](../adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md): la ruta pide sesión.** Era: **la ruta `POST /distractores` es pública y sin autenticación** en el entorno desplegado, y cada solicitud gasta cuota del proveedor de LLM. | Bajo | Que alguien fuera del curso la use en bucle y agote la cuota diaria de la capa gratuita de Groq (1 000 solicitudes y 200 000 tokens por día para el modelo, consultado el 4-oct-2026 en https://console.groq.com/docs/rate-limits). | Sin tarjeta, el peor caso es agotar la cuota y nunca una factura (RNF-16): la ruta responde 503 y nada más se afecta (EC-08). Se cierra con `identidad` (A-05), igual que R-14. **Mitigado en el segundo corte** ([ADR-0015](../adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md)): la línea base mostró que una ráfaga de 20 agotaba el límite por minuto para todos (8 cortes por cuota); con un presupuesto de 6 por minuto y 150 por día, lo que no cabe se responde con 429 sin gastar cuota ([EC-09](#ec-09)). |
 | **R-18** | **El presupuesto del proveedor de LLM vive en la memoria del proceso de la API** ([ADR-0015](../adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md)). Se vacía en cada despliegue y cada reinicio, y con más de una instancia o más de un proceso de uvicorn cada uno tendría el suyo. | Bajo | Un reinicio a mitad del día, que devuelve el cupo diario completo (hasta 300 solicitudes en 24 h, más de las que caben en la cuota diaria de Groq); o escalar la API horizontalmente. | Mientras haya una instancia y un proceso, se acepta: el último freno sigue siendo el 503 del proveedor. Si la API escala, el presupuesto pasa a Redis detrás del mismo adaptador `GeneradorConPresupuesto`. |
 | **R-19** | **El presupuesto es global, no por profesor.** Un cliente puede gastar el cupo de los demás: un minuto si lanza una ráfaga, un día si insiste 150 veces. | Medio | Que alguien fuera del curso use la URL pública en bucle. | Lo cierra `identidad` (A-05), con un cupo por profesor autenticado, igual que R-14 y R-17. Mientras tanto, el presupuesto protege la cuota del proveedor, aunque no la reparte. |
 | **R-20** | **Divergencias conocidas entre esta documentación y lo desplegado**, anotadas en vez de esconderse. (1) Corregida con el frontend nuevo: la pantalla de carga mostraba «En cola» para toda hoja aceptada, también para las `pendiente_de_encolar`; ahora lee el campo `estado` (`frontend/lib/features/carga/data/servicio_carga.dart:48`) y la muestra como pendiente. (2) `POST /distractores` ya tiene pantalla (Pauta y distractores); `GET /metricas` sigue sin pantalla y se consulta por la API. (3) La cifra de 1,744 s de EC-07 que citan 6.2, `aspectos.md` y ADR-0006 no está en el informe crudo `medicion-ec07-despues.json`, que registra 1,491 s como peor de tres corridas; las dos cumplen el umbral de 10 s. | Bajo | Que un revisor busque 1,744 en el informe crudo, o la pantalla de `/metricas`. | (1) Hecho: el reporte de la pantalla de carga muestra el `estado`. (2) Una vista de `GET /metricas` solo si la operación la necesita. (3) Repetir la medición de EC-07 con `medir_ec07.py` y citar la cifra del informe que quede versionado. |
@@ -2407,9 +2506,12 @@ priorización original.
 | **R-32** | **Con 0,5 CPU por contenedor, cinco lotes de EC-07 a la vez no caben en el plazo del lote.** Medido en local con el compose del servidor: los cinco lotes tardan 11 s y entre el 8 y el 30 % de las hojas quedan `pendiente_de_encolar`. Quedan guardadas y en la bitácora, pero sin trabajo en la cola hasta que algo las reintente. Con tres lotes a la vez, ninguna. | Bajo: un docente carga un lote a la vez | Varios docentes cargando a la vez, o uno que sube varios lotes en paralelo. | El reintento automático de las hojas pendientes desde la bitácora, con A-02. Medir EC-07 en el servidor con un lote de 200 hojas. **No llegó con A-02:** el worker ya lee y califica, pero nada republica las hojas pendientes. Sigue siendo lo primero que mitiga este riesgo. |
 | **R-33** | **El presupuesto de carga es global y vive en la memoria de la API** ([ADR-0022](../adr/0022-poner-un-presupuesto-de-carga-delante-del-almacen.md)). Un cliente puede gastar el cupo del día y dejar al docente sin carga hasta 24 horas, y cada despliegue devuelve el cupo entero: con diez despliegues más hasta el 30-nov, el peor caso sobre el disco sube de 7,5 a unos 10 GB. | Bajo; **Medio** con datos reales | Que alguien use la ruta en bucle, o que `lotes_rechazados_desde_el_arranque` crezca en `GET /metricas` sin que el equipo haya cargado. | A-05, con un cupo por docente. Si aparecen cortes, el presupuesto pasa a Redis, que en el servidor persiste. |
 | **R-34** | **El sistema de las imágenes base no se analiza** (amenaza AM-04 del [modelo de amenazas](../evidencia/modelo-de-amenazas.md)). El job `dependencias` mira los paquetes de Python y de Dart, no `python:3.12-slim`, `nginx-unprivileged:alpine` ni `redis:7-alpine`. | Medio | Una vulnerabilidad publicada en una de esas imágenes. | Escanear las imágenes en el pipeline, con la misma regla de no desplegar con un hallazgo sin decidir. Dueño: Josué, antes del proyecto final. |
-| **R-35** | **La clave de cada examen se copia a mano al volumen** hasta A-04 ([ADR-0023](../adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md)). Es un JSON por examen en `RUTA_CLAVES`, con su habilitación (quién y cuándo) escrita en el mismo archivo. `ClavesEnDisco` rechaza uno que no tenga la forma de una clave, pero no puede saber si una respuesta está equivocada: con una clave mal copiada, todas las hojas salen mal calificadas sin pasar por revisión. En el servidor, además, copiarla pide entrar al contenedor desde el panel, y eso no se ha probado. | Medio | Copiar la clave de otro examen, o con una letra corrida; o llegar a la demostración sin haber copiado ninguna (las hojas quedan «Sin nota», con el motivo). | A-04: registrar la clave desde la aplicación y que el docente la revise antes de habilitarla (RF-07). Mientras tanto, la pantalla de carga solo ofrece los exámenes que tienen clave, una hoja cuya clave no está habilitada queda «Sin nota» con ese motivo, y la copia en el servidor se ensaya antes de la demostración. |
+| **R-35** | **Cerrado con [ADR-0026](../adr/0026-registrar-y-habilitar-la-clave-desde-la-aplicacion.md): la clave se registra y se habilita desde la aplicación.** Era: **la clave de cada examen se copia a mano al volumen** hasta A-04 ([ADR-0023](../adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md)). Es un JSON por examen en `RUTA_CLAVES`, con su habilitación (quién y cuándo) escrita en el mismo archivo. `ClavesEnDisco` rechaza uno que no tenga la forma de una clave, pero no puede saber si una respuesta está equivocada: con una clave mal copiada, todas las hojas salen mal calificadas sin pasar por revisión. En el servidor, además, copiarla pide entrar al contenedor desde el panel, y eso no se ha probado. | Medio | Copiar la clave de otro examen, o con una letra corrida; o llegar a la demostración sin haber copiado ninguna (las hojas quedan «Sin nota», con el motivo). | A-04: registrar la clave desde la aplicación y que el docente la revise antes de habilitarla (RF-07). Mientras tanto, la pantalla de carga solo ofrece los exámenes que tienen clave, una hoja cuya clave no está habilitada queda «Sin nota» con ese motivo, y la copia en el servidor se ensaya antes de la demostración. |
 | **R-36** | **Cerrado con [ADR-0023](../adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md), punto 11:** la vuelta desde la lista en curso cuenta como un intento, y después de cuatro el trabajo va a fallidos con el motivo, salvo que ya se haya procesado; las demás hojas siguen. Era que **un trabajo cuyo worker muere volvía a la cola sin contar el intento** ([ADR-0020](../adr/0020-entregar-los-trabajos-al-menos-una-vez-con-reintentos-y-lista-de-fallidos.md)): `recuperar_en_curso` lo ponía otra vez a la cabeza de la cola, así que una hoja que mataba al worker lo volvía a matar en cada reinicio, y ninguna otra hoja se leía. Se encontró al documentar A-02, con un PNG blanco de 120 KB y 10 000 × 10 000 px que lo mataba por memoria en un contenedor de 96 MB; ese caso lo cierra además el tope por encabezado ([evidencia](../evidencia/medicion-lectura-omr.md#5-imágenes-que-piden-más-memoria-de-la-que-tiene-el-worker)). | Cerrado | Un error de OpenCV que tumbe el proceso, o una imagen que agote la memoria por otro camino. | Contar cada recuperación como un intento, en `consumo.recuperar_en_curso`, con tres pruebas contra Redis en `test_mensajeria.py`, validadas provocando la falla. Una hoja así queda en la lista de fallidos, donde una persona la ve. |
 | **R-37** | **EC-03 y EC-04 solo se han medido en local** ([medición de la S14](../evidencia/medicion-s14.md#6-entorno-de-la-medición)). Las cuatro corridas de cada uno (la del 6-nov con Docker y las tres de la S14 sin Docker) usaron los topes de CPU del servidor, pero no su red, su procesador ni la carga de los demás equipos; y la condición de EC-04 sobre la CPU y la memoria **del servidor** durante un lote no se midió. Lo que se sabe es que hay margen: 1,22 s de p95 contra 5 s, y 3,6 min contra 10. | Medio | Que el reto de corte o el proyecto final juzguen EC-03 o EC-04 en el entorno desplegado, o que el servidor cambie de topes o tenga más carga. | Medir en el servidor un lote de EC-04 y 20 hojas sueltas de EC-03 cuando se pueda copiar la clave al volumen (R-35), con el registro del panel para los tiempos (`medir_procesamiento analizar` ya lo lee) y la CPU y la memoria del servidor durante el lote. Hasta entonces, cada cifra de EC-03 y EC-04 dice «en local». |
+| **R-38** | **La entrada no limita los intentos** ([ADR-0025](../adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md)). Probar contraseñas solo lo frenan scrypt, unos 50 ms por intento, y el mínimo de 10 caracteres. | Medio | Que alguien pruebe contraseñas contra `POST /sesion`; se vería como `entrada_rechazada` seguidos en el registro. | Un límite de intentos por correo y por IP, en memoria como los presupuestos, si el registro muestra intentos seguidos. |
+| **R-39** | **Un token no se revoca antes de vencer** ([ADR-0025](../adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md)). | Bajo | Una sesión robada o un docente que deja el curso. | Vence a las 12 horas; quitar la cuenta de `DOCENTES` o cambiar `SESION_SECRETO` y desplegar la cierra, porque cada petición comprueba la lista. |
+| **R-40** | **El token vive en el almacenamiento del navegador** ([ADR-0025](../adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md)), al alcance de los scripts de la página. | Bajo | Un script ajeno en el sitio. | El sitio no muestra HTML de terceros ni de usuarios, y el token vence a las 12 horas. Una cookie no sirve: en web, Flutter baja los recortes sin credenciales. |
 
 ## 11.1 Amenazas aceptadas (S13)
 
@@ -2418,8 +2520,8 @@ pendientes, con su dueño, están en el modelo; las que quedaron como deuda son 
 
 | Amenaza | Por qué se acepta | Qué la reabre |
 |---|---|---|
-| **AM-02** · Suplantación en la relación 1 del C4: cualquiera carga hojas y pide distractores sin cuenta. **Ampliada el 6-nov con A-03**: cualquiera ve las notas de un examen, resuelve una revisión con cualquier nombre y, como la respuesta trae la nota recalculada, podría deducir la clave probando opciones | Cerrarla es construir `identidad` (A-05), que no cabe en la semana. Mientras tanto, en el servidor solo hay hojas sintéticas, y los dos presupuestos acotan lo que alguien puede gastar o llenar. Lo que se publica no lleva el código del estudiante ni la respuesta correcta, y la nota automática no se borra: una revisión malintencionada queda registrada y se deshace con otra ([modelo de amenazas, sección 8](../evidencia/modelo-de-amenazas.md#8-actualización-la-lectura-las-notas-y-la-revisión-2026-11-06)) | **La primera hoja de un estudiante real**: antes tiene que existir A-05. No es un plazo, es una condición |
-| **AM-08** · Repudio: nadie puede probar quién cargó un lote, **ni, desde RF-08, quién resolvió una revisión** | La bitácora ya dice qué entró y cuándo, y el registro de revisiones, qué se resolvió, cuándo y con qué nombre; el quién verificado necesita cuentas (A-05). Se cumplió lo que la reabría, las calificaciones de A-03, pero son de hojas sintéticas: sin notas reales no hay reclamo que responder | La primera nota real, o A-05 |
+| **AM-02** · Suplantación en la relación 1 del C4: cualquiera carga hojas y pide distractores sin cuenta. **Ampliada el 6-nov con A-03**: cualquiera ve las notas de un examen, resuelve una revisión con cualquier nombre y, como la respuesta trae la nota recalculada, podría deducir la clave probando opciones | **Reducida el 21-nov con [ADR-0025](../adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md)**: sin cuenta ya no se llega a ninguna de esas rutas. Queda que cualquier docente con cuenta ve todos los exámenes, con el código del estudiante, y resuelve cualquiera; eso se cierra con los cursos (EC-06), que dependen de A-04. Mientras tanto, en el servidor solo hay hojas sintéticas, y los dos presupuestos acotan lo que alguien puede gastar o llenar. Lo que se publica no lleva el código del estudiante ni la respuesta correcta, y la nota automática no se borra: una revisión malintencionada queda registrada y se deshace con otra ([modelo de amenazas, sección 8](../evidencia/modelo-de-amenazas.md#8-actualización-la-lectura-las-notas-y-la-revisión-2026-11-06)) | **La primera hoja de un estudiante real**: antes tienen que existir los cursos (EC-06). No es un plazo, es una condición |
+| **AM-08** · Repudio: nadie puede probar quién cargó un lote. **Desde ADR-0025, cada revisión queda con el correo de la sesión** | La bitácora ya dice qué entró y cuándo, pero no quién: la ruta de carga pide sesión y todavía no guarda el correo. Se cumplió lo que la reabría, las calificaciones de A-03, pero son de hojas sintéticas: sin notas reales no hay reclamo que responder | La primera nota real |
 | **AM-09** · `/docs`, `/openapi.json` y `/metricas`, públicos | Solo exponen esquemas y cuentas, ningún dato personal; el contrato es público por decisión, versionado en el repositorio | Que `/metricas` tenga que publicar algo de un docente o de un curso |
 | **AM-11** · Lo que queda de la inyección de prompt | La salida solo vuelve a quien la pidió, con forma fija, y el docente revisa cada propuesta antes de usarla (RF-07) | Que una propuesta se use sin revisión humana, o que el sitio muestre la salida del modelo como HTML |
 | **AM-12** · Envenenamiento de la caché de propuestas | La clave es el texto completo de la pregunta: quien deje algo guardado tuvo que mandar la misma pregunta, y el modelo respondió a esa | Una caché por docente con A-05, o que la caché guarde algo distinto de la respuesta del modelo |
@@ -2473,6 +2575,7 @@ palabras que la tabla anterior. El detalle está en la
 | **Aspecto** | Corte vertical del sistema con valor propio, recorrible completo desde la necesidad hasta la evidencia. No es una capa ni un módulo. Ver [`../aspectos.md`](../aspectos.md). |
 | **Clave de respuestas** | Conjunto de opciones correctas de un examen, contra el cual se comparan las marcas detectadas. |
 | **Cola de trabajos** | Lista de tareas pendientes de procesar, que separa la carga de las hojas de su procesamiento. En este sistema es una lista de Redis: lo que garantiza que ninguna hoja recibida se pierda es la bitácora de recepción ([ADR-0006](../adr/0006-registrar-la-recepcion-en-una-bitacora-antes-de-encolar.md)), no la cola. Desde el taller de mensajería la entrega es al menos una vez, con acuse, reintentos y lista de fallidos ([ADR-0020](../adr/0020-entregar-los-trabajos-al-menos-una-vez-con-reintentos-y-lista-de-fallidos.md)). En Render la lista no persistía (R-28); en el servidor del laboratorio, Redis la guarda con AOF ([ADR-0021](../adr/0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md)). |
+| **Clave habilitada** | La que el docente certificó, con su correo y la hora: solo con ella las hojas de su examen reciben nota (RF-07). Se puede cambiar mientras ninguna hoja tenga nota, y cambiarla la deja sin habilitar ([ADR-0026](../adr/0026-registrar-y-habilitar-la-clave-desde-la-aplicacion.md)). |
 | **Corte de intención** | Confianza desde la cual una burbuja cuenta como marcada a propósito por el estudiante, aunque no llegue al umbral: hoy 40, configurable de 31 a 50 (`OMR_CORTE_DE_INTENCION`). Con exactamente una burbuja sobre el corte, una pregunta en revisión llega preseleccionada y una columna del código se acepta ([ADR-0024](../adr/0024-preseleccionar-en-la-revision-la-unica-intencion.md)). |
 | **Distractor** | Opción incorrecta de una pregunta de opción múltiple, diseñada para ser plausible. Un distractor equivalente a la respuesta correcta invalida la pregunta. |
 | **Escenario de calidad (EC)** | Especificación medible de un atributo de calidad en seis partes: fuente, estímulo, artefacto, entorno, respuesta y medida de respuesta. |
@@ -2489,8 +2592,9 @@ palabras que la tabla anterior. El detalle está en la
 | **SymPy** | Librería de Python para matemática simbólica. **Ya no es obligatoria en este sistema**: se consideró para verificar automáticamente la equivalencia algebraica de la clave de respuestas, pero el profesor confirmó que no es necesaria y esa verificación pasó a ser una aprobación manual del profesor (ver [ADR-0004](../adr/0004-quitar-validacion-simbolica-obligatoria-de-la-clave.md)). |
 | **Recorte** | La imagen de la fila de una pregunta en revisión, con su número y sus cuatro burbujas, sin el código del estudiante. El worker la guarda al leer la hoja, y es lo que el docente mira para resolver la pregunta (RF-08). |
 | **Registro de resultados** | Archivo de solo agregado con un hecho por hoja leída: su estado, la lectura y la nota. Lo escribe solo el worker; lo que resuelve el docente va aparte, en el registro de revisiones, que escribe solo la API ([ADR-0023](../adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md)). |
-| **Presupuesto de carga** | Tope de lo que la ruta pública de carga deja entrar al almacén: hojas por lote, bytes por día y tamaño de la petición ([ADR-0022](../adr/0022-poner-un-presupuesto-de-carga-delante-del-almacen.md)). Lo que no cabe se responde con 413 o 429, sin que entre ninguna hoja. |
+| **Presupuesto de carga** | Tope de lo que la ruta de carga deja entrar al almacén: hojas por lote, bytes por día y tamaño de la petición ([ADR-0022](../adr/0022-poner-un-presupuesto-de-carga-delante-del-almacen.md)). Lo que no cabe se responde con 413 o 429, sin que entre ninguna hoja. |
 | **Preselección** | La opción que la pantalla de revisión trae ya elegida en una pregunta: la única intención que vio la lectura. Se ve igual que una elección del docente y no cuenta en la nota hasta que él guarda (ADR-0024). |
+| **Sesión** | El permiso con que un docente usa el sistema después de entrar con su correo y su contraseña: un token firmado por la API, con el correo y el vencimiento, que el sitio manda en cada petición ([ADR-0025](../adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md)). |
 | **STRIDE** | Clasificación de amenazas en seis categorías: suplantación, manipulación, repudio, divulgación de información, denegación de servicio y elevación de privilegios. Es el método del [modelo de amenazas](../evidencia/modelo-de-amenazas.md) de la S13. |
 | **TA** | *Teaching Assistant.* Asistente de cátedra; usuario operativo del sistema. |
 | **Umbral de confianza** | Valor mínimo de certeza de la detección OMR por debajo del cual una respuesta se envía a revisión manual en lugar de calificarse. Hoy es 70, configurable de 51 a 100 (`OMR_UMBRAL_DE_CONFIANZA`), y sin calibrar con hojas reales (R-04). |

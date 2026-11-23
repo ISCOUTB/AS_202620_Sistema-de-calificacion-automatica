@@ -41,3 +41,15 @@ def test_la_medicion_de_perdida_reporta_todas_las_hojas_con_la_cola_caida() -> N
     # daba 5).
     assert informe["archivos_escritos_en_el_almacen"] == 4
     assert informe["cumple"] is True
+
+
+def test_la_medicion_corre_sin_la_sesion_de_las_pruebas() -> None:
+    """Fuera de pytest no está la sustitución de `conftest.py`: la herramienta tiene que poner la
+    suya, o cada lote recibiría 401 y la medición daría cero hojas (ADR-0025)."""
+    from api.main import app, docente_de_la_sesion
+
+    app.dependency_overrides.pop(docente_de_la_sesion, None)
+
+    informe = medir_latencia(hojas=2, kilobytes=1, repeticiones=1)
+
+    assert informe["hojas_confirmadas"] == 2

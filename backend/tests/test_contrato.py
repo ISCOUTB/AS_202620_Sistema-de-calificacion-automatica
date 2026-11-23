@@ -55,6 +55,9 @@ RUTA_EXAMENES = "/examenes"
 RUTA_REVISION = "/examenes/{examen_id}/revision"
 RUTA_RESOLVER = "/examenes/{examen_id}/hojas/{hoja_id}/revision"
 RUTA_RECORTE = "/examenes/{examen_id}/hojas/{hoja_id}/preguntas/{numero}/recorte"
+RUTA_SESION = "/sesion"
+RUTA_CLAVE = "/examenes/{examen_id}/clave"
+RUTA_HABILITACION = "/examenes/{examen_id}/clave/habilitacion"
 
 
 @pytest.fixture(scope="module")
@@ -156,20 +159,23 @@ def test_la_version_del_contrato_es_la_declarada_en_el_codigo(contrato_publicado
     assert contrato_publicado["info"]["version"] == VERSION_DEL_CONTRATO
 
 
-def test_el_contrato_declara_las_nueve_rutas_que_la_api_expone(contrato_publicado):
+def test_el_contrato_declara_las_doce_rutas_que_la_api_expone(contrato_publicado):
     """Las rutas son lo primero que un consumidor busca; que desaparezca una es el cambio
     incompatible mas obvio que existe.
 
     De la ruta de distractores se exige ademas que publique su 503: es la degradacion que
     ADR-0013 promete cuando el proveedor de LLM falla, y un cliente que no sepa que existe la
     trataria como un error inesperado. Desde 1.2.0 se exige tambien su 429, el corte del
-    presupuesto de ADR-0015, y la ruta `GET /metricas` que lo publica."""
+    presupuesto de ADR-0015, y la ruta `GET /metricas` que lo publica. Desde 2.0.0, la ruta de
+    entrar (ADR-0025), y desde 2.1.0, las dos de la clave (ADR-0026)."""
     rutas = contrato_publicado["paths"]
 
     assert set(rutas) == {
         "/health", RUTA_CARGA, RUTA_DISTRACTORES, RUTA_METRICAS, RUTA_RESULTADOS, RUTA_EXAMENES,
-        RUTA_REVISION, RUTA_RESOLVER, RUTA_RECORTE,
+        RUTA_REVISION, RUTA_RESOLVER, RUTA_RECORTE, RUTA_SESION, RUTA_CLAVE, RUTA_HABILITACION,
     }
+    assert {"get", "put"} <= set(rutas[RUTA_CLAVE])
+    assert "post" in rutas[RUTA_HABILITACION]
     assert "get" in rutas[RUTA_REVISION]
     assert "post" in rutas[RUTA_RESOLVER]
     assert "image/png" in rutas[RUTA_RECORTE]["get"]["responses"]["200"]["content"]
@@ -260,16 +266,17 @@ def test_la_lista_de_examenes_no_publica_las_respuestas_de_la_clave(contrato_pub
     assert set(esquema["properties"]) == {"examen_id", "habilitada"}
 
 
-def test_la_revision_no_publica_la_clave_ni_el_codigo(contrato_publicado):
+def test_la_revision_no_publica_la_clave_y_trae_el_codigo(contrato_publicado):
     """`GET /examenes/{examen_id}/revision` es publica hasta A-05. El profesor dice que marco el
     estudiante y el sistema decide si es correcto, asi que ningun esquema de la revision lleva la
-    respuesta correcta, y la hoja no lleva el codigo del estudiante."""
+    respuesta correcta. La hoja si lleva el codigo del estudiante, que es como el profesor sabe de
+    quien es; es la unica ruta que lo publica, y por eso solo entran hojas sinteticas (AM-02)."""
     esquemas = contrato_publicado["components"]["schemas"]
     pregunta = set(esquemas["PreguntaEnRevisionEnRespuesta"]["properties"])
     hoja = set(esquemas["HojaEnRevisionEnRespuesta"]["properties"])
 
     assert not [campo for campo in pregunta | hoja if "correcta" in campo]
-    assert [campo for campo in hoja if "codigo" in campo] == ["codigo_completo"]
+    assert sorted(campo for campo in hoja if "codigo" in campo) == ["codigo", "codigo_completo"]
 
 
 def test_el_resultado_dice_si_la_nota_la_corrigio_el_profesor(contrato_publicado):
@@ -277,3 +284,19 @@ def test_el_resultado_dice_si_la_nota_la_corrigio_el_profesor(contrato_publicado
     esquema = contrato_publicado["components"]["schemas"]["ResultadoDeHojaEnRespuesta"]
 
     assert "revisada" in esquema["required"]
+
+
+def test_el_contrato_dice_que_rutas_piden_sesion(contrato_publicado):
+    """Un consumidor tiene que saber, leyendo el contrato, que debe entrar antes y con qué
+    encabezado (ADR-0025). Las públicas no declaran seguridad; las demás, el token y su 401."""
+    publicas = {("/health", "get"), (RUTA_SESION, "post"), (RUTA_METRICAS, "get")}
+    assert contrato_publicado["components"]["securitySchemes"]["HTTPBearer"]["scheme"] == "bearer"
+    for ruta, operaciones in contrato_publicado["paths"].items():
+        for metodo, operacion in operaciones.items():
+            if (ruta, metodo) in publicas:
+                assert "security" not in operacion, (ruta, metodo)
+            else:
+                assert operacion["security"] == [{"HTTPBearer": []}], (ruta, metodo)
+                assert "401" in operacion["responses"], (ruta, metodo)
+    entrar = contrato_publicado["paths"][RUTA_SESION]["post"]["responses"]
+    assert {"200", "401", "503"} <= set(entrar)

@@ -93,6 +93,7 @@ class HojaEnRevision {
     required this.preguntas,
     this.nombreArchivo,
     this.recibidaEn,
+    this.codigo,
   });
 
   final String hojaId;
@@ -107,6 +108,10 @@ class HojaEnRevision {
   /// Cuándo llegó la hoja, en UTC tal como lo manda la API. Los nombres se repiten de un lote a
   /// otro (`hoja1.jpg`), y la hora es lo que las distingue.
   final DateTime? recibidaEn;
+
+  /// El código del estudiante tal como se leyó, con `?` en los dígitos que no se leyeron. Nulo si
+  /// la lectura no lo trae. Es como el profesor sabe de quién es la hoja.
+  final String? codigo;
 
   int get pendientes => preguntas.where((p) => !p.resuelta).length;
 
@@ -134,6 +139,7 @@ class HojaEnRevision {
       ],
       nombreArchivo: nombre == null || nombre.trim().isEmpty ? null : nombre,
       recibidaEn: recibida == null ? null : DateTime.tryParse(recibida),
+      codigo: json['codigo'] as String?,
     );
   }
 }
@@ -142,12 +148,13 @@ const _meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', '
 
 /// «Subida el 16 nov, 14:32», en la hora del navegador del docente. Sin el paquete `intl`, como
 /// las cifras del panel.
-String llegadaLegible(DateTime instante) => 'Subida el ${_fechaLegible(instante)}';
+String llegadaLegible(DateTime instante) => 'Subida el ${fechaLegible(instante)}';
 
 /// «Editada el 19 nov, 14:40»: cuándo guardó el profesor por última vez en la hoja.
-String edicionLegible(DateTime instante) => 'Editada el ${_fechaLegible(instante)}';
+String edicionLegible(DateTime instante) => 'Editada el ${fechaLegible(instante)}';
 
-String _fechaLegible(DateTime instante) {
+/// «16 nov, 14:32», en la hora del navegador del docente.
+String fechaLegible(DateTime instante) {
   final local = instante.toLocal();
   final hora = local.hour.toString().padLeft(2, '0');
   final minuto = local.minute.toString().padLeft(2, '0');
@@ -231,17 +238,16 @@ Future<RevisionDelExamen> consultarRevision(String examenId, {http.Client? clien
 }
 
 /// Guarda lo que el profesor vio marcado en cada pregunta (nulo si ninguna opción vale) y devuelve
-/// la hoja con la nota recalculada. [por] queda registrado con cada decisión.
+/// la hoja con la nota recalculada. Quién lo resolvió no viaja: la API registra al docente de la
+/// sesión (ADR-0025).
 Future<ResultadoDeHoja> guardarRevision(
   String examenId,
   String hojaId,
-  String por,
   Map<int, String?> opciones, {
   http.Client? cliente,
 }) async {
   final uri = Uri.parse('${_ruta(examenId)}/hojas/${Uri.encodeComponent(hojaId)}/revision');
   final cuerpo = jsonEncode({
-    'por': por,
     'resoluciones': [
       for (final MapEntry(key: numero, value: opcion) in opciones.entries)
         {'numero': numero, 'opcion': opcion},

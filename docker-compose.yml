@@ -52,6 +52,11 @@ services:
       # solo `api` lo lee y se vacía al reiniciar el servicio.
       LLM_SOLICITUDES_POR_MINUTO: ${LLM_SOLICITUDES_POR_MINUTO:-6}
       LLM_SOLICITUDES_POR_DIA: ${LLM_SOLICITUDES_POR_DIA:-150}
+      # Inicio de sesión (ADR-0025). Sin los dos, nadie entra y la API sigue viva. La lista sale
+      # de `python -m herramientas.crear_docente`; el secreto, de cualquier texto largo al azar.
+      SESION_SECRETO: ${SESION_SECRETO:-}
+      DOCENTES: ${DOCENTES:-}
+      SESION_HORAS: ${SESION_HORAS:-12}
     volumes:
       - almacen_imagenes:/app/almacen_imagenes
     depends_on:

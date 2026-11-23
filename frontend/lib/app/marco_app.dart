@@ -30,10 +30,22 @@ enum Seccion {
 /// destinos lejos entre sí. Las cuatro pantallas viven en un [IndexedStack], así que cambiar de
 /// sección no pierde lo que el docente estaba escribiendo o el reporte de la última carga.
 class MarcoApp extends StatefulWidget {
-  const MarcoApp({super.key, required this.servicios, this.seccionInicial = Seccion.panel});
+  const MarcoApp({
+    super.key,
+    required this.servicios,
+    this.seccionInicial = Seccion.panel,
+    this.correo,
+    this.alSalir,
+  });
 
   final ServiciosApp servicios;
   final Seccion seccionInicial;
+
+  /// El correo de la sesión, para la barra superior (ADR-0025).
+  final String? correo;
+
+  /// Cierra la sesión; sin él, la barra no ofrece salir.
+  final VoidCallback? alSalir;
 
   @override
   State<MarcoApp> createState() => _MarcoAppState();
@@ -51,6 +63,10 @@ class _MarcoAppState extends State<MarcoApp> {
   /// Avisa cada vez que Revisión vuelve a la vista: la pantalla sigue viva mientras se mira otra
   /// sección, y lo subido en Carga no aparecía hasta recargar la página.
   final _revisionALaVista = ValueNotifier<int>(0);
+
+  /// Avisa que se guardó o se habilitó una clave en Pauta, para que la carga y la revisión
+  /// vuelvan a pedir la lista de exámenes: sin esto, uno nuevo no aparecía hasta recargar.
+  final _clavesCambiadas = ValueNotifier<int>(0);
   late Seccion _seccion = widget.seccionInicial;
 
   @override
@@ -66,6 +82,7 @@ class _MarcoAppState extends State<MarcoApp> {
     _examenParaRevisar.dispose();
     _revisionesGuardadas.dispose();
     _revisionALaVista.dispose();
+    _clavesCambiadas.dispose();
     super.dispose();
   }
 
@@ -109,6 +126,7 @@ class _MarcoAppState extends State<MarcoApp> {
             _nombresDeHojas.value = {..._nombresDeHojas.value, ...nombres},
         alRevisar: _irARevisar,
         revisionesGuardadas: _revisionesGuardadas,
+        clavesCambiadas: _clavesCambiadas,
         estadoApi: _estadoApi,
       ),
       PantallaRevision(
@@ -116,14 +134,21 @@ class _MarcoAppState extends State<MarcoApp> {
         consultarRevision: servicios.consultarRevision,
         guardarRevision: servicios.guardarRevision,
         urlDelRecorte: servicios.urlDelRecorte,
+        encabezadosDelRecorte: servicios.encabezadosDelRecorte,
         nombresDeHojas: _nombresDeHojas,
         examenPedido: _examenParaRevisar,
         alMostrarse: _revisionALaVista,
+        clavesCambiadas: _clavesCambiadas,
         alGuardar: () => _revisionesGuardadas.value++,
       ),
       PantallaPauta(
         proponerDistractores: servicios.proponerDistractores,
         estadoApi: _estadoApi,
+        listarExamenes: servicios.listarExamenes,
+        consultarClave: servicios.consultarClave,
+        guardarClave: servicios.guardarClave,
+        habilitarClave: servicios.habilitarClave,
+        alCambiarLaClave: () => _clavesCambiadas.value++,
       ),
     ];
 
@@ -142,7 +167,12 @@ class _MarcoAppState extends State<MarcoApp> {
     final ancha = MediaQuery.sizeOf(context).width >= QAnchos.riel;
 
     return Scaffold(
-      appBar: BarraSuperior(estado: _estadoApi, alReintentar: _comprobarApi),
+      appBar: BarraSuperior(
+        estado: _estadoApi,
+        alReintentar: _comprobarApi,
+        correo: widget.correo,
+        alSalir: widget.alSalir,
+      ),
       body: ancha
           ? Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,

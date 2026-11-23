@@ -10,7 +10,6 @@ import '../../../common/widgets/q_encabezado_pantalla.dart';
 import '../../../common/widgets/q_estado_vacio.dart';
 import '../../../common/widgets/q_pagina.dart';
 import '../../../common/widgets/q_tarjeta.dart';
-import '../../../common/widgets/q_titulo_seccion.dart';
 import '../../carga/data/servicio_examenes.dart';
 import '../../carga/data/servicio_resultados.dart';
 import '../../carga/views/widgets/tarjeta_examen.dart';
@@ -20,15 +19,18 @@ import '../data/servicio_revision.dart';
 /// decidir, y en cada pregunta el recorte de su fila para que el docente diga qué marcó el
 /// estudiante. El sistema decide con la clave si es correcto y recalcula la nota.
 ///
-/// La pantalla no recibe la clave ni el código del estudiante: las rutas son públicas hasta A-05.
-/// El nombre que escribe el docente queda con cada decisión (RF-10), sin verificar hasta entonces.
+/// La pantalla no recibe la clave. Sí recibe el código del estudiante, que es como el docente sabe
+/// de quién es cada hoja. Quién decide no se escribe: la API registra al docente de la sesión con
+/// cada decisión (RF-10, ADR-0025).
 class PantallaRevision extends StatefulWidget {
   const PantallaRevision({
     super.key,
     this.listarExamenes,
+    this.clavesCambiadas,
     this.consultarRevision,
     this.guardarRevision,
     this.urlDelRecorte,
+    this.encabezadosDelRecorte,
     this.nombresDeHojas,
     this.examenPedido,
     this.alMostrarse,
@@ -36,16 +38,22 @@ class PantallaRevision extends StatefulWidget {
   });
 
   final Future<List<ExamenConClave>> Function()? listarExamenes;
+
+  /// Avisa que se guardó o se habilitó una clave en Pauta: la lista de exámenes se vuelve a
+  /// pedir para que aparezca el nuevo, o su clave habilitada.
+  final Listenable? clavesCambiadas;
   final Future<RevisionDelExamen> Function(String examenId)? consultarRevision;
   final Future<ResultadoDeHoja> Function(
     String examenId,
     String hojaId,
-    String por,
     Map<int, String?> opciones,
   )? guardarRevision;
 
   /// Dónde pedir el recorte de una pregunta. Sin él, la pregunta se muestra sin imagen.
   final String Function(String examenId, String hojaId, int numero)? urlDelRecorte;
+
+  /// Con qué encabezados pedirlo: el token de la sesión, porque la ruta del recorte lo pide.
+  final Map<String, String> Function()? encabezadosDelRecorte;
 
   /// El nombre de archivo de cada hoja subida en esta sesión, por `hoja_id`.
   final ValueListenable<Map<String, String>>? nombresDeHojas;
@@ -69,7 +77,6 @@ const _ninguna = '-';
 
 class _PantallaRevisionState extends State<PantallaRevision> {
   final _examen = TextEditingController();
-  final _nombre = TextEditingController();
 
   List<ExamenConClave>? _examenes;
   bool _cargandoExamenes = false;
@@ -98,9 +105,9 @@ class _PantallaRevisionState extends State<PantallaRevision> {
     final pedido = widget.examenPedido?.value;
     if (pedido != null) _examen.text = pedido;
     _examen.addListener(_alCambiarElExamen);
-    _nombre.addListener(_redibujar);
     widget.examenPedido?.addListener(_alPedirExamen);
     widget.alMostrarse?.addListener(_alMostrarse);
+    widget.clavesCambiadas?.addListener(_pedirExamenesOtraVez);
     widget.nombresDeHojas?.addListener(_redibujar);
     if (widget.listarExamenes != null) {
       _cargandoExamenes = true;
@@ -115,9 +122,9 @@ class _PantallaRevisionState extends State<PantallaRevision> {
     _espera?.cancel();
     widget.examenPedido?.removeListener(_alPedirExamen);
     widget.alMostrarse?.removeListener(_alMostrarse);
+    widget.clavesCambiadas?.removeListener(_pedirExamenesOtraVez);
     widget.nombresDeHojas?.removeListener(_redibujar);
     _examen.dispose();
-    _nombre.dispose();
     super.dispose();
   }
 
@@ -136,6 +143,10 @@ class _PantallaRevisionState extends State<PantallaRevision> {
     final examen = _examenVisto;
     if (!mounted || examen == null || (_espera?.isActive ?? false)) return;
     _cargarRevision(examen);
+  }
+
+  void _pedirExamenesOtraVez() {
+    if (widget.listarExamenes != null) _pedirExamenes();
   }
 
   Future<void> _pedirExamenes() async {
@@ -293,7 +304,7 @@ class _PantallaRevisionState extends State<PantallaRevision> {
     if (guardar == null || examen == null || cambios.isEmpty) return;
     setState(() => _guardando = true);
     try {
-      final resultado = await guardar(examen, hoja.hojaId, _nombre.text.trim(), cambios);
+      final resultado = await guardar(examen, hoja.hojaId, cambios);
       if (!mounted) return;
       final nota = resultado.notaEnDecimas == null ? '' : notaLegible(resultado.notaEnDecimas!);
       _avisar(resultado.provisional ? 'Guardado. Nota provisional $nota.' : 'Guardado. Nota $nota.');
@@ -347,31 +358,15 @@ class _PantallaRevisionState extends State<PantallaRevision> {
               cargando: _cargandoExamenes,
               alReintentar: _fallaExamenes ? _volverAPedirExamenes : null,
             );
-            final nombre = QTarjeta(
-              padding: EdgeInsets.all(ancha ? QEspacios.lg : QEspacios.md),
-              child: TextField(
-                controller: _nombre,
-                enabled: !_guardando,
-                textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(
-                  labelText: 'Su nombre',
-                  helperText: 'Queda registrado con cada decisión.',
-                  prefixIcon: Icon(Icons.person_outline),
-                ),
-              ),
-            );
-            if (!ancha) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [examen, const SizedBox(height: QEspacios.md), nombre],
-              );
-            }
+            if (!ancha) return examen;
+            // En ancho conserva la mitad de la fila, la que tenía junto al nombre que ya no se
+            // pide: a todo el ancho, una lista de exámenes se vuelve una franja difícil de leer.
             return Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(child: examen),
                 const SizedBox(width: QEspacios.lg),
-                Expanded(child: nombre),
+                const Spacer(),
               ],
             );
           },
@@ -457,15 +452,12 @@ class _PantallaRevisionState extends State<PantallaRevision> {
     final textos = Theme.of(context).textTheme;
     final elegidas = _eleccionesDe(hoja);
     final cambios = _cambios(hoja);
-    final sinNombre = _nombre.text.trim().isEmpty;
-    final puedeGuardar = !_guardando && cambios.isNotEmpty && !sinNombre;
+    final puedeGuardar = !_guardando && cambios.isNotEmpty;
     final String indicacion;
     if (_guardando) {
       indicacion = 'Guardando…';
     } else if (cambios.isEmpty) {
       indicacion = 'Elija lo que marcó el estudiante.';
-    } else if (sinNombre) {
-      indicacion = 'Escriba su nombre para guardar.';
     } else {
       indicacion = cambios.length == 1
           ? 'Se guardará 1 pregunta.'
@@ -476,9 +468,26 @@ class _PantallaRevisionState extends State<PantallaRevision> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        QTituloSeccion(
-          titulo: _nombreDe(hoja),
-          descripcion: hoja.provisional ? 'Nota provisional $nota' : 'Nota $nota',
+        // El código va a la derecha, en la línea del nombre: es lo que dice de quién es la hoja.
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: [
+            Expanded(child: Text(_nombreDe(hoja), style: textos.headlineSmall)),
+            if (hoja.codigo case final codigo?) ...[
+              const SizedBox(width: QEspacios.md),
+              _CodigoDelEstudiante(
+                codigo: codigo,
+                completo: hoja.codigoCompleto,
+                estilo: textos.titleMedium,
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 2),
+        Text(
+          hoja.provisional ? 'Nota provisional $nota' : 'Nota $nota',
+          style: textos.bodyMedium?.copyWith(color: QColores.textoSuave),
         ),
         if (hoja.recibidaEn case final recibida?) ...[
           const SizedBox(height: QEspacios.xs),
@@ -503,6 +512,7 @@ class _PantallaRevisionState extends State<PantallaRevision> {
             recorte: pregunta.conRecorte && widget.urlDelRecorte != null && _examenVisto != null
                 ? widget.urlDelRecorte!(_examenVisto!, hoja.hojaId, pregunta.numero)
                 : null,
+            encabezados: widget.encabezadosDelRecorte?.call(),
             habilitada: !_guardando,
             alElegir: (opcion) => setState(() => elegidas[pregunta.numero] = opcion),
           ),
@@ -673,11 +683,44 @@ class _FilaDeHoja extends StatelessWidget {
         pendientes > 0 ? Icons.rate_review_outlined : Icons.task_alt_outlined,
         color: pendientes > 0 ? QColores.advertenciaTexto : QColores.exitoTexto,
       ),
-      title: Text(nombre, maxLines: 2, overflow: TextOverflow.ellipsis),
+      title: Row(
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
+        children: [
+          Expanded(child: Text(nombre, maxLines: 2, overflow: TextOverflow.ellipsis)),
+          if (hoja.codigo case final codigo?) ...[
+            const SizedBox(width: QEspacios.sm),
+            _CodigoDelEstudiante(codigo: codigo, completo: hoja.codigoCompleto),
+          ],
+        ],
+      ),
       subtitle: Text(lineas.join('\n')),
       trailing: QChipEstado(
         texto: nota,
         tono: hoja.provisional ? QTono.advertencia : QTono.exito,
+      ),
+    );
+  }
+}
+
+/// El código del estudiante, con cifras del mismo ancho para que quede alineado de una fila a otra.
+/// Si quedó incompleto va en el color de advertencia, con `?` donde no se leyó.
+class _CodigoDelEstudiante extends StatelessWidget {
+  const _CodigoDelEstudiante({required this.codigo, required this.completo, this.estilo});
+
+  final String codigo;
+  final bool completo;
+  final TextStyle? estilo;
+
+  @override
+  Widget build(BuildContext context) {
+    final base = estilo ?? Theme.of(context).textTheme.bodyMedium;
+    return Text(
+      codigo,
+      semanticsLabel: completo ? 'Código $codigo' : 'Código incompleto $codigo',
+      style: base?.copyWith(
+        color: completo ? QColores.textoSuave : QColores.advertenciaTexto,
+        fontFeatures: const [FontFeature.tabularFigures()],
       ),
     );
   }
@@ -691,11 +734,13 @@ class _TarjetaPregunta extends StatelessWidget {
     required this.recorte,
     required this.habilitada,
     required this.alElegir,
+    this.encabezados,
   });
 
   final PreguntaEnRevision pregunta;
   final String? elegida;
   final String? recorte;
+  final Map<String, String>? encabezados;
   final bool habilitada;
   final ValueChanged<String> alElegir;
 
@@ -731,6 +776,7 @@ class _TarjetaPregunta extends StatelessWidget {
                 constraints: const BoxConstraints(maxHeight: 96),
                 child: Image.network(
                   recorte,
+                  headers: encabezados,
                   fit: BoxFit.contain,
                   alignment: Alignment.centerLeft,
                   semanticLabel: 'La fila de la pregunta ${pregunta.numero} en la hoja',

@@ -16,7 +16,7 @@ void main() {
           'hojas': [
             {
               'hoja_id': 'h-1', 'nota_en_decimas': 49, 'provisional': true,
-              'codigo_completo': true, 'nombre_archivo': 'hoja1.jpg',
+              'codigo_completo': true, 'codigo': 'T20261105', 'nombre_archivo': 'hoja1.jpg',
               'recibida_en': '2026-11-16T19:32:00Z',
               'preguntas': [
                 {
@@ -41,10 +41,20 @@ void main() {
     final hoja = revision.hojas.single;
     expect((hoja.hojaId, hoja.notaEnDecimas, hoja.pendientes), ('h-1', 49, 0));
     expect(hoja.nombreArchivo, 'hoja1.jpg');
+    expect(hoja.codigo, 'T20261105');
     expect(hoja.recibidaEn, DateTime.utc(2026, 11, 16, 19, 32));
     final pregunta = hoja.preguntas.single;
     expect((pregunta.numero, pregunta.resuelta, pregunta.opcionResuelta), (7, true, null));
     expect(pregunta.burbujas[1].tipo, 'tenue');
+  });
+
+  test('Una hoja sin código leído llega con el código nulo', () {
+    final hoja = HojaEnRevision.desdeJson({
+      'hoja_id': 'h-1', 'nota_en_decimas': 30, 'provisional': true, 'codigo_completo': false,
+      'codigo': null, 'preguntas': [],
+    });
+
+    expect(hoja.codigo, isNull);
   });
 
   test('Cada pregunta trae la opción sugerida y cuándo se resolvió', () {
@@ -182,10 +192,9 @@ void main() {
       );
     });
 
-    final hoja = await guardarRevision('P2', 'h-1', 'Docente', {7: 'C', 9: null}, cliente: cliente);
+    final hoja = await guardarRevision('P2', 'h-1', {7: 'C', 9: null}, cliente: cliente);
 
     expect(enviado, {
-      'por': 'Docente',
       'resoluciones': [
         {'numero': 7, 'opcion': 'C'},
         {'numero': 9, 'opcion': null},
@@ -204,7 +213,7 @@ void main() {
     );
 
     await expectLater(
-      guardarRevision('P2', 'h-1', 'Docente', {8: 'A'}, cliente: cliente),
+      guardarRevision('P2', 'h-1', {8: 'A'}, cliente: cliente),
       throwsA(isA<ExcepcionDeRevision>().having(
         (e) => e.mensaje,
         'mensaje',

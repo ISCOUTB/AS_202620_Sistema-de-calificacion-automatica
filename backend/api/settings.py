@@ -62,3 +62,12 @@ LLM_SOLICITUDES_POR_DIA = int(os.environ.get("LLM_SOLICITUDES_POR_DIA", SOLICITU
 # (`presupuesto.py`).
 CARGA_HOJAS_POR_LOTE = int(os.environ.get("CARGA_HOJAS_POR_LOTE", HOJAS_POR_LOTE))
 CARGA_MB_POR_DIA = int(os.environ.get("CARGA_MB_POR_DIA", MB_POR_DIA))
+
+# Inicio de sesión (A-05, ADR-0025). El secreto firma los tokens de sesión y la lista dice quién
+# puede entrar, en la forma `correo=cifrada` que imprime `python -m herramientas.crear_docente`.
+# Los dos llegan por el entorno y nunca van al repositorio (RNF-11). Sin alguno de los dos nadie
+# entra: la API falla cerrada, y `/health` sigue respondiendo.
+SESION_SECRETO = os.environ.get("SESION_SECRETO", "")
+DOCENTES = os.environ.get("DOCENTES", "")
+# Cuánto vale un token. Corto a propósito: no se puede revocar antes de vencer (ADR-0025).
+SESION_HORAS = int(os.environ.get("SESION_HORAS", "12"))

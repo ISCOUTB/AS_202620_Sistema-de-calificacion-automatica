@@ -61,7 +61,15 @@ from infraestructura.modelo import (
 # 1.8.0 agrega la revision manual (RF-08): las preguntas que esperan al profesor, su recorte y la
 # ruta que guarda lo que resolvio, mas el campo `revisada` en el resultado de cada hoja. Todo
 # agrega; un cliente que no conoce `revisada` recibe lo mismo de antes.
-VERSION_DEL_CONTRATO = "1.8.0"
+#
+# 2.0.0 agrega el inicio de sesion (A-05, ADR-0025): `POST /sesion` da un token, y todas las rutas
+# salvo `/health`, `/metricas` y la de entrar lo piden en `Authorization: Bearer`. Sube la mayor
+# porque un cliente de 1.8.0 recibe 401 donde antes recibia 200. La solicitud de revision ya no
+# lleva `por`: quien resuelve es el docente de la sesion, y un `por` que llegue se ignora.
+#
+# 2.1.0 agrega la clave de un examen (A-04, ADR-0026): leerla, registrarla y habilitarla. Solo
+# agrega rutas, asi que sube la menor.
+VERSION_DEL_CONTRATO = "2.1.0"
 
 EstadoDeHoja = Literal["encolada", "pendiente_de_encolar"]
 
@@ -171,8 +179,8 @@ class RespuestaDeCarga(BaseModel):
 class ResultadoDeHojaEnRespuesta(BaseModel):
     """Como quedo una hoja despues de leerla y calificarla.
 
-    **No lleva el codigo del estudiante.** La API no tiene inicio de sesion hasta A-05, y esta
-    ruta es tan publica como las demas; el codigo queda en el registro del servidor (AM-02)."""
+    **No lleva el codigo del estudiante.** La pantalla de carga no lo necesita: queda en el
+    registro del servidor y en la revision, que es donde el profesor lo usa."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -253,7 +261,10 @@ class PreguntaEnRevisionEnRespuesta(BaseModel):
         description="La opcion que el profesor vio marcada, o nula si dijo que ninguna vale."
     )
     resuelta_por: str | None = Field(
-        description="El nombre que escribio quien la resolvio. Sin verificar hasta A-05."
+        description=(
+            "Quien la resolvio: el correo de su sesion desde ADR-0025; en las resueltas antes, el"
+            " nombre que escribio a mano, sin verificar."
+        )
     )
     resuelta_en: datetime | None
     opcion_sugerida: OpcionDeRespuesta | None = Field(
@@ -266,7 +277,7 @@ class PreguntaEnRevisionEnRespuesta(BaseModel):
 
 
 class HojaEnRevisionEnRespuesta(BaseModel):
-    """Una hoja con preguntas en revision, con su nota vigente. Sin el codigo del estudiante."""
+    """Una hoja con preguntas en revision, con su nota vigente y el codigo del estudiante."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -281,6 +292,15 @@ class HojaEnRevisionEnRespuesta(BaseModel):
     )
     recibida_en: datetime | None = Field(
         default=None, description="Cuando quedo registrada la hoja, en UTC; nulo si no se sabe."
+    )
+    codigo: str | None = Field(
+        default=None,
+        description=(
+            "El codigo del estudiante tal como se leyo: la T y ocho digitos, con ? en los que no se"
+            " leyeron. Nulo si la lectura no lo trae. Es un dato personal: la ruta pide sesion"
+            " (ADR-0025), pero sin cursos todavia cualquier docente con cuenta ve todas las hojas"
+            " (EC-06)."
+        ),
     )
 
 
@@ -300,16 +320,15 @@ class ResolucionEnSolicitud(BaseModel):
 
 
 class SolicitudDeRevision(BaseModel):
-    """Lo que el profesor resolvio en una hoja, todo junto. `por` queda registrado con cada
-    resolucion (RF-10); es un nombre escrito a mano hasta A-05."""
+    """Lo que el profesor resolvio en una hoja, todo junto. Quien lo resolvio no viaja aqui: es el
+    docente de la sesion, y queda registrado con cada resolucion (RF-10, ADR-0025)."""
 
-    por: str = Field(min_length=1, max_length=80)
     resoluciones: list[ResolucionEnSolicitud] = Field(min_length=1, max_length=100)
 
 
 class ExamenEnRespuesta(BaseModel):
-    """Un examen con clave registrada. **No lleva las respuestas**: la ruta es publica hasta A-05,
-    y para elegir el examen basta con su identificador."""
+    """Un examen con clave registrada. **No lleva las respuestas**: para elegir el examen basta con
+    su identificador, y la clave no sale del servidor."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -492,3 +511,40 @@ class RespuestaDeMetricas(BaseModel):
     presupuesto_de_distractores: EstadoDelPresupuestoEnRespuesta
     cache_de_distractores: EstadoDeLaCacheEnRespuesta
     presupuesto_de_carga: EstadoDelPresupuestoDeCargaEnRespuesta
+
+
+class SolicitudDeSesion(BaseModel):
+    """El correo y la contrasena de un docente de la lista (ADR-0025)."""
+
+    correo: str = Field(min_length=3, max_length=254)
+    contrasena: str = Field(min_length=1, max_length=200)
+
+
+class SesionEnRespuesta(BaseModel):
+    """Una sesion abierta: el token que va en `Authorization: Bearer` y hasta cuando vale."""
+
+    token: str
+    correo: str = Field(description="El correo con el que quedo la sesion, en minusculas.")
+    vence: datetime = Field(description="Desde este momento, en UTC, el token deja de valer.")
+
+
+class SolicitudDeClave(BaseModel):
+    """Las respuestas correctas del examen, la de la pregunta 1 primero. Que quepan en la hoja (de 1
+    a 40, cada una entre A y D) lo decide `autoria`, con un mensaje para el docente."""
+
+    respuestas: list[str] = Field(max_length=100)
+
+
+class ClaveEnRespuesta(BaseModel):
+    """La clave de un examen, para el docente que la registra (ADR-0026). Las rutas de la clave
+    piden sesion; la revision y la lista de examenes siguen sin las respuestas."""
+
+    examen_id: str
+    respuestas: list[str] = Field(description="La respuesta correcta de cada pregunta, desde la 1.")
+    habilitada_por: str | None = Field(
+        description="El correo del docente que la habilito; nulo mientras no este habilitada."
+    )
+    habilitada_en: datetime | None = Field(description="Cuando se habilito, en UTC.")
+    se_puede_cambiar: bool = Field(
+        description="Falso si ya hay hojas del examen calificadas con ella (409 al cambiarla)."
+    )

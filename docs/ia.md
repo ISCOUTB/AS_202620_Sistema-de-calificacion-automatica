@@ -6,7 +6,7 @@ Este documento registra el uso de herramientas de IA durante el desarrollo del p
 
 Este registro documenta IA como herramienta de construcción (apoyo para redactar, diseñar y documentar). El modelo de lenguaje que el sistema usa para proponer distractores diagnósticos (RF-11, función opcional que no interviene en la calificación) es IA como componente del sistema: se documenta en el aspecto A-06 y en su evaluación (`docs/evidencia/evaluacion-distractores.md`), no aquí.
 
-**La entrada más reciente es la [23](#entrada-23), la cámara y la preselección en la revisión** (2026-11-19 y 2026-11-20): el botón «Tomar foto» en el celular, y la regla de ADR-0024, que trae elegida la única marca de una pregunta en revisión y acepta la de una columna del código, con su medición, construidos con Claude. **Lo rechazado, con su motivo técnico:** aceptar sola la única marca, como pedía el planteamiento inicial, porque el sistema decidiría lo dudoso sin el docente (RF-03); distinguir la preselección con un botón de confirmar por pregunta, porque es el toque que se quería ahorrar; calcular la sugerencia en `dashboard`, que no puede importar `omr`; y una cámara propia con `getUserMedia`, por la resolución. **Lo corregido:** la medición del código solo tenía borrones de menos de 10 de confianza, cuando en las fotos llegaron a 35 (lo encontró una revisión independiente); y al probar en local, «Revisar» no traía las hojas recién subidas y la lista mezclaba revisadas con pendientes. **Lo aceptado:** el corte en 40, la preselección igual a una elección del docente y sin contar en la nota hasta guardar, y cero sugerencias equivocadas y cero dígitos mal aceptados como condición.
+**La entrada más reciente es la [24](#entrada-24), el inicio de sesión y la clave desde la aplicación** (2026-11-21 y 2026-11-22): A-05 en parte con [ADR-0025](adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md), la entrada con correo y contraseña de una lista cifrada en el servidor y el token en todas las rutas salvo la sonda de vida y las métricas, y A-04 en parte con [ADR-0026](adr/0026-registrar-y-habilitar-la-clave-desde-la-aplicacion.md), la clave registrada y habilitada desde la pantalla de pauta, construidos con Claude a partir de un diseño hecho en Stitch. **Lo rechazado, con su motivo técnico:** del diseño, entrar con Microsoft 365 o SAVIO y recuperar la contraseña, que el sistema no hace, y un pie que afirmaba autenticación federada y cumplimiento legal sin que nadie lo verificara; una «pasarela» simulada, que pedía credenciales con aspecto de Microsoft o dejaba entrar sin contraseña; una cookie, porque en Flutter web los recortes se bajan sin credenciales; JWT, por una dependencia nueva para un token que solo lee nuestra API; y recalcular las notas al cambiar una clave, por el riesgo antes de la entrega. **Lo corregido:** la cookie la había recomendado primero la IA; un token con caracteres que no son ASCII hacía responder 500; y, a pedido de Sebastián, cerrar sesión pide confirmación. **Lo aceptado:** las cuentas en el panel, el token de 12 horas, `/metricas` abierta y la condición de AM-02 sin cambio: solo hojas sintéticas mientras no haya cursos.
 
 **La entrada [21](#entrada-21) es la de la lectura de las hojas y su calificación** (2026-11-02 a 2026-11-06): A-02 y A-03 con la revisión manual de las preguntas dudosas (RF-08), el prototipo de R-05, las mediciones de EC-01 a EC-04 y ADR-0023, construidos con Claude. **Lo rechazado, con su motivo técnico:** detectar los círculos y ordenarlos, como traía el prompt de partida, porque uno que no se detecta corre a todos los siguientes sin aviso; un umbral para toda la hoja, porque con la sombra de una foto las burbujas vacías salían llenas; la burbuja más llena como respuesta, porque elige entre candidatas (RF-03); la hoja A4, porque impresa en carta pierde las marcas de abajo; el resultado en la bitácora, porque tendría dos escritores; y mostrar la respuesta correcta en la revisión, porque las rutas son públicas. **Lo corregido al ejecutar:** el brillo del grafito se detectaba contando puntos claros, que se perdían con un poco de desenfoque; la resolución mínima subió de 3,5 a 7,5 px/mm; y al documentar, un PNG de 120 KB mataba al worker por memoria en cada reinicio (AM-16), y se cerró con un tope por encabezado y con que la muerte del worker cuente como un intento. **Lo aceptado:** ADR-0023, aceptado por el equipo el 6-nov, las fotos preparadas en el navegador, las notas sin el código del estudiante y RF-08 antes de A-05, solo con hojas sintéticas (AM-02).
 
@@ -610,3 +610,67 @@ Fecha, actividad realizada, herramienta utilizada, respuesta obtenida (resumen),
 - **Justificación:** dos lecciones.
   - **Lo que pide el usuario y lo que necesita pueden ser distintos.** El pedido era que la marca sola contara; lo que hacía falta era no elegir a mano lo que ya se veía. La preselección da lo segundo sin romper la regla de no decidir lo dudoso.
   - **Una medición que no llega al caso difícil no dice nada de él.** Los borrones de la medición original nunca se acercaban al corte, así que el cero no probaba la regla nueva. Lo vio quien no la había escrito.
+
+### Entrada 24
+
+- **Fecha:** 2026-11-21 y 2026-11-22
+- **Actividad realizada:** el inicio de sesión ([ADR-0025](adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md)): la entrada con correo y
+  contraseña, el token en todas las rutas salvo la sonda de vida y las métricas, y la revisión a
+  nombre del docente de la sesión, con el código del estudiante a la vista. Y la clave de cada examen
+  ([ADR-0026](adr/0026-registrar-y-habilitar-la-clave-desde-la-aplicacion.md)): registrarla y habilitarla desde la pantalla de pauta, que hasta ahora se
+  escribía a mano y se copiaba al volumen por consola.
+- **Herramienta utilizada:** Claude (Anthropic) en Claude Code, en el computador de Sebastián, con un
+  clon desechable del repositorio, Flutter para el sitio y un contenedor con la imagen del backend
+  para las pruebas y para correr la API con uvicorn. Stitch, para el diseño de la pantalla de entrada
+  que trajo el equipo.
+- **Prompt utilizado (resumen):** construir el inicio de sesión a partir de un diseño en HTML hecho
+  con Stitch, con las cuentas de los docentes en una lista del servidor, y dejarlo listo para que el
+  equipo haga los commits. Después, que la clave de los exámenes se pueda subir desde la aplicación.
+- **Respuesta obtenida (resumen):**
+  - Lo que el diseño prometía y el sistema no cumple: entrar con SAVIO o Microsoft 365, recuperar la
+    contraseña, un pie con autenticación federada, TLS 1.3 y la Ley 1581, y un carrusel con fotos
+    generadas del campus.
+  - El módulo `identidad` con scrypt y un token firmado de la biblioteca estándar, la sesión en cada
+    ruta y la pantalla de entrada, con sus pruebas y una verificación contra uvicorn.
+  - Tres commits (identidad, API y sitio), cada uno con sus pruebas en verde.
+  - Para la clave, la recomendación de ponerla en la misma rama, después del inicio de sesión, y
+    dos commits más (API y sitio).
+- **Quién hizo qué con lo generado:** Sebastián eligió las cuentas en una lista de Dokploy y qué
+  quitar del diseño, pidió la confirmación al cerrar sesión y quitar una ayuda redundante, y lo probó
+  en local. Para la clave decidió cuándo se puede cambiar, la cuadrícula con el campo para pegar y el
+  cuadro que confirma lo pegado. Susana subió `identidad`, Sebastián la API y la clave, y Josué el
+  sitio. María subió los ADR-0025 y ADR-0026 y el arc42; Susana, esta entrada y el modelo de
+  amenazas; Josué, `aspectos.md`, el C4 y el README. El PR lo revisa Josué, el código y los
+  documentos.
+- **Qué se aceptó:**
+  - **Las cuentas en una variable del servidor**, cifradas con scrypt, en vez de una tabla en
+    Postgres, que sigue sin uso (R-06).
+  - **El token en `Authorization: Bearer`**, que lleva también cada recorte.
+  - **Un formato propio con la biblioteca estándar** en vez de JWT: ninguna dependencia nueva.
+  - **`/metricas` abierta:** solo publica cuentas de los presupuestos y la caché.
+  - **La clave se cambia mientras ninguna hoja tenga nota,** y cambiarla la deja sin habilitar.
+- **Qué se rechazó y se corrigió:**
+  - **Una «pasarela» que simulara entrar con Microsoft 365:** o pedía credenciales en una pantalla
+    con aspecto de Microsoft, o dejaba entrar sin contraseña. Se quitaron ese botón y la recuperación
+    de la contraseña. Lo decidió Sebastián.
+  - **El pie de autenticación federada, TLS 1.3 y la Ley 1581**, porque nadie lo verificó, y el
+    carrusel, porque sus fotos eran generadas y no de la UTB.
+  - **Una cookie para la sesión, que la IA había recomendado primero:** en Flutter web las imágenes
+    se bajan por XHR sin credenciales, así que los recortes se habrían quedado sin imagen. Se vio en
+    el código del SDK (`_network_image_web.dart`) antes de construir.
+  - **JWT con PyJWT:** una dependencia más para un token que solo lee nuestra API.
+  - **Recalcular las notas al cambiar una clave:** toca el registro de resultados y las revisiones ya
+    resueltas, demasiado riesgo antes de la entrega.
+  - **Una tercera rama para la clave:** sumaba un ciclo de PR, revisión y merge el último día.
+  - **Corregido al construir:** un token con caracteres que no son ASCII hacía fallar la comparación
+    de la firma, y la API respondía 500 en vez de 401; y a 320 px el encabezado de la entrada se
+    desbordaba. En la clave, una tarjeta con el mismo nombre que otra de la pantalla de pauta, y la
+    lista de exámenes de la carga, que no veía una clave nueva hasta recargar la página.
+  - **Corregido a pedido de Sebastián:** cerrar sesión con un toque y sin confirmar, y la ayuda «El
+    correo con el que le dieron acceso a QuantIA», que explicaba lo obvio.
+- **Justificación:** dos lecciones.
+  - **Un diseño generado trae promesas que el sistema no cumple.** El de Stitch ofrecía entrar con la
+    cuenta de la universidad y afirmaba cumplir una ley. Ante un jurado, un botón que no hace nada o
+    una afirmación sin verificar cuesta más que no tenerlos.
+  - **Una recomendación se comprueba en el código de quien la va a ejecutar.** La cookie parecía la
+    opción más segura, y en Flutter web habría dejado la revisión sin recortes.
