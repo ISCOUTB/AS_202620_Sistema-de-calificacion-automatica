@@ -36,38 +36,6 @@ Detalle en [Entorno desplegado, en detalle](#entorno-desplegado-en-detalle).
 - **Revisión con la opción ya elegida (ADR-0024):** la única marca con 40 o más de confianza llega
   elegida; en las fotos, 25 de 28 bien y 0 equivocadas, y 0 en 1 163 preguntas sintéticas.
 
-## Evidencia S14: medición de atributos de calidad
-
-- **Qué se midió:** los cuatro escenarios de la lectura y la calificación, EC-01 a EC-04, contra el
-  umbral que declara la sección 10 del arc42 desde la S2, con **tres repeticiones** de cada uno.
-- **Resultado:**
-  - **EC-01**, 100 % de marcas claras bien leídas, contra ≥98 %. Cumple, con hojas sintéticas (R-01).
-  - **EC-02**, 100 % de las ambiguas a revisión, contra ≥99 %, con 0 errores silenciosos en 36 000
-    preguntas. Cumple, con el umbral de 70 sin calibrar (R-04).
-  - **EC-03**, p95 de 1,22 s por hoja, contra ≤5 s. Cumple en local.
-  - **EC-04**, 600 de 600 hojas, cada lote de 200 en 3,5 a 3,6 min, contra ≤10 min. Cumple en
-    tiempo, en local; la CPU y la memoria del servidor no se midieron.
-- **Entorno:** local, no el desplegado, con los topes de CPU del servidor. Medir EC-03 y EC-04 en el
-  servidor es R-37.
-- **Revisión entre pares:** **no se realizó.** El profesor estuvo incapacitado la semana 14 y no
-  hubo clases, así que el equipo no recibió señalamientos. La sección 11.2 del arc42 lo deja
-  dicho, y la 11.3 recoge lo que dejó la medición, con su estado.
-
-| Lo que revisa la ficha | Dónde está |
-|---|---|
-| Escenario medido, con el umbral declarado en arc42 §10 | [`medicion-s14.md`, sección 1](docs/evidencia/medicion-s14.md#1-los-escenarios-y-su-umbral-como-están-en-la-sección-10) · [arc42 §10.2](docs/arc42/arc42-template-ES.md#102-escenarios-de-calidad-priorizados), fila «Resultado medido (S14)» de EC-01 a EC-04 |
-| Procedimiento con herramienta, carga y repeticiones | [sección 2](docs/evidencia/medicion-s14.md#2-procedimiento) · [`medir_lectura.py`](backend/herramientas/medir_lectura.py) · [`medir_procesamiento.py`](backend/herramientas/medir_procesamiento.py) · [`repetir-local.sh`](docs/evidencia/medicion-s14/repetir-local.sh) |
-| Medición reproducible por otra persona | [`docs/evidencia/medicion-s14/`](docs/evidencia/medicion-s14/): informes, registros y muestras de las doce corridas · [sección 7](docs/evidencia/medicion-s14.md#7-reproducibilidad) y [sección 10](docs/evidencia/medicion-s14.md#10-cómo-repetirla) |
-| Resultado contrastado con el umbral, con conclusión | [tabla «Resultado»](docs/evidencia/medicion-s14.md#resultado) y secciones 3 a 5 |
-| Entorno de la medición | [sección 6](docs/evidencia/medicion-s14.md#6-entorno-de-la-medición): local, y qué cambia eso en el número |
-| arc42 §11 con lo señalado por los pares | [§11.2](docs/arc42/arc42-template-ES.md#112-revisión-entre-pares-s14): la revisión no se hizo · [§11.3](docs/arc42/arc42-template-ES.md#113-lo-que-dejó-la-medición-de-la-s14): lo que dejó la medición · R-37 |
-| Estado de cada señalamiento | Columna «Estado» de §11.2 y §11.3: corregido, asumido o pendiente |
-| Evidencia del aspecto medido | [`docs/aspectos.md`](docs/aspectos.md#tabla-de-trazabilidad), columna «Evidencia» de A-02 y A-03 |
-
-**Después de la S14** se construyeron A-04 y, en parte, A-05 (ADR-0026 y ADR-0025). Siguen
-pendientes medir EC-03 y EC-04 en el servidor (R-37) y calibrar el umbral con hojas escaneadas
-(R-01, R-04).
-
 ## Lectura y calificación de las hojas (A-02, A-03)
 
 - **Construidas**, con la revisión manual de las preguntas dudosas (RF-08), en
@@ -86,186 +54,28 @@ pendientes medir EC-03 y EC-04 en el servidor (R-37) y calibrar el umbral con ho
 | Código | `backend/omr/`, `backend/calificacion/`, `backend/dashboard/`, `backend/worker/main.py` |
 | Cómo probarlo en un computador | [Cómo se recorre la lectura](#cómo-se-recorre-la-lectura) |
 
-## Evidencia S13: modelado de amenazas
+## Dónde está la evidencia
 
-- **Amenazas:** 15, con STRIDE sobre el Nivel 2 del C4, cada una con probabilidad, impacto,
-  mitigación, dueño y estado (`docs/evidencia/modelo-de-amenazas.md`). La primera, AM-01, la carga
-  pública que llenaba el disco compartido, se cerró: 250 hojas por lote, 256 MB por día y 100 MB por
-  petición (ADR-0022).
-- **Dependencias:** OSV-Scanner en el CI, antes de publicar el despliegue. `certifi` vulnerable,
-  corregido; 0 en el frontend.
-- **Privacidad:** la hoja, el nombre del archivo y la IP del docente, con base en la Ley 1581 y la
-  autorización que recoge la UTB (arc42 §8.7). Aceptadas, con su motivo: arc42 §11.1.
+La documentación vive en `docs/`. Esta tabla dice dónde está cada cosa.
 
 | Qué | Dónde |
 |---|---|
-| Tabla de amenazas, plan, componente generativo, dependencias y privacidad | [`modelo-de-amenazas.md`](docs/evidencia/modelo-de-amenazas.md) |
-| La mitigación estructural | [ADR-0022](docs/adr/0022-poner-un-presupuesto-de-carga-delante-del-almacen.md) · [`test_presupuesto_de_carga.py`](backend/tests/test_presupuesto_de_carga.py) |
-| Análisis de dependencias en el pipeline | job `dependencias` de [`ci.yml`](.github/workflows/ci.yml) · [run](https://github.com/ISCOUTB/AS_202620_Sistema-de-calificacion-automatica/actions/runs/41328819502) |
-| Arquitectura de seguridad, privacidad y amenazas aceptadas | [arc42 §8.6](docs/arc42/arc42-template-ES.md#86-seguridad), [§8.7](docs/arc42/arc42-template-ES.md#87-privacidad-y-datos-personales) y [§11.1](docs/arc42/arc42-template-ES.md#111-amenazas-aceptadas-s13) |
-
-## Evidencia: consistencia de los datos y caché
-
-Lo que se entrega: la tabla operación → garantía de consistencia, el diseño de una caché con su
-política de invalidación y el ADR de la decisión de datos más costosa de revertir. Las tres cosas
-están en el código, con pruebas, y no solo en los documentos.
-
-- **Tabla operación → consistencia** ([`consistencia-y-cache.md`](docs/evidencia/consistencia-y-cache.md), sección 2): diez
-  operaciones, C-01 a C-10, cada una con la garantía que da, la que **no** da, el archivo y la
-  línea, y la prueba. Por ejemplo: lo confirmado al docente ya está escrito con `fsync`; la carga es
-  atómica por hoja y no por lote; la cola va detrás de la bitácora y nunca al revés; el worker
-  procesa como mucho una vez por trabajo; el presupuesto es linealizable dentro del proceso.
-- **La decisión de datos más costosa de revertir** ([ADR-0018](docs/adr/0018-dar-a-la-hoja-una-identidad-propia-y-derivar-su-estado-de-la-bitacora.md)): la **identidad de la hoja**.
-  El ADR recorre las demás decisiones de datos con lo que costaría revertir cada una, y esta es la
-  única que no está detrás de un puerto y cuyo costo crece con cada registro. Hasta ahora era
-  implícita (el `trabajo_id`) y no dejaba recalificar una hoja sin chocar con la idempotencia de
-  ADR-0016. Se separa un `hoja_id` propio y la bitácora pasa a ser la fuente de verdad del estado.
-- **Caché con su invalidación** ([ADR-0019](docs/adr/0019-guardar-en-cache-las-propuestas-de-distractores.md)): las propuestas del proveedor de LLM se guardan
-  24 horas, y la misma pregunta repetida no llama al proveedor ni gasta cupo. Se invalida por
-  versión (el modelo y la huella de las instrucciones van en la clave), por tiempo, por capacidad y
-  a pedido del profesor («Pedir otras propuestas» manda `otras: true`). Se guarda sin filtrar, así
-  que la regla corre en cada lectura. Nunca guarda el estado de una hoja.
-- **Probado:** 19 pruebas nuevas, validadas provocando la falla con diez mutaciones; el contrato
-  pasa a 1.4.0, solo agregando.
-
-| Lo que se pide | Dónde está |
-|---|---|
-| Tabla operación → garantía de consistencia | [`consistencia-y-cache.md`](docs/evidencia/consistencia-y-cache.md), sección 2, filas C-01 a C-10, cada una con su prueba |
-| Diseño de caché con su política de invalidación | [`consistencia-y-cache.md`](docs/evidencia/consistencia-y-cache.md), sección 3 · [ADR-0019](docs/adr/0019-guardar-en-cache-las-propuestas-de-distractores.md) · [`autoria/cache.py`](backend/autoria/cache.py) · [`test_cache_de_propuestas.py`](backend/tests/test_cache_de_propuestas.py) (13 pruebas, una mutación por regla) |
-| ADR de la decisión de datos más costosa de revertir | [ADR-0018](docs/adr/0018-dar-a-la-hoja-una-identidad-propia-y-derivar-su-estado-de-la-bitacora.md), con la tabla que compara lo que costaría revertir cada decisión de datos · [`test_identidad_de_la_hoja.py`](backend/tests/test_identidad_de_la_hoja.py) (6 pruebas) |
-| Correspondencia con el repositorio | Cada fila de la tabla cita archivo, línea y prueba; el código está en `ingesta/recepcion.py`, `infraestructura/bitacora.py`, `autoria/cache.py` y `api/main.py`, y el contrato en [`openapi.json`](docs/contrato/openapi.json) 1.4.0 |
-| Documentación sincronizada | arc42 §5.1, §6.2, §6.4, §8.3, §8.5 (nueva), §9 y §11 (R-26 y R-27) · [C4](docs/c4/doc-c4.md) Nivel 2, relación 8, y Nivel 3, relaciones 3, 11 y 12 · [`aspectos.md`](docs/aspectos.md), filas A-01 y A-06 |
-| Uso de IA | [`docs/ia.md`, entrada 17](docs/ia.md#entrada-17) |
-
-## Evidencia S11: fallos parciales y decisión de extracción
-
-La integración principal es la **cola de trabajos** (API → Redis → worker): toda hoja aceptada pasa
-por ella. La S11 la recorrió con los tres casos que pide, y también las otras dos integraciones, el
-proveedor de LLM y el sitio frente a la API.
-
-- **Tabla de modos de fallo** ([`modos-de-fallo.md`](docs/evidencia/modos-de-fallo.md)): 13 modos, MF-01 a MF-13, cada uno con
-  su mitigación, el archivo y la línea, la prueba y su estado. 10 tienen prueba automática; MF-12
-  está implementado sin prueba de su espera, MF-13 está probado solo en el sitio, y MF-06 (el
-  worker que muere a mitad) y la detección de duplicados en la API quedan declarados, con riesgo y
-  plan.
-- **Encontrado al medir:** con Redis lento, un lote de 200 hojas tardaba **10,017 s** en
-  confirmarse, fuera del techo de 10 s de EC-07. Con [ADR-0016](docs/adr/0016-acotar-la-espera-de-la-cola-y-hacer-idempotente-al-worker.md), **2,017 s**.
-- **Idempotencia:** el worker procesa una sola vez el trabajo que la cola entrega dos veces, con
-  `SET trabajo-visto:<id> NX EX`. No hay saga: ninguna transacción cruza servicios, y la recepción
-  se recupera hacia adelante desde la bitácora.
-- **Decisión de extracción:** [ADR-0017](docs/adr/0017-no-extraer-ningun-modulo-del-monolito-todavia.md), **no extraer ningún módulo todavía**, evaluado
-  contra tres opciones de extracción con siete criterios, y con los datos que lo harían revisar.
-- **CI:** el paso «Modos de fallo de las integraciones (S11)» de [`ci.yml`](.github/workflows/ci.yml).
-
-| Lo que pide la S11 | Dónde está |
-|---|---|
-| Tabla de modos de fallo de la integración principal: no responde, responde tarde, responde dos veces | [`modos-de-fallo.md`](docs/evidencia/modos-de-fallo.md), sección 2: MF-01 a MF-06 para la cola, y MF-07 a MF-13 para el proveedor de LLM y el sitio |
-| Una mitigación asignada a cada modo | La misma tabla, columnas «Mitigación asignada», «Dónde está» y «Prueba» |
-| Correspondencia entre lo declarado y lo implementado, o lo pendiente con plan | [`modos-de-fallo.md`](docs/evidencia/modos-de-fallo.md), sección 3 · riesgos R-22 a R-25 en el [arc42 §11](docs/arc42/arc42-template-ES.md#11-risks-and-technical-debts) |
-| Diseño de idempotencia o saga, o por qué no aplica | [`modos-de-fallo.md`](docs/evidencia/modos-de-fallo.md), secciones 4 y 5 · [ADR-0016](docs/adr/0016-acotar-la-espera-de-la-cola-y-hacer-idempotente-al-worker.md) |
-| ADR de extraer o no extraer, con criterios | [ADR-0017](docs/adr/0017-no-extraer-ningun-modulo-del-monolito-todavia.md): cuatro opciones, siete criterios, «no extraer» con sus motivos y sus disparadores |
-| arc42 §11 con los modos de fallo | R-22 a R-25 en el [arc42 §11](docs/arc42/arc42-template-ES.md#11-risks-and-technical-debts), y el recorrido en [§6.6](docs/arc42/arc42-template-ES.md#66-fallos-parciales-de-las-integraciones-s11--adr-0016) |
-| `aspectos.md` al día | Filas [A-01](docs/aspectos.md#a-01) y [A-06](docs/aspectos.md#a-06), con sus subsecciones de la S11 |
-| Los modos de fallo probados, no solo listados | [`test_modos_de_fallo.py`](backend/tests/test_modos_de_fallo.py) (9 pruebas en la S11, validadas provocando la falla con 7 mutaciones; 12 desde los arreglos del 19-oct) y la columna «Prueba» de la tabla |
-| Documentación sincronizada | arc42 §5.1, §6.2, §6.6, §8.4, §9 y §11 · [C4](docs/c4/doc-c4.md) Nivel 2, relaciones 4 y 5, y Nivel 3, relaciones 5 y 6 · [`aspectos.md`](docs/aspectos.md) |
-| Uso de IA | [`docs/ia.md`, entrada 15](docs/ia.md#entrada-15) |
-
-## Segundo corte: límite de costo
-
-Escenario operativo del segundo corte: **límite de costo**. `POST /distractores` es pública y cada
-solicitud gasta cuota de la capa gratuita de Groq (R-17). La pregunta es qué hace el MVP desplegado
-cuando alguien la golpea con una ráfaga.
-
-- **Línea base, en el entorno desplegado:** de 20 solicitudes seguidas, las 20 llegaron a Groq y 8
-  terminaron en 503 porque el proveedor cortó por cuota. Durante ese minuto la ruta quedó inutilizable
-  para cualquier otro profesor.
-- **Decisión, [ADR-0015](docs/adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md):**
-  un presupuesto de 6 solicitudes por minuto y 150 por día en la memoria de la API, delante del
-  adaptador de Groq. Lo que no cabe se responde con 429 y `Retry-After`, sin salir a la red. Precisa
-  a ADR-0013 sin reemplazarlo.
-- **Observabilidad:** el evento `presupuesto_agotado` en el registro JSON y `GET /metricas`, con el
-  contrato en 1.2.0.
-- **Resultado desplegado** ([experimento](docs/evidencia/experimento-presupuesto.md), con
-  hipótesis, montaje, umbrales y límites): de 20 solicitudes, 6 llegaron a Groq, 0 cortadas por
-  cuota (antes 8) y 14 con 429 de la API (p95 0,121 s); `/health` en 200. Cumple los cuatro
-  umbrales. Una corrida local con proveedor simulado aísla la variación de Groq.
-- **CI:** el paso «Escenario del segundo corte (presupuesto del proveedor de LLM)» de
-  [`ci.yml`](.github/workflows/ci.yml).
-
-| Fila del reto | Dónde está |
-|---|---|
-| Escenario y su medida | [EC-09 en el arc42](docs/arc42/arc42-template-ES.md#ec-09) · recorrido en [§6.5](docs/arc42/arc42-template-ES.md#65-ráfaga-contra-la-ruta-de-distractores-ec-09--adr-0015) |
-| Decisión | [ADR-0015](docs/adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md), que precisa a [ADR-0013](docs/adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md) |
-| Código | [`autoria/presupuesto.py`](backend/autoria/presupuesto.py) · [`api/main.py`](backend/api/main.py) (429 y `GET /metricas`) · [`api/esquemas.py`](backend/api/esquemas.py) (contrato 1.2.0) |
-| Pruebas y pipeline | [`test_presupuesto.py`](backend/tests/test_presupuesto.py) · [`test_ruta_distractores.py`](backend/tests/test_ruta_distractores.py) · paso propio en [`ci.yml`](.github/workflows/ci.yml) |
-| Experimento | [`experimento-presupuesto.md`](docs/evidencia/experimento-presupuesto.md), con los informes [`presupuesto-antes.json`](docs/evidencia/presupuesto-antes.json), [`presupuesto-despues.json`](docs/evidencia/presupuesto-despues.json), [`presupuesto-local-antes.json`](docs/evidencia/presupuesto-local-antes.json) y [`presupuesto-local-despues.json`](docs/evidencia/presupuesto-local-despues.json) |
-| Observabilidad | https://quantia-utb-api.onrender.com/metricas y el evento `presupuesto_agotado` en los logs de `quantia-utb-api` |
-| Documentación sincronizada | arc42 §3, §5, §6.5, §7, §8, §9, §10 ([EC-09](docs/arc42/arc42-template-ES.md#ec-09)) y §11 (R-17 mitigado; R-18 a R-21, con las divergencias conocidas en R-20) · [C4](docs/c4/doc-c4.md) Nivel 2, relación 8, y Nivel 3, relación 12 · [`aspectos.md`](docs/aspectos.md#a-06) |
-| Uso de IA | [`docs/ia.md`, entrada 13](docs/ia.md#entrada-13) |
-
-## Evidencia S9
-
-Porción construida con IA: **RF-11, distractores diagnósticos** (aspecto A-06), en
-`backend/autoria/` y la ruta `POST /distractores` (contrato 1.1.0).
-
-- **Código:** `autoria/distractores.py` (la regla), `autoria/proveedor_llm.py` (el adaptador) y
-  `api/main.py`, en los commits `e81dbce` a `12ba9d6`.
-- **Cadena:** fila A-06 de `docs/aspectos.md`, de RF-11 a EC-08, C4, ADR, código, pruebas y evidencia.
-- **ADR-0013:** Groq detrás de un puerto de `autoria`, sin dependencias nuevas, 20 s sin
-  reintentos y 503 si falla.
-- **Prueba que falla:** PR #1, cerrado sin fusionar; runs 37243370215 y 37244214146 en rojo, con
-  4 pruebas.
-- **EC-08 medido:** M1, 0 de 120 propuestas repiten la correcta; M2, p95 de 2,91 s (≤ 15 s); M3,
-  503 en 20,25 s (≤ 21 s).
-- **`docs/ia.md`, entrada 12:** rechazados el SDK `openai`, `urllib` y los reintentos, con su motivo.
-- **`docs/evidencia/auditoria-s9.md`:** sin cruces de contexto ni de propiedad (un flanco de
-  `test_fronteras.py`, corregido); sin dependencias nuevas, las directas verificadas en PyPI; sin
-  credenciales.
-- **Componente generativo:** 20 preguntas; 44 de 60 propuestas válidas y 0 equivalentes; US$0 en
-  la capa gratuita y US$0,0004 por solicitud; C4 Nivel 2, relación 8.
-
-Los enlaces, fila por fila:
-
-| Fila de la ficha | Dónde está |
-|---|---|
-| Porción real y su cadena completa | [A-06 en `aspectos.md`](docs/aspectos.md#a-06): RF-11 → [EC-08](docs/arc42/arc42-template-ES.md#ec-08) → C4 → ADR → código → pruebas → evidencia |
-| ADR con la decisión del equipo | [ADR-0013](docs/adr/0013-consumir-groq-detras-de-un-puerto-y-degradar-sin-bloquear-la-autoria.md): Groq detrás de un puerto de `autoria`, `httpx` sin dependencias nuevas, 20 s de espera sin reintentos y 503 ante cualquier falla |
-| Prueba que falla ante el defecto | [El PR del defecto](https://github.com/ISCOUTB/AS_202620_Sistema-de-calificacion-automatica/pull/1), cerrado sin fusionar, y su [procedimiento con los runs](docs/evidencia/prueba-distractores-falla.md): sin el filtro de la respuesta correcta fallan 4 pruebas |
-| Medición de EC-08 | [Evaluación](docs/evidencia/evaluacion-distractores.md): M1, ninguna de las 120 propuestas entregadas repite la respuesta correcta (0 %) · M2, p95 de la latencia de 2,91 s contra un techo de 15 s, en 40 solicitudes · M3, con el proveedor caído o lento la ruta responde 503 en 20,25 s como máximo, contra 21 s |
-| Componente generativo evaluado | Conjunto de 20 preguntas ([`conjunto-evaluacion-distractores.json`](docs/evidencia/conjunto-evaluacion-distractores.json)), resultados ([`evaluacion-distractores.json`](docs/evidencia/evaluacion-distractores.json)), calidad: 44 de 60 propuestas diagnósticas válidas (73 %), ninguna equivalente a la respuesta correcta, y el error más común es la etiqueta (8 incorrectas y 4 a medias); costo: US$0 en la capa gratuita (al precio de pago serían US$0,0004 por solicitud y US$0,008 por examen de 20 preguntas); el proveedor en el [C4 Nivel 2, relación 8](docs/c4/doc-c4.md#relaciones-1) |
-| `ia.md` con lo aceptado, lo corregido y lo rechazado | [Entrada 12](docs/ia.md#entrada-12) |
-| Auditoría de erosión, dependencias y credenciales | [`auditoria-s9.md`](docs/evidencia/auditoria-s9.md): sin cruces de contexto ni de propiedad; un flanco de la prueba de fronteras, corregido; sin dependencias nuevas; sin credenciales. Los dos `git log -S` del CONTRATO §9 devuelven un solo commit, `49ae0c0`: es esa auditoría, que cita los comandos textualmente, no una clave |
-| ADR aceptados no reescritos | [ADR-0014](docs/adr/0014-dejar-constancia-del-ajuste-de-enlaces-en-adr-0007.md) deja constancia del ajuste de enlaces de ADR-0007 |
-
-## Dónde está la evidencia de cada entrega
-
-La documentación larga vive en pocos archivos. Esta tabla dice, para lo que pide cada ficha, en
-qué archivo y en qué sección está.
-
-| Entrega | Qué | Dónde |
-|---|---|---|
-| Corte 1 | Medición de EC-07 antes y después del cambio, con su herramienta | [`docs/evidencia/medicion-ec07.md`](docs/evidencia/medicion-ec07.md) |
-| S6 | Mapa de contextos y lenguaje ubicuo | [arc42 §8.1 y §8.2](docs/arc42/arc42-template-ES.md#81-mapa-de-contextos) |
-| S6 | Tabla módulo → dato, recorrido de la auditoría y violaciones V-1 a V-5 con su plan | [arc42 §8.3](docs/arc42/arc42-template-ES.md#83-propiedad-de-datos) |
-| S6 | Contexto del mapa que realiza cada aspecto | [`docs/aspectos.md`](docs/aspectos.md#tabla-de-trazabilidad) · [ADR-0007](docs/adr/0007-declarar-los-contextos-delimitados-y-la-regla-de-dueno-unico.md) |
-| S6 | Hallazgos de SonarQube Cloud y sus correcciones | [`docs/evidencia/hallazgos-y-correcciones.md`](docs/evidencia/hallazgos-y-correcciones.md) |
-| S7 | Contrato OpenAPI versionado (1.0.0) | [`docs/contrato/openapi.json`](docs/contrato/openapi.json) |
-| S7 | Prueba de contrato y su paso propio en el pipeline | [`backend/tests/test_contrato.py`](backend/tests/test_contrato.py) · paso «Prueba de contrato (OpenAPI)» de [`ci.yml`](.github/workflows/ci.yml) |
-| S7 | La prueba falla ante un cambio incompatible, con los tres runs | [`docs/evidencia/prueba-de-contrato-falla.md`](docs/evidencia/prueba-de-contrato-falla.md) |
-| S7 | Flujos de interacción | [arc42 §6](docs/arc42/arc42-template-ES.md#6-runtime-view) |
-| S7 | C4 Nivel 2 con protocolo y formato en cada relación | [`docs/c4/doc-c4.md`](docs/c4/doc-c4.md#nivel-2--diagrama-de-contenedores) |
-| S9 | Porción construida con IA, prueba que falla, EC-08, auditoría y componente generativo | [Evidencia S9](#evidencia-s9) |
-| Corte 2 | Escenario operativo de límite de costo: decisión, experimento, CI, observabilidad y documentación sincronizada | [Segundo corte](#segundo-corte-límite-de-costo) |
-| S11 | Modos de fallo de las integraciones, idempotencia, saga y decisión de no extraer | [Evidencia S11](#evidencia-s11-fallos-parciales-y-decisión-de-extracción) |
-| Consistencia y caché | Tabla operación → consistencia, caché con su invalidación y ADR de la decisión de datos más costosa de revertir | [Evidencia: consistencia de los datos y caché](#evidencia-consistencia-de-los-datos-y-caché) |
-| Taller de mensajería | Contrato del mensaje, entrega al menos una vez, duplicados, reintentos, seguimiento y ADR frente a la alternativa síncrona | [`docs/evidencia/taller-mensajeria.md`](docs/evidencia/taller-mensajeria.md) · [ADR-0020](docs/adr/0020-entregar-los-trabajos-al-menos-una-vez-con-reintentos-y-lista-de-fallidos.md) |
-| Despliegue en iscoutb.dev | Revisión desplegada, comprobación desde fuera de la universidad, recorrido de una hoja de la API al worker y límites de memoria medidos | [`docs/evidencia/despliegue-iscoutb.md`](docs/evidencia/despliegue-iscoutb.md) · [ADR-0021](docs/adr/0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md) |
-| S13 | Amenazas priorizadas con su mitigación, análisis de dependencias y privacidad | [Evidencia S13](#evidencia-s13-modelado-de-amenazas) |
-| S14 | EC-01 a EC-04 con tres repeticiones contra su umbral, el entorno de la medición y la revisión entre pares, que no se hizo, en arc42 §11 | [Evidencia S14](#evidencia-s14-medición-de-atributos-de-calidad) · [`medicion-s14.md`](docs/evidencia/medicion-s14.md) |
-| Lectura OMR | A-02 y A-03 con RF-08: el prototipo, EC-01 a EC-04 medidos y ADR-0023 | [Lectura y calificación](#lectura-y-calificación-de-las-hojas-a-02-a-03) · [`medicion-lectura-omr.md`](docs/evidencia/medicion-lectura-omr.md) |
-| Todas | Pipeline de integración continua | [Runs de GitHub Actions](https://github.com/ISCOUTB/AS_202620_Sistema-de-calificacion-automatica/actions) |
-| Todas | Análisis estático y su *Quality Gate* | [SonarQube Cloud](https://sonarcloud.io/summary/new_code?id=ISCOUTB_AS_202620_Sistema-de-calificacion-automatica) |
-| Todas | Respuesta a la retroalimentación automática | [`correcciones.md`](correcciones.md) |
+| La arquitectura completa | [arc42](docs/arc42/arc42-template-ES.md) · [C4, Niveles 1 a 3](docs/c4/doc-c4.md) · [27 ADR](docs/adr/) |
+| Los aspectos y su trazabilidad | [`docs/aspectos.md`](docs/aspectos.md#tabla-de-trazabilidad) |
+| La lectura y la calificación: EC-01 a EC-04 | [`medicion-lectura-omr.md`](docs/evidencia/medicion-lectura-omr.md) · [`medicion-s14.md`](docs/evidencia/medicion-s14.md), tres repeticiones |
+| La preselección en la revisión | [`preseleccion-omr.md`](docs/evidencia/preseleccion-omr.md) |
+| La recepción sin pérdida: EC-07 | [`medicion-ec07.md`](docs/evidencia/medicion-ec07.md) |
+| Los distractores con IA: EC-08 | [`evaluacion-distractores.md`](docs/evidencia/evaluacion-distractores.md) · [`auditoria-s9.md`](docs/evidencia/auditoria-s9.md) |
+| El límite de costo del proveedor: EC-09 | [`experimento-presupuesto.md`](docs/evidencia/experimento-presupuesto.md) |
+| Los modos de fallo y la cola | [`modos-de-fallo.md`](docs/evidencia/modos-de-fallo.md) · [`taller-mensajeria.md`](docs/evidencia/taller-mensajeria.md) |
+| La consistencia de los datos y la caché | [`consistencia-y-cache.md`](docs/evidencia/consistencia-y-cache.md) |
+| La base de datos | [`base-de-datos.md`](docs/evidencia/base-de-datos.md) |
+| Las amenazas, las dependencias y la privacidad | [`modelo-de-amenazas.md`](docs/evidencia/modelo-de-amenazas.md) |
+| El despliegue y su costo | [`despliegue-iscoutb.md`](docs/evidencia/despliegue-iscoutb.md) · [`costo-mensual.md`](docs/despliegue/costo-mensual.md) |
+| El contrato de la API y su prueba | [`openapi.json`](docs/contrato/openapi.json) · [`test_contrato.py`](backend/tests/test_contrato.py) · [la prueba que falla](docs/evidencia/prueba-de-contrato-falla.md) |
+| El análisis estático | [SonarQube Cloud](https://sonarcloud.io/summary/new_code?id=ISCOUTB_AS_202620_Sistema-de-calificacion-automatica) · [`hallazgos-y-correcciones.md`](docs/evidencia/hallazgos-y-correcciones.md) |
+| El pipeline | [GitHub Actions](https://github.com/ISCOUTB/AS_202620_Sistema-de-calificacion-automatica/actions) |
+| El uso de IA en la construcción | [`docs/ia.md`](docs/ia.md) |
 
 ## Entorno desplegado, en detalle
 
@@ -298,19 +108,6 @@ contenedor por separado):
     {"momento": "2026-10-30T04:38:08.792+00:00", "nivel": "INFO", "registro": "ingesta", "mensaje": "Trabajo publicado", "evento": "trabajo_publicado", "trabajo": "b4f7061e-4444-4f6e-a132-f8e929c38047", "hoja": "ff64200e-7ffc-4b60-ae67-28fe3b1b0c68", "examen": "Calculo 2", "cola": "procesamiento"}
     {"momento": "2026-10-30T04:38:08.793+00:00", "nivel": "INFO", "registro": "worker", "mensaje": "Hoja recibida", "evento": "hoja_recibida", "trabajo": "b4f7061e-4444-4f6e-a132-f8e929c38047", "hoja": "ff64200e-7ffc-4b60-ae67-28fe3b1b0c68", "intento": 1, "examen": "Calculo 2", "archivo": "hoja-real.png", "referencia": "Calculo_2-20b4f352/35158635-8806-469c-8522-416de15e71e2-hoja-real.png", "bytes": 74}
     {"momento": "2026-10-30T04:38:08.793+00:00", "nivel": "INFO", "registro": "api", "mensaje": "Lote confirmado", "evento": "lote_confirmado", "examen": "Calculo 2", "hojas_aceptadas": 1, "hojas_pendientes_de_encolar": 0, "hojas_rechazadas": 1, "duracion_confirmacion_ms": 7.9}
-
-### El entorno anterior: Render (S8)
-
-Del 27-sep al 29-oct el sistema corrió en la capa gratuita de Render, desde [`render.yaml`](render.yaml)
-(ADR-0009 a ADR-0012, reemplazados por ADR-0021). Sigue arriba, sin cambios, hasta que el docente
-confirme las filas de despliegue de la S8 y el taller.
-
-| | |
-|---|---|
-| Sistema y API | https://quantia-utb.onrender.com · https://quantia-utb-api.onrender.com/health |
-| Comprobación de la S8 | 2026-09-27, 18:59 (−05:00), internet residencial en Cartagena: sitio `http=200 tiempo=0,37 s` · API `health=200 tiempo=0,20 s` |
-| Escenario del segundo corte | Límite de costo sobre `POST /distractores`: presupuesto de 6 por minuto y 150 por día, 429 si no cabe, y su estado en https://quantia-utb-api.onrender.com/metricas ([ADR-0015](docs/adr/0015-limitar-el-gasto-del-proveedor-de-llm-con-un-presupuesto-en-la-api.md)) |
-| Taller de despliegue | Condición: **patrón de carga**, definida por el equipo por indicación del docente. Pieza: **la API**. Arranque en frío medido: **12,5 s** frente a los 10 s de EC-07; con el monitor que la mantiene despierta, 0,2 a 0,4 s ([comparación](docs/despliegue/taller-despliegue-api.md) · [medición](docs/evidencia/medicion-arranque-en-frio.json) · [ADR-0009](docs/adr/0009-desplegar-la-api-en-el-servicio-web-gratuito-de-render-y-mantenerla-despierta.md)) |
 
 ## Cómo se arranca
 
@@ -393,7 +190,7 @@ en el encabezado de [`deploy/compose.local-override.yaml`](deploy/compose.local-
 ## Corte vertical: carga de examen (aspecto A-01)
 
 Del sistema hay **cinco aspectos construidos de punta a punta**, y A-05 en parte. Los otros son
-A-06, la porción de la [Evidencia S9](#evidencia-s9); A-02 y A-03, la
+A-06, los [distractores diagnósticos](docs/aspectos.md#a-06); A-02 y A-03, la
 [lectura y la calificación](#lectura-y-calificación-de-las-hojas-a-02-a-03); y A-04, la clave desde
 la aplicación. Este es
 [A-01, la carga de examen para calificación](docs/aspectos.md#a-01), que realiza RF-01: el
@@ -460,17 +257,15 @@ El identificador de trabajo es el mismo que muestra la pantalla. Esa coincidenci
 de que el recorrido se completó: la hoja pasó del navegador a la API, de ahí al volumen de
 imágenes y a la cola de Redis, y de ahí a un proceso distinto en otro contenedor.
 
-### Qué falta de este aspecto
+### Lo que queda de este aspecto
 
 Desde A-02, el worker no termina al registrar la hoja: la lee y la califica, y la nota aparece en
 la misma pantalla de carga ([cómo se recorre](#cómo-se-recorre-la-lectura)). La política de
 retención de imágenes que exige RNF-14 no está implementada: hoy nada borra lo que se guarda.
 
 El almacenamiento y la bitácora de recepción están **detrás de sendos puertos** en
-`infraestructura`, con adaptadores en disco declarados provisionales. Es deliberado: el corte
-necesitaba guardar archivos sin cerrar de paso la decisión de persistencia (riesgo R-06 del
-arc42). Cuando llegó ese ADR, el 0027, lo que cambió fueron los adaptadores: la bitácora pasó a
-Postgres y `ingesta`, el modelo de datos y las pruebas del aspecto no se tocaron.
+`infraestructura`. Por eso, cuando la bitácora pasó a Postgres (ADR-0027), lo que cambió fue el
+adaptador: `ingesta`, el modelo de datos y las pruebas del aspecto no se tocaron.
 
 El reintento de las hojas que quedaron `pendiente_de_encolar` **no está automatizado**:
 `bitacora.pendientes()` deja el dato listo, y A-02 no lo consumió (R-32).
@@ -498,7 +293,7 @@ imagen recuperable, que el estado se relee desde el archivo y no de la memoria, 
 truncada no inutiliza el registro, y que el lote deja de insistir contra una cola caída en vez de
 pagar el tiempo de espera de conexión doscientas veces.
 
-Cuarenta y cuatro llegaron con la porción de la S9 (aspecto A-06). Verifican que ninguna
+Cuarenta y cuatro son de los distractores (aspecto A-06). Verifican que ninguna
 propuesta que repita la respuesta correcta llega al profesor, aunque esté escrita distinto; que
 al proveedor de LLM solo le llega la pregunta (RNF-13); que el tiempo agotado, la cuota agotada,
 la clave rechazada y una respuesta ilegible terminan en un 503 con su motivo; y que ningún
@@ -514,7 +309,7 @@ red.
 Una llegó con el frontend nuevo: que el navegador puede leer `Retry-After` en el 429. CORS solo
 deja leer las cabeceras que la API declara, y sin esa el sitio no sabría cuánto esperar.
 
-Diez llegaron con la S11 (modos de fallo, ADR-0016), casi todas en
+Diez son de los modos de fallo (ADR-0016), casi todas en
 [`backend/tests/test_modos_de_fallo.py`](backend/tests/test_modos_de_fallo.py). Contra un servidor
 que acepta la conexión y no contesta, verifican que publicar se rinde en menos de 3 s, que un lote
 de 100 hojas confirma dentro de los 10 s con todas pendientes en la bitácora, que el cliente de
@@ -546,7 +341,7 @@ la capacidad, «Pedir otras propuestas», que no se guardan fallas ni respuestas
 corre en cada lectura. Se validaron provocando la falla con diez mutaciones, que los dos docstrings
 enumeran.
 
-Diecisiete llegaron con la S13 (ADR-0022), en
+Diecisiete son del presupuesto de carga (ADR-0022), en
 [`backend/tests/test_presupuesto_de_carga.py`](backend/tests/test_presupuesto_de_carga.py).
 Verifican que un lote con más hojas que el tope, o que no cabe en el cupo de bytes de las últimas
 24 horas, no entra entero y no deja nada en el almacén, la bitácora ni la cola; que el 429 dice
@@ -748,52 +543,23 @@ Las decisiones de un ADR aceptado no se editan ni se borran: si una decisión ca
 - [x] Aspectos A-01 (carga de examen), A-02 (lectura de las hojas), A-03 (calificación, salvo las
   estadísticas del Panel), A-04 (la clave desde la aplicación) y A-06 (distractores diagnósticos)
   construidos de punta a punta; A-05, en parte: la entrada con sesión, sin los cursos
-- [x] arc42: objetivos de calidad, restricciones clasificadas y contexto
-- [x] arc42: estrategia de solución, decisiones de arquitectura y riesgos
-- [x] arc42: Building Block View, Runtime View y Cross-cutting Concepts (secciones 5, 6 y 8)
-- [x] arc42: Deployment View (sección 7)
-- [x] Escenarios de calidad: 5 priorizados y 4 complementarios; EC-01 a EC-04 (sobre hojas
-  sintéticas, en local) y EC-07 a EC-09 medidos
-- [x] C4 Niveles 1, 2 y 3
-- [x] ADR 0001 a 0027
-- [x] Elección de stack: FastAPI en el backend, Flutter en el frontend
-- [x] Esqueleto ejecutable
-- [x] Corte vertical de A-01: `ingesta`, almacén, bitácora, encolado y pantalla de carga
-- [x] Contrato de la API (OpenAPI) versionado y su prueba en el pipeline
-- [x] Despliegue con URL pública, logs estructurados y métrica de EC-07: en Render desde la S8 y en
-  el servidor del laboratorio (iscoutb.dev) desde el 29-oct, con la cola y las hojas persistentes
-  (ADR-0021)
-- [x] ADR de persistencia (riesgo R-06): ADR-0027 lleva la bitácora, los resultados y las
-  revisiones a Postgres; siguen abiertos el medio de las imágenes y la retención
-- [x] Modelo de datos compartido más allá de lo que A-01 necesitó: la clave, la lectura y la nota
-  (A-02, A-03), cada una con su dueño en la línea `Posee:` de su módulo
-- [x] Proveedor de LLM: Groq, detrás de un puerto de `autoria` (ADR-0013)
-- [x] Segundo corte: presupuesto del proveedor de LLM, `GET /metricas` y experimento de EC-09 (ADR-0015)
-- [x] S11: modos de fallo de las tres integraciones, esperas acotadas de la cola y worker idempotente (ADR-0016); decisión de no extraer (ADR-0017)
-- [x] Arreglos del 19-oct: el lote ya no se cae por un error del disco,
-  tiene un plazo para la cola, no congela la API (R-21 cerrado) y se lee de a una hoja con tope
-- [x] Acuse de recibo, reintentos y lista de fallidos en la cola (ADR-0020, R-22 cerrado)
-- [ ] Detección de hojas subidas dos veces (R-24): con A-02, una hoja repetida se califica dos veces
-- [x] Consistencia y caché: tabla operación → consistencia, `hoja_id` propio con la bitácora como
-  fuente de verdad (ADR-0018) y caché de propuestas con su invalidación (ADR-0019)
-- [x] Consulta del estado vigente de una hoja: `GET /examenes/{examen_id}/resultados` (A-03); que
-  no relea los registros enteros sigue en R-26
-- [x] S13: modelo de amenazas con STRIDE sobre el C4, análisis de dependencias en el pipeline,
-  presupuesto de carga (ADR-0022) y privacidad
-- [x] Lectura OMR y calificación (A-02, A-03): prototipo de R-05, EC-01 a EC-04 medidos, revisión
-  manual desde la aplicación (RF-08), y una imagen que mataba al worker en cada reinicio, cerrada
-  (AM-16, R-36)
-- [x] Preselección en la revisión: la única marca de una pregunta dudosa llega elegida (ADR-0024)
-- [x] Inicio de sesión (A-05 en parte, ADR-0025): correo y contraseña de una lista cifrada en el
-  servidor, y la sesión en todas las rutas de datos
-- [x] La clave desde la aplicación (A-04, ADR-0026): se registra y se habilita en Pauta, a nombre del
-  docente (R-35 cerrado)
-- [ ] Los cursos y su aislamiento (EC-06): hasta entonces, solo hojas sintéticas (AM-02); análisis
-  de las imágenes base (R-34)
-- [ ] Calibrar el umbral con hojas reales escaneadas (R-01, R-04); estadísticas del Panel (RF-05)
-- [x] S14: EC-01 a EC-04 medidos tres veces cada uno y contrastados con su umbral, con el entorno
-  declarado; arc42 §11.2 y §11.3
-- [ ] EC-03 y EC-04 medidos en el servidor desplegado, con su CPU y su memoria (R-37)
+- [x] Documentación completa: arc42 (las doce secciones), C4 Niveles 1, 2 y 3, y ADR 0001 a 0027
+- [x] Escenarios de calidad: EC-01 a EC-04 medidos tres veces sobre hojas sintéticas, y EC-07 a
+  EC-09 medidos
+- [x] Monolito modular con cola y worker (ADR-0002): acuse, reintentos y lista de fallidos
+  (ADR-0020), esperas acotadas y worker idempotente (ADR-0016)
+- [x] Lectura OMR en posiciones fijas, revisión manual de lo dudoso (ADR-0023) y preselección de la
+  única marca (ADR-0024)
+- [x] Inicio de sesión (ADR-0025) y la clave registrada y habilitada en la aplicación (ADR-0026)
+- [x] La bitácora, los resultados y las revisiones en Postgres (ADR-0027)
+- [x] Distractores con un modelo de lenguaje, detrás de un puerto, con caché y presupuesto
+  (ADR-0013, ADR-0015 y ADR-0019)
+- [x] Contrato de la API versionado y su prueba en el pipeline; análisis estático y de dependencias
+- [x] Despliegue en el servidor del laboratorio, con el sitio compilado en el CI (ADR-0021)
+- [ ] Los cursos y su aislamiento (EC-06): hasta entonces, solo hojas sintéticas (AM-02)
+- [ ] Las estadísticas del Panel con los resultados reales (RF-05) y el banco de preguntas (RF-06)
+- [ ] Calibrar el umbral con hojas escaneadas (R-01, R-04) y medir EC-03 y EC-04 en el servidor (R-37)
+- [ ] Detectar una hoja subida dos veces (R-24) y la retención de las imágenes (RNF-14)
 
 ## Documentación
 
@@ -807,7 +573,7 @@ docs/
 ├── contrato/
 │   └── openapi.json                                    # contrato HTTP (OpenAPI 3.1), generado
 ├── despliegue/                                        # estimación de costo y taller de despliegue
-├── evidencia/                                          # EC-07, arranque en frío, prueba de contrato, SonarQube; de la S9: EC-08, prueba del defecto y auditoría; del corte 2: experimento de EC-09; de la S11: modos de fallo; de consistencia y caché: la tabla de garantías y el diseño de la caché; del taller de mensajería: su ejecución; del despliegue en iscoutb.dev: la verificación; de la S13: el modelo de amenazas; de la lectura OMR: la medición de EC-01 a EC-04 y la revisión manual
+├── evidencia/                                          # las mediciones, los experimentos y el modelo de amenazas
 ├── ficha-problema.md                                   # el problema, usuarios y alcance
 ├── aspectos.md                                         # aspectos y tabla de trazabilidad
 └── ia.md                                               # registro de uso de IA
