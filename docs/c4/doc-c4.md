@@ -378,8 +378,8 @@ Hoy tienen código el aspecto A-01, en `ingesta` e `infraestructura`; el A-06, e
 desde el segundo corte incluye el presupuesto del proveedor de LLM (ADR-0015); y desde el 6-nov,
 A-02 y A-03, en `omr`, `calificacion` y `dashboard`
 ([ADR-0023](../adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md)).
-`identidad` existe como paquete con su docstring (`Responsabilidad:`, `Requisitos:` e
-`Importa:`) y sin implementación.
+Desde [ADR-0025](../adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md), `identidad` tiene la autenticación: las contraseñas, el token
+de la sesión y la lista de docentes. Los roles y el aislamiento por curso siguen sin código.
 
 ### Reparto de módulos por contenedor
 
@@ -394,8 +394,8 @@ procesos corren la misma imagen y el mismo código de `backend/`: no están dupl
 una pregunta (RF-08). `infraestructura` es la que los dos usan para el almacén y los registros.
 `identidad` aparece en el worker porque `omr` y `calificacion` la declaran en su línea `Importa:`
 ([`omr/__init__.py`](../../backend/omr/__init__.py),
-[`calificacion/__init__.py`](../../backend/calificacion/__init__.py)), aunque todavía no haya código
-que la llame.
+[`calificacion/__init__.py`](../../backend/calificacion/__init__.py)), aunque el worker no la llama:
+la sesión se comprueba en la aplicación web.
 
 ```mermaid
 ---
@@ -421,9 +421,9 @@ flowchart TB
         autoria["<b>autoria</b>
         [Componente]
 
-        Distractores, presupuesto y lista
-        de exámenes con clave (construidos);
-        banco y registro de la clave (previstos)."]
+        Distractores, presupuesto, lista
+        de exámenes y registro de la clave
+        (construidos); banco (previsto)."]
 
         dashboard["<b>dashboard</b>
         [Componente]
@@ -439,10 +439,12 @@ flowchart TB
         y recalcula la nota (RF-08)."]
 
         identidad["<b>identidad</b>
-        [Componente · previsto]
+        [Componente]
 
-        Autenticación y
-        aislamiento por curso."]
+        Contraseñas, token de la
+        sesión y lista de docentes
+        (construidos); roles y cursos
+        (previstos)."]
 
         infraestructura["<b>infraestructura</b>
         [Componente de soporte]
@@ -467,16 +469,24 @@ flowchart TB
     <b>[HTTPS · JSON]</b>"| api
     profesor -.->|"Registra el banco
     <b>[HTTPS · JSON]</b>"| api
+    profesor -->|"Registra y habilita la clave
+    <b>[HTTPS · JSON]</b>"| api
+    profesor -->|"Entra con correo y contraseña;
+    manda el token en cada petición
+    <b>[HTTPS · JSON · Bearer]</b>"| api
 
     api -->|"recibir_lote()"| ingesta
     api -->|"Construye almacén, bitácora,
     registros y cliente de cola"| infraestructura
     api -->|"proponer_distractores();
     estado del presupuesto;
-    examenes_con_clave()"| autoria
+    examenes_con_clave();
+    registrar_clave(), habilitar_clave()"| autoria
     api -->|"resultados_del_examen();
     revision_del_examen()"| dashboard
     api -->|"resolver_preguntas()"| calificacion_web
+    api -->|"docente_de_la_sesion():
+    autenticar(), leer_sesion()"| identidad
 
     ingesta -->|"Puertos AlmacenDeImagenes
     y BitacoraDeRecepcion; publicar()"| infraestructura
@@ -485,9 +495,9 @@ flowchart TB
     y LectorDeRevisiones"| infraestructura
     calificacion_web -->|"Registro de revisiones"| infraestructura
     autoria -->|"CatalogoDeClaves"| infraestructura
-    ingesta -.->|"Verifica acceso"| identidad
-    autoria -.->|"Verifica acceso"| identidad
-    dashboard -.->|"Verifica acceso"| identidad
+    ingesta -.->|"Verificará el curso"| identidad
+    autoria -.->|"Verificará el curso"| identidad
+    dashboard -.->|"Verificará el curso"| identidad
 
     infraestructura -->|"<b>[Lectura y escritura en volumen]</b>"| imagenes
     infraestructura -->|"<b>[Redis · RPUSH · JSON]</b>"| cola
@@ -506,8 +516,7 @@ flowchart TB
     classDef external fill:#999999,stroke:#6B6B6B,color:#ffffff,stroke-dasharray: 5 5
 
     class profesor person
-    class api,ingesta,autoria,dashboard,calificacion_web component
-    class identidad previsto
+    class api,ingesta,autoria,dashboard,calificacion_web,identidad component
     class infraestructura soporte
     class imagenes,cola,db,llm external
 ```
