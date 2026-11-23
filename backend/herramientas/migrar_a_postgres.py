@@ -149,21 +149,9 @@ def migrar(
 
 
 def main(argv: list[str] | None = None) -> int:
-    almacen = os.environ.get("RUTA_ALMACEN", RUTA_ALMACEN_POR_OMISION)
+    """La base y las rutas salen del entorno, como en la API y el worker, y no de argumentos: una
+    ruta por la línea de comandos permitiría leer cualquier archivo del contenedor."""
     parser = argparse.ArgumentParser(description="Copia los registros .jsonl a Postgres.")
-    parser.add_argument("--url", default=os.environ.get("DATABASE_URL", ""))
-    parser.add_argument(
-        "--bitacora",
-        default=os.environ.get(
-            "RUTA_BITACORA", os.path.join(almacen, "bitacora-de-recepcion.jsonl")
-        ),
-    )
-    parser.add_argument(
-        "--resultados", default=os.environ.get("RUTA_RESULTADOS", RUTA_RESULTADOS_POR_OMISION)
-    )
-    parser.add_argument(
-        "--revisiones", default=os.environ.get("RUTA_REVISIONES", RUTA_REVISIONES_POR_OMISION)
-    )
     parser.add_argument("--forzar", action="store_true")
     parser.add_argument(
         "--si-hace-falta",
@@ -171,16 +159,19 @@ def main(argv: list[str] | None = None) -> int:
         help="migra solo si la bitácora de la base está vacía; si no, no hace nada",
     )
     args = parser.parse_args(argv)
-    if not args.url:
+    url = os.environ.get("DATABASE_URL", "")
+    if not url:
         if args.si_hace_falta:
             return 0
-        print("Falta DATABASE_URL (o --url).", file=sys.stderr)
+        print("Falta DATABASE_URL.", file=sys.stderr)
         return 2
+    almacen = os.environ.get("RUTA_ALMACEN", RUTA_ALMACEN_POR_OMISION)
+    bitacora = os.environ.get("RUTA_BITACORA", os.path.join(almacen, "bitacora-de-recepcion.jsonl"))
     cuenta = migrar(
-        args.url,
-        Path(args.bitacora),
-        Path(args.resultados),
-        Path(args.revisiones),
+        url,
+        Path(bitacora),
+        Path(os.environ.get("RUTA_RESULTADOS", RUTA_RESULTADOS_POR_OMISION)),
+        Path(os.environ.get("RUTA_REVISIONES", RUTA_REVISIONES_POR_OMISION)),
         args.forzar,
         args.si_hace_falta,
     )

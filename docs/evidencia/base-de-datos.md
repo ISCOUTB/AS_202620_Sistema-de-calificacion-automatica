@@ -15,7 +15,7 @@ con sus límites de memoria y CPU.
 |---|---|---|
 | Los adaptadores de Postgres devuelven lo mismo que los de disco | `tests/test_base_de_datos.py`, contra Postgres 16: la misma secuencia de hechos en los dos | **9 de 9** |
 | La migración deja en la base lo mismo que había en los archivos | `tests/test_migrar_a_postgres.py`, con una línea truncada a propósito | **1 de 1** |
-| La suite completa del backend | `pytest` con Postgres y Redis, y `mypy` | **587 pasan**, 2 se saltan (las fotos de R-05, que no están en el repositorio); `mypy` sin errores en 111 archivos |
+| La suite completa del backend | `pytest` con Postgres y Redis, y `mypy` | **592 pasan**, 2 se saltan (las fotos de R-05, que no están en el repositorio); `mypy` sin errores en 111 archivos |
 | La migración en el compose del servidor | 8 hojas y una revisión con archivos; después la base y `migrar_a_postgres` | La API devuelve **exactamente lo mismo** antes y después; una segunda corrida se niega y no duplica |
 | La migración al arrancar, sin pasos a mano | Otro proyecto con volúmenes nuevos: 6 hojas y una revisión con archivos, y después la base | La API migró sola al arrancar y devuelve **lo mismo**; al reiniciarla no hizo nada, y las hojas nuevas fueron solo a la base |
 | Un lote de 200 hojas en el compose del servidor, dos corridas | `medir_procesamiento`, con los límites de CPU y memoria de `compose.lab.yaml` | Confirmado en **1,2 y 2,8 s**, con **0 hojas pendientes de encolar**; procesado en **4,9 y 5,0 min** |

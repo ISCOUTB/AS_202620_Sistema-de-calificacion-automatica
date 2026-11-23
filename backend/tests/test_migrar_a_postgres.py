@@ -70,3 +70,28 @@ def test_al_arrancar_migra_una_sola_vez_aunque_el_worker_ya_haya_escrito(url, tm
     assert (primera["bitacora"], primera["resultados"]) == (2, 1)
     assert segunda == {"omitida": "la bitácora de la base ya tiene datos"}
     assert len(ResultadosEnPostgres(url).hechos_del_examen("P1")) == 2
+
+
+@pytest.mark.parametrize("argumento", ["--bitacora", "--resultados", "--revisiones", "--url"])
+def test_la_herramienta_no_acepta_rutas_ni_la_base_por_la_linea_de_comandos(argumento):
+    """Las rutas y la base salen del entorno, como en la API y el worker: un argumento con una
+    ruta permitiría leer cualquier archivo del contenedor (SonarCloud, pythonsecurity:S8707)."""
+    from herramientas.migrar_a_postgres import main
+
+    with pytest.raises(SystemExit):
+        main([argumento, "/etc/passwd"])
+
+
+@con_base
+def test_la_herramienta_lee_las_rutas_y_la_base_del_entorno(url, tmp_path, monkeypatch):
+    from herramientas.migrar_a_postgres import main
+
+    bitacora = BitacoraEnDisco(tmp_path / "b.jsonl")
+    bitacora.registrar(_entrada(1))
+    monkeypatch.setenv("DATABASE_URL", url)
+    monkeypatch.setenv("RUTA_BITACORA", str(tmp_path / "b.jsonl"))
+    monkeypatch.setenv("RUTA_RESULTADOS", str(tmp_path / "r.jsonl"))
+    monkeypatch.setenv("RUTA_REVISIONES", str(tmp_path / "v.jsonl"))
+
+    assert main([]) == 0
+    assert [e.trabajo_id for e in BitacoraEnPostgres(url).pendientes()] == ["t-1"]
