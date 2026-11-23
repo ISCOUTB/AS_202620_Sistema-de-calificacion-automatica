@@ -43,6 +43,16 @@ Future<void> _llamarATodos(ServiciosApp servicios) async {
   await intentar(() => servicios.consultarClave!('E'));
   await intentar(() => servicios.guardarClave!('E', ['A']));
   await intentar(() => servicios.habilitarClave!('E'));
+  const pregunta = SolicitudDistractores(enunciado: 'Derivada de x²', respuestaCorrecta: '2x');
+  await intentar(() => servicios.guardarDistractores!(
+        pregunta,
+        const [DistractorPropuesto(expresion: 'x', error: 'Bajó el exponente.')],
+      ));
+  await intentar(() => servicios.listarDistractoresGuardados!());
+  await intentar(() => servicios.quitarDistractoresGuardados!('a' * 64));
+  await intentar(() => servicios.listarPreguntas!());
+  await intentar(() => servicios.agregarPregunta!('Derivada de x²', '2x'));
+  await intentar(() => servicios.eliminarPregunta!('b' * 64));
 }
 
 void main() {
@@ -68,6 +78,12 @@ void main() {
       'GET /examenes/E/clave',
       'PUT /examenes/E/clave',
       'POST /examenes/E/clave/habilitacion',
+      'PUT /distractores/guardados',
+      'GET /distractores/guardados',
+      'DELETE /distractores/guardados/${'a' * 64}',
+      'GET /preguntas',
+      'POST /preguntas',
+      'DELETE /preguntas/${'b' * 64}',
     });
     expect(enviadas.values.toSet(), {'Bearer v1.abc.def'});
   });

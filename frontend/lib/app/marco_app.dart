@@ -155,6 +155,12 @@ class _MarcoAppState extends State<MarcoApp> {
       PantallaPauta(
         proponerDistractores: servicios.proponerDistractores,
         estadoApi: _estadoApi,
+        guardarDistractores: servicios.guardarDistractores,
+        listarDistractoresGuardados: servicios.listarDistractoresGuardados,
+        quitarDistractoresGuardados: servicios.quitarDistractoresGuardados,
+        listarPreguntas: servicios.listarPreguntas,
+        agregarPregunta: servicios.agregarPregunta,
+        eliminarPregunta: servicios.eliminarPregunta,
         listarExamenes: servicios.listarExamenes,
         consultarClave: servicios.consultarClave,
         guardarClave: servicios.guardarClave,

@@ -161,4 +161,124 @@ void main() {
     expect(e.proveedorNoDisponible, isFalse);
     expect(e.presupuestoAgotado, isFalse);
   });
+
+  // --- Los distractores guardados (ADR-0029) -------------------------------------------------
+
+  test('Regenerar una sola pide una propuesta nueva, sin leer la caché', () {
+    expect(_solicitud.paraRegenerarUna().aJson(), {
+      'enunciado': 'Derive f(x) = x·sin(x)',
+      'respuesta_correcta': 'sin(x) + x·cos(x)',
+      'cantidad': 1,
+      'otras': true,
+    });
+  });
+
+  /// Lo que guardó Ana para la pregunta de [_solicitud], como lo devuelve la API.
+  Map<String, Object> guardadosEnJson(List<Map<String, String>> distractores) => {
+        'llave': 'a' * 64,
+        'enunciado': 'Derive f(x) = x·sin(x)',
+        'respuesta_correcta': 'sin(x) + x·cos(x)',
+        'distractores': distractores,
+        'guardado_en': '2026-11-23T09:00:00Z',
+      };
+
+  test('Guardar manda la pregunta y los elegidos con PUT y lee lo que quedó', () async {
+    late http.Request enviada;
+    final cliente = MockClient((peticion) async {
+      enviada = peticion;
+      return http.Response.bytes(
+        utf8.encode(jsonEncode(guardadosEnJson([
+          {'expresion': 'cos(x)', 'error': 'Olvida la regla del producto.'},
+        ]))),
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    });
+
+    final guardados = await guardarDistractores(
+      _solicitud,
+      const [DistractorPropuesto(expresion: 'cos(x)', error: 'Olvida la regla del producto.')],
+      cliente: cliente,
+    );
+
+    expect(enviada.method, 'PUT');
+    expect(enviada.url.toString(), '$backendUrl/distractores/guardados');
+    expect(jsonDecode(enviada.body), {
+      'enunciado': 'Derive f(x) = x·sin(x)',
+      'respuesta_correcta': 'sin(x) + x·cos(x)',
+      'distractores': [
+        {'expresion': 'cos(x)', 'error': 'Olvida la regla del producto.'},
+      ],
+    });
+    expect(guardados.llave, 'a' * 64);
+    expect(guardados.enunciado, 'Derive f(x) = x·sin(x)');
+    expect(guardados.respuestaCorrecta, 'sin(x) + x·cos(x)');
+    expect(guardados.distractores.single.expresion, 'cos(x)');
+    expect(guardados.guardadoEn, DateTime.utc(2026, 11, 23, 9));
+  });
+
+  test('Un 422 al guardar trae el motivo de la API', () async {
+    try {
+      await guardarDistractores(
+        _solicitud,
+        const [DistractorPropuesto(expresion: 'cos(x)', error: 'x')],
+        cliente: _responde(422, {'detail': '«cos(x)» está dos veces.'}),
+      );
+      fail('No lanzó.');
+    } on ExcepcionDistractores catch (e) {
+      expect(e.mensaje, '«cos(x)» está dos veces.');
+    }
+  });
+
+  test('La lista de lo guardado se pide con GET y trae cada pregunta con su llave', () async {
+    late http.Request enviada;
+    final cliente = MockClient((peticion) async {
+      enviada = peticion;
+      return http.Response.bytes(
+        utf8.encode(jsonEncode([
+          guardadosEnJson([
+            {'expresion': 'x·cos(x)', 'error': 'Deriva solo el segundo factor.'},
+          ]),
+        ])),
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    });
+
+    final lista = await listarDistractoresGuardados(cliente: cliente);
+
+    expect(enviada.method, 'GET');
+    expect(enviada.url.toString(), '$backendUrl/distractores/guardados');
+    expect(lista.single.llave, 'a' * 64);
+    expect(lista.single.distractores.single.expresion, 'x·cos(x)');
+  });
+
+  test('Quitar lo guardado manda DELETE con la llave', () async {
+    late http.Request enviada;
+    final cliente = MockClient((peticion) async {
+      enviada = peticion;
+      return http.Response('', 204);
+    });
+
+    await quitarDistractoresGuardados('a' * 64, cliente: cliente);
+
+    expect(enviada.method, 'DELETE');
+    expect(enviada.url.toString(), '$backendUrl/distractores/guardados/${'a' * 64}');
+  });
+
+  test('Quitar lo que ya no estaba guardado no es un error', () async {
+    await quitarDistractoresGuardados(
+      'a' * 64,
+      cliente: _responde(404, {'detail': 'Esa pregunta no tiene distractores guardados.'}),
+    );
+  });
+
+  test('Si quitar falla por otra cosa, lo dice', () async {
+    try {
+      await quitarDistractoresGuardados('a' * 64, cliente: _responde(500, {}));
+      fail('No lanzó.');
+    } on ExcepcionDistractores catch (e) {
+      expect(e.mensaje, 'El servidor respondió 500.');
+    }
+  });
 }

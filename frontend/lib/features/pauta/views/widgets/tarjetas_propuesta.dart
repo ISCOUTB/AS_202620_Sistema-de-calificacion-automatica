@@ -7,8 +7,8 @@ import '../../../../common/widgets/q_tarjeta.dart';
 import '../../data/servicio_distractores.dart';
 import 'letra_opcion.dart';
 
-/// Lo que el docente decidió sobre una propuesta. Vive solo en esta vista: el modelo propone y
-/// el docente decide (RF-07), pero todavía no hay banco de preguntas (A-04) donde guardarlo.
+/// Lo que el docente decidió sobre una propuesta: el modelo propone y el docente decide (RF-07).
+/// Las elegidas se guardan con «Guardar distractores» (ADR-0029).
 enum DecisionDocente { pendiente, usar, descartar }
 
 /// La respuesta correcta que el docente escribió, como opción A.
@@ -81,6 +81,9 @@ class TarjetaClave extends StatelessWidget {
 /// Mientras está pendiente lleva el riel y la insignia cian, que marcan lo que hizo la máquina.
 /// Cuando el docente decide, el color pasa a ser el de su decisión: así se ve de un vistazo qué
 /// falta revisar.
+///
+/// Una descartada ofrece «Regenerar», a la izquierda de «Deshacer»: pide al modelo una sola
+/// propuesta nueva para reemplazar esta, sin tocar las demás.
 class TarjetaDistractor extends StatelessWidget {
   const TarjetaDistractor({
     super.key,
@@ -88,12 +91,26 @@ class TarjetaDistractor extends StatelessWidget {
     required this.distractor,
     required this.decision,
     required this.alDecidir,
+    this.guardada = false,
+    this.alRegenerar,
+    this.regenerando = false,
+    this.aviso,
   });
 
   final String letra;
   final DistractorPropuesto distractor;
   final DecisionDocente decision;
   final ValueChanged<DecisionDocente> alDecidir;
+
+  /// Si está guardada para esta pregunta (ADR-0029).
+  final bool guardada;
+
+  /// Nulo cuando no se puede regenerar (sin conexión).
+  final VoidCallback? alRegenerar;
+  final bool regenerando;
+
+  /// Lo que pasó al regenerar, si no se pudo: el motivo de la API o que la nueva ya estaba.
+  final String? aviso;
 
   @override
   Widget build(BuildContext context) {
@@ -103,10 +120,16 @@ class TarjetaDistractor extends StatelessWidget {
           'Propuesta del modelo',
           Icons.auto_awesome_outlined,
         ),
+      DecisionDocente.usar when guardada => (
+          QTono.exito,
+          'Guardada',
+          Icons.bookmark_added_outlined,
+        ),
       DecisionDocente.usar => (QTono.exito, 'Usted la eligió', Icons.check_circle_outlined),
       DecisionDocente.descartar => (QTono.neutro, 'Usted la descartó', Icons.block_outlined),
     };
     final descartada = decision == DecisionDocente.descartar;
+    final textos = Theme.of(context).textTheme;
 
     return Semantics(
       container: true,
@@ -163,8 +186,22 @@ class TarjetaDistractor extends StatelessWidget {
                       ),
                     ]
                   : [
+                      if (descartada)
+                        TextButton.icon(
+                          onPressed: regenerando ? null : alRegenerar,
+                          icon: regenerando
+                              ? const SizedBox.square(
+                                  dimension: 18,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.autorenew_outlined, size: 18),
+                          label: Text(
+                            regenerando ? 'Regenerando…' : 'Regenerar',
+                            semanticsLabel: 'Regenerar la opción $letra',
+                          ),
+                        ),
                       TextButton.icon(
-                        onPressed: () => alDecidir(DecisionDocente.pendiente),
+                        onPressed: regenerando ? null : () => alDecidir(DecisionDocente.pendiente),
                         icon: const Icon(Icons.undo_outlined, size: 18),
                         label: Text(
                           'Deshacer',
@@ -173,6 +210,17 @@ class TarjetaDistractor extends StatelessWidget {
                       ),
                     ],
             ),
+            if (aviso case final texto?) ...[
+              const SizedBox(height: QEspacios.xs),
+              Semantics(
+                liveRegion: true,
+                child: Text(
+                  texto,
+                  textAlign: TextAlign.end,
+                  style: textos.bodySmall?.copyWith(color: QColores.advertenciaTexto),
+                ),
+              ),
+            ],
           ],
         ),
       ),

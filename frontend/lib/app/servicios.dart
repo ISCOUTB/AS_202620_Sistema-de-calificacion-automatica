@@ -11,6 +11,7 @@ import '../features/carga/data/servicio_resultados.dart' as resultados;
 import '../features/panel/data/servicio_panel.dart' as panel;
 import '../features/pauta/data/servicio_clave.dart' as clave;
 import '../features/pauta/data/servicio_distractores.dart' as distractores;
+import '../features/pauta/data/servicio_preguntas.dart' as preguntas;
 import '../features/revision/data/servicio_revision.dart' as revision;
 import 'sesion_actual.dart';
 
@@ -41,6 +42,12 @@ class ServiciosApp {
     this.habilitarClave,
     this.crearExamen,
     this.consultarPanel,
+    this.guardarDistractores,
+    this.listarDistractoresGuardados,
+    this.quitarDistractoresGuardados,
+    this.listarPreguntas,
+    this.agregarPregunta,
+    this.eliminarPregunta,
     this.tomarFoto,
   });
 
@@ -81,6 +88,16 @@ class ServiciosApp {
       habilitarClave: (examenId) => clave.habilitarClave(examenId, cliente: cliente),
       crearExamen: (nombre) => examenes.crearExamen(nombre, cliente: cliente),
       consultarPanel: (examenId) => panel.consultarPanel(examenId, cliente: cliente),
+      guardarDistractores: (pregunta, elegidos) =>
+          distractores.guardarDistractores(pregunta, elegidos, cliente: cliente),
+      listarDistractoresGuardados: () =>
+          distractores.listarDistractoresGuardados(cliente: cliente),
+      quitarDistractoresGuardados: (llave) =>
+          distractores.quitarDistractoresGuardados(llave, cliente: cliente),
+      listarPreguntas: () => preguntas.listarPreguntas(cliente: cliente),
+      agregarPregunta: (enunciado, respuesta) =>
+          preguntas.agregarPregunta(enunciado, respuesta, cliente: cliente),
+      eliminarPregunta: (llave) => preguntas.eliminarPregunta(llave, cliente: cliente),
     );
   }
 
@@ -97,6 +114,21 @@ class ServiciosApp {
   final Future<carga.ResultadoCarga> Function(String, List<carga.ArchivoSeleccionado>) subirHojas;
   final Future<distractores.ResultadoDistractores> Function(distractores.SolicitudDistractores)
       proponerDistractores;
+
+  /// Los distractores que el docente aprueba (ADR-0029): guardarlos y encontrarlos al volver a
+  /// la pregunta. Opcionales: sin ellos, Pauta no ofrece guardar.
+  final Future<distractores.DistractoresGuardados> Function(
+    distractores.SolicitudDistractores,
+    List<distractores.DistractorPropuesto>,
+  )? guardarDistractores;
+  final Future<List<distractores.DistractoresGuardados>> Function()? listarDistractoresGuardados;
+  final Future<void> Function(String llave)? quitarDistractoresGuardados;
+
+  /// Las preguntas que el docente agrega en Pauta (ADR-0030).
+  final Future<List<preguntas.PreguntaDelDocente>> Function()? listarPreguntas;
+  final Future<preguntas.PreguntaDelDocente> Function(String enunciado, String respuesta)?
+      agregarPregunta;
+  final Future<void> Function(String llave)? eliminarPregunta;
 
   /// Cómo quedó cada hoja leída de un examen. Opcional: sin él, el reporte de carga se queda en
   /// la recepción, como antes de la lectura.

@@ -38,6 +38,16 @@ class SolicitudDistractores {
         otras: true,
       );
 
+  /// La misma pregunta, pidiendo una sola propuesta nueva: es lo que hace «Regenerar» en una
+  /// tarjeta descartada. La caché de la API guarda aparte cada cantidad, así que no reemplaza las
+  /// propuestas de la pregunta (ADR-0019).
+  SolicitudDistractores paraRegenerarUna() => SolicitudDistractores(
+        enunciado: enunciado,
+        respuestaCorrecta: respuestaCorrecta,
+        cantidad: 1,
+        otras: true,
+      );
+
   Map<String, dynamic> aJson() => {
         'enunciado': enunciado,
         'respuesta_correcta': respuestaCorrecta,
@@ -57,6 +67,8 @@ class DistractorPropuesto {
         expresion: json['expresion'] as String,
         error: json['error'] as String,
       );
+
+  Map<String, dynamic> aJson() => {'expresion': expresion, 'error': error};
 }
 
 /// Una propuesta que la regla del dominio no dejó pasar, con el motivo.
@@ -183,6 +195,111 @@ Future<ResultadoDistractores> proponerDistractores(
       throw const ExcepcionDistractores(
         'Revise el enunciado y la respuesta correcta: no pueden quedar vacíos ni pasar del '
         'largo permitido.',
+      );
+    default:
+      throw ExcepcionDistractores('El servidor respondió ${respuesta.statusCode}.');
+  }
+}
+
+/// Los distractores que el docente guardó para una pregunta (ADR-0029). [llave] es como la API
+/// reconoce la pregunta, y con ella se quitan.
+class DistractoresGuardados {
+  const DistractoresGuardados({
+    required this.llave,
+    required this.enunciado,
+    required this.respuestaCorrecta,
+    required this.distractores,
+    required this.guardadoEn,
+  });
+
+  final String llave;
+  final String enunciado;
+  final String respuestaCorrecta;
+  final List<DistractorPropuesto> distractores;
+  final DateTime guardadoEn;
+
+  factory DistractoresGuardados.desdeJson(Map<String, dynamic> json) => DistractoresGuardados(
+        llave: json['llave'] as String,
+        enunciado: json['enunciado'] as String,
+        respuestaCorrecta: json['respuesta_correcta'] as String,
+        distractores: (json['distractores'] as List)
+            .map((e) => DistractorPropuesto.desdeJson(e as Map<String, dynamic>))
+            .toList(),
+        guardadoEn: DateTime.parse(json['guardado_en'] as String),
+      );
+}
+
+/// Guarda los distractores que el docente eligió para la pregunta de [pregunta]
+/// (`PUT /distractores/guardados`). Reemplazan a los que tuviera guardados para esa pregunta. Un
+/// 422 trae el motivo redactado por la API: uno repetido, la respuesta correcta o más de tres.
+Future<DistractoresGuardados> guardarDistractores(
+  SolicitudDistractores pregunta,
+  List<DistractorPropuesto> distractores, {
+  http.Client? cliente,
+}) async {
+  final put = cliente?.put ?? http.put;
+  final cuerpo = await _guardados(() => put(
+        Uri.parse('$backendUrl/distractores/guardados'),
+        headers: const {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'enunciado': pregunta.enunciado,
+          'respuesta_correcta': pregunta.respuestaCorrecta,
+          'distractores': [for (final d in distractores) d.aJson()],
+        }),
+      ));
+  try {
+    return DistractoresGuardados.desdeJson(jsonDecode(cuerpo) as Map<String, dynamic>);
+  } catch (_) {
+    throw const ExcepcionDistractores('La respuesta del servidor no se pudo leer.');
+  }
+}
+
+/// Lo que guardó el docente de la sesión (`GET /distractores/guardados`), pregunta por pregunta,
+/// de lo más antiguo a lo más reciente.
+Future<List<DistractoresGuardados>> listarDistractoresGuardados({http.Client? cliente}) async {
+  final get = cliente?.get ?? http.get;
+  final cuerpo = await _guardados(() => get(Uri.parse('$backendUrl/distractores/guardados')));
+  try {
+    return [
+      for (final g in jsonDecode(cuerpo) as List)
+        DistractoresGuardados.desdeJson(g as Map<String, dynamic>),
+    ];
+  } catch (_) {
+    throw const ExcepcionDistractores('La respuesta del servidor no se pudo leer.');
+  }
+}
+
+/// Quita lo guardado para la pregunta de [llave] (`DELETE /distractores/guardados/{llave}`). Si ya
+/// no había nada, el resultado es el mismo y no se trata como un error.
+Future<void> quitarDistractoresGuardados(String llave, {http.Client? cliente}) async {
+  final delete = cliente?.delete ?? http.delete;
+  await _guardados(
+    () => delete(Uri.parse('$backendUrl/distractores/guardados/$llave')),
+    esperado: 204,
+    o: 404,
+  );
+}
+
+/// El cuerpo de la respuesta de una ruta de lo guardado, si llegó el código esperado.
+Future<String> _guardados(
+  Future<http.Response> Function() pedir, {
+  int esperado = 200,
+  int? o,
+}) async {
+  final http.Response respuesta;
+  try {
+    respuesta = await pedir().timeout(const Duration(seconds: 15));
+  } catch (_) {
+    throw const ExcepcionDistractores(
+      'No se pudo contactar con el servidor. Revise su conexión y vuelva a intentarlo.',
+    );
+  }
+  final cuerpo = utf8.decode(respuesta.bodyBytes);
+  if (respuesta.statusCode == esperado || respuesta.statusCode == o) return cuerpo;
+  switch (respuesta.statusCode) {
+    case 422:
+      throw ExcepcionDistractores(
+        _detalle(cuerpo) ?? 'Revise los distractores: alguno está vacío o pasa del largo permitido.',
       );
     default:
       throw ExcepcionDistractores('El servidor respondió ${respuesta.statusCode}.');
