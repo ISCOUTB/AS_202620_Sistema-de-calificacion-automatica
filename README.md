@@ -26,13 +26,15 @@ Detalle en [Entorno desplegado, en detalle](#entorno-desplegado-en-detalle).
 
 ## Evidencia del final
 
-- **Inicio de sesión (ADR-0025):** correo y contraseña de una lista cifrada en el servidor; toda
-  ruta salvo `/health` y `/metricas` responde 401 sin sesión, y una prueba las recorre todas.
-- **La clave desde la aplicación (ADR-0026):** se registra y se habilita en Pauta, a nombre del
+- **Base de datos (ADR-0027):** la bitácora, los resultados y las revisiones en Postgres, detrás de
+  los mismos puertos; lo que había en archivos pasa a la base sin cambios
+  (`docs/evidencia/base-de-datos.md`).
+- **Inicio de sesión (ADR-0025):** correo y contraseña de una lista cifrada en el servidor; sin
+  sesión, las rutas de datos responden 401.
+- **Clave desde la aplicación (ADR-0026):** se registra y se habilita en Pauta a nombre del
   docente, y no cambia después de la primera nota.
-- **La revisión con la opción ya elegida (ADR-0024):** la única marca con 40 o más de confianza
-  llega elegida y no cuenta hasta guardar. En las 3 fotos, 25 de 28 bien y 0 equivocadas; 0
-  sugerencias equivocadas en 1 163 preguntas sintéticas (`docs/evidencia/preseleccion-omr.md`).
+- **Revisión con la opción ya elegida (ADR-0024):** la única marca con 40 o más de confianza llega
+  elegida; en las fotos, 25 de 28 bien y 0 equivocadas, y 0 en 1 163 preguntas sintéticas.
 
 ## Evidencia S14: medición de atributos de calidad
 
@@ -62,9 +64,9 @@ Detalle en [Entorno desplegado, en detalle](#entorno-desplegado-en-detalle).
 | Estado de cada señalamiento | Columna «Estado» de §11.2 y §11.3: corregido, asumido o pendiente |
 | Evidencia del aspecto medido | [`docs/aspectos.md`](docs/aspectos.md#tabla-de-trazabilidad), columna «Evidencia» de A-02 y A-03 |
 
-**Antes del proyecto final** queda: medir EC-03 y EC-04 en el servidor (R-37); el conjunto de hojas
-escaneadas y la calibración del umbral (R-01, R-04); y llevar A-04 y A-05, que siguen declarados, a
-la tabla de aspectos de punta a punta.
+**Después de la S14** se construyeron A-04 y, en parte, A-05 (ADR-0026 y ADR-0025). Siguen
+pendientes medir EC-03 y EC-04 en el servidor (R-37) y calibrar el umbral con hojas escaneadas
+(R-01, R-04).
 
 ## Lectura y calificación de las hojas (A-02, A-03)
 
@@ -73,7 +75,7 @@ la tabla de aspectos de punta a punta.
   leídas (pide ≥98 %); EC-02, 100 % de las ambiguas a revisión (pide ≥99 %); 0 errores silenciosos.
   EC-03, p95 de 1,7 s por hoja (pide ≤5 s); EC-04, 200 hojas en 3,6 min (pide ≤10 min).
 - **Salvedades:** hojas sintéticas, no las escaneadas de R-01; umbral sin calibrar con hojas reales
-  (R-04); rutas públicas hasta A-05, solo con hojas sintéticas (AM-02).
+  (R-04); solo hojas sintéticas hasta que existan los cursos (AM-02).
 
 | Qué | Dónde |
 |---|---|
@@ -312,11 +314,13 @@ confirme las filas de despliegue de la S8 y el taller.
 
 ## Cómo se arranca
 
-Requiere Docker (con el plugin Compose). Antes de la primera vez, copiar `.env.example` a `.env`.
-Solo hace falta editarlo para probar la ruta de distractores: ahí va `LLM_API_KEY`, la clave del
-proveedor de LLM, que nunca se versiona (RNF-11). Sin ella, esa ruta responde 503 y lo demás
-funciona igual. Ahí están también `LLM_SOLICITUDES_POR_MINUTO` y `LLM_SOLICITUDES_POR_DIA`, el
-presupuesto del proveedor (ADR-0015), que no hace falta tocar.
+Requiere Docker (con el plugin Compose). Antes de la primera vez, copiar `.env.example` a `.env` y
+llenar `SESION_SECRETO` (un texto largo al azar) y `DOCENTES`, con la línea de cada cuenta que
+imprime `python -m herramientas.crear_docente correo` desde `backend/` (ADR-0025): sin ellas nadie
+puede entrar. `LLM_API_KEY`, la clave del proveedor de LLM, solo hace falta para la ruta de
+distractores y nunca se versiona (RNF-11); sin ella, esa ruta responde 503 y lo demás funciona
+igual. `LLM_SOLICITUDES_POR_MINUTO` y `LLM_SOLICITUDES_POR_DIA` son el presupuesto del proveedor
+(ADR-0015) y no hace falta tocarlas.
 
 Desde la raíz del repositorio:
 
@@ -326,7 +330,7 @@ docker compose up
 
 Levanta, con un solo comando, la aplicación web (FastAPI, puerto 8000), un worker que comparte
 el mismo código de dominio que la API, la cola de trabajos (Redis), la base de datos (Postgres,
-todavía sin esquema) y el frontend (Flutter compilado a estáticos, servido en el puerto 8080).
+con la bitácora, los resultados y las revisiones; ADR-0027) y el frontend (Flutter compilado a estáticos, servido en el puerto 8080).
 La primera construcción es lenta por el SDK de Flutter de la etapa de build del frontend; no
 está colgado. Para reconstruir tras cambiar código: `docker compose up --build`.
 
@@ -335,15 +339,9 @@ está colgado. Para reconstruir tras cambiar código: `docker compose up --build
 
 ### Cómo se recorre la lectura
 
-Para que una hoja salga con nota, su examen necesita una clave habilitada, y hasta A-04 se escribe
-a mano: un JSON con `examen_id`, las preguntas (`numero`, `correcta` de A a D y `peso`) y la
-`habilitacion` (`por` y `en`). Con el sistema arriba, desde la raíz del repositorio, se copia al
-volumen con el nombre del examen (uno como `CALC-2026-01`, sin espacios ni tildes):
-
-```
-docker compose exec api mkdir -p /app/almacen_imagenes/claves-de-respuestas
-docker compose cp CALC-2026-01.json api:/app/almacen_imagenes/claves-de-respuestas/CALC-2026-01.json
-```
+Para que una hoja salga con nota, su examen necesita una clave habilitada. Se registra y se
+habilita en la pantalla Pauta & IA, después de entrar con una cuenta de `DOCENTES` (ADR-0025 y
+ADR-0026): la cuadrícula de respuestas, o las letras pegadas de una vez, y el botón «Habilitar».
 
 En Git Bash, estos comandos llevan `MSYS_NO_PATHCONV=1` delante, porque Git Bash cambia las rutas
 que empiezan con `/` antes de pasárselas a Docker. En PowerShell, cmd, Linux o macOS van tal cual.
@@ -394,9 +392,10 @@ en el encabezado de [`deploy/compose.local-override.yaml`](deploy/compose.local-
 
 ## Corte vertical: carga de examen (aspecto A-01)
 
-Del sistema hay **cuatro aspectos construidos de punta a punta**, y los demás solo declarados. Los
-otros son A-06, la porción de la [Evidencia S9](#evidencia-s9), y A-02 y A-03, la
-[lectura y la calificación](#lectura-y-calificación-de-las-hojas-a-02-a-03). Este es
+Del sistema hay **cinco aspectos construidos de punta a punta**, y A-05 en parte. Los otros son
+A-06, la porción de la [Evidencia S9](#evidencia-s9); A-02 y A-03, la
+[lectura y la calificación](#lectura-y-calificación-de-las-hojas-a-02-a-03); y A-04, la clave desde
+la aplicación. Este es
 [A-01, la carga de examen para calificación](docs/aspectos.md#a-01), que realiza RF-01: el
 docente sube las hojas escaneadas de un examen y el sistema le confirma cuáles recibió y cuáles
 no, con el motivo de cada rechazo.
@@ -469,9 +468,9 @@ retención de imágenes que exige RNF-14 no está implementada: hoy nada borra l
 
 El almacenamiento y la bitácora de recepción están **detrás de sendos puertos** en
 `infraestructura`, con adaptadores en disco declarados provisionales. Es deliberado: el corte
-necesitaba guardar archivos sin cerrar de paso la decisión de persistencia, que sigue abierta
-como riesgo R-06 del arc42. Cuando se escriba ese ADR, lo que cambia son los adaptadores;
-`ingesta`, el modelo de datos y las pruebas del aspecto no se tocan.
+necesitaba guardar archivos sin cerrar de paso la decisión de persistencia (riesgo R-06 del
+arc42). Cuando llegó ese ADR, el 0027, lo que cambió fueron los adaptadores: la bitácora pasó a
+Postgres y `ingesta`, el modelo de datos y las pruebas del aspecto no se tocaron.
 
 El reintento de las hojas que quedaron `pendiente_de_encolar` **no está automatizado**:
 `bitacora.pendientes()` deja el dato listo, y A-02 no lo consumió (R-32).
@@ -572,7 +571,7 @@ se omite.
 Diez son la **prueba de contrato** ([`backend/tests/test_contrato.py`](backend/tests/test_contrato.py)),
 y verifican que el documento de `docs/contrato/openapi.json` y la API que corre no se puedan
 separar: que el archivo versionado sea exactamente el que genera la aplicación de hoy, que su
-número de versión sea el declarado en el código, que sigan estando las nueve rutas (y que la de
+número de versión sea el declarado en el código, que sigan estando las doce rutas (y que la de
 distractores publique su 503 y su 429), que la
 respuesta de carga exija sus cuatro campos, que los estados publicados sean los dos del dominio,
 que la revisión no publique la respuesta correcta,
@@ -744,11 +743,11 @@ El desarrollo sigue Aspect Driven Development (ADD): cada funcionalidad se decla
 
 Las decisiones de un ADR aceptado no se editan ni se borran: si una decisión cambia, se escribe uno nuevo y el anterior pasa a estado *reemplazado por*. Los ajustes menores que no son de arquitectura, como un enlace roto, se permiten dejando constancia ([ADR-0014](docs/adr/0014-dejar-constancia-del-ajuste-de-enlaces-en-adr-0007.md)).
 
-## Estado actual
+## Estado al cierre
 
 - [x] Aspectos A-01 (carga de examen), A-02 (lectura de las hojas), A-03 (calificación, salvo las
-  estadísticas del Panel) y A-06 (distractores diagnósticos) construidos de punta a punta; A-04 y
-  A-05 declarados
+  estadísticas del Panel), A-04 (la clave desde la aplicación) y A-06 (distractores diagnósticos)
+  construidos de punta a punta; A-05, en parte: la entrada con sesión, sin los cursos
 - [x] arc42: objetivos de calidad, restricciones clasificadas y contexto
 - [x] arc42: estrategia de solución, decisiones de arquitectura y riesgos
 - [x] arc42: Building Block View, Runtime View y Cross-cutting Concepts (secciones 5, 6 y 8)
@@ -756,7 +755,7 @@ Las decisiones de un ADR aceptado no se editan ni se borran: si una decisión ca
 - [x] Escenarios de calidad: 5 priorizados y 4 complementarios; EC-01 a EC-04 (sobre hojas
   sintéticas, en local) y EC-07 a EC-09 medidos
 - [x] C4 Niveles 1, 2 y 3
-- [x] ADR 0001 a 0023
+- [x] ADR 0001 a 0027
 - [x] Elección de stack: FastAPI en el backend, Flutter en el frontend
 - [x] Esqueleto ejecutable
 - [x] Corte vertical de A-01: `ingesta`, almacén, bitácora, encolado y pantalla de carga
@@ -764,7 +763,8 @@ Las decisiones de un ADR aceptado no se editan ni se borran: si una decisión ca
 - [x] Despliegue con URL pública, logs estructurados y métrica de EC-07: en Render desde la S8 y en
   el servidor del laboratorio (iscoutb.dev) desde el 29-oct, con la cola y las hojas persistentes
   (ADR-0021)
-- [ ] ADR de persistencia y almacenamiento (riesgo R-06); el adaptador actual es provisional
+- [x] ADR de persistencia (riesgo R-06): ADR-0027 lleva la bitácora, los resultados y las
+  revisiones a Postgres; siguen abiertos el medio de las imágenes y la retención
 - [x] Modelo de datos compartido más allá de lo que A-01 necesitó: la clave, la lectura y la nota
   (A-02, A-03), cada una con su dueño en la línea `Posee:` de su módulo
 - [x] Proveedor de LLM: Groq, detrás de un puerto de `autoria` (ADR-0013)
@@ -783,9 +783,13 @@ Las decisiones de un ADR aceptado no se editan ni se borran: si una decisión ca
 - [x] Lectura OMR y calificación (A-02, A-03): prototipo de R-05, EC-01 a EC-04 medidos, revisión
   manual desde la aplicación (RF-08), y una imagen que mataba al worker en cada reinicio, cerrada
   (AM-16, R-36)
-- [ ] Autenticación (A-05), antes de la primera hoja real (AM-02); análisis de las imágenes base
-  (R-34)
-- [ ] Registro de la clave desde la aplicación (A-04); hoy se copia a mano (R-35)
+- [x] Preselección en la revisión: la única marca de una pregunta dudosa llega elegida (ADR-0024)
+- [x] Inicio de sesión (A-05 en parte, ADR-0025): correo y contraseña de una lista cifrada en el
+  servidor, y la sesión en todas las rutas de datos
+- [x] La clave desde la aplicación (A-04, ADR-0026): se registra y se habilita en Pauta, a nombre del
+  docente (R-35 cerrado)
+- [ ] Los cursos y su aislamiento (EC-06): hasta entonces, solo hojas sintéticas (AM-02); análisis
+  de las imágenes base (R-34)
 - [ ] Calibrar el umbral con hojas reales escaneadas (R-01, R-04); estadísticas del Panel (RF-05)
 - [x] S14: EC-01 a EC-04 medidos tres veces cada uno y contrastados con su umbral, con el entorno
   declarado; arc42 §11.2 y §11.3
@@ -797,7 +801,7 @@ Las decisiones de un ADR aceptado no se editan ni se borran: si una decisión ca
 docs/
 ├── arc42/
 │   └── arc42-template-ES.md                            # documento de arquitectura (arc42)
-├── adr/                                                # 0001 a 0023; el 0001, reemplazado por el 0002, y del 0009 al 0012, por el 0021
+├── adr/                                                # 0001 a 0027; el 0001, reemplazado por el 0002, y del 0009 al 0012, por el 0021
 ├── c4/
 │   └── doc-c4.md                                       # modelo C4 (Niveles 1, 2 y 3)
 ├── contrato/
