@@ -639,9 +639,9 @@ Fecha, actividad realizada, herramienta utilizada, respuesta obtenida (resumen),
   quitar del diseño, pidió la confirmación al cerrar sesión y quitar una ayuda redundante, y lo probó
   en local. Para la clave decidió cuándo se puede cambiar, la cuadrícula con el campo para pegar y el
   cuadro que confirma lo pegado. Susana subió `identidad`, Sebastián la API y la clave, y Josué el
-  sitio. María escribió ADR-0025 y el
-  arc42; Susana, esta entrada y el modelo de amenazas; Josué, `aspectos.md`, el C4 y el README. El PR
-  lo revisan María, el código, y Susana, los documentos.
+  sitio. María subió los ADR-0025 y ADR-0026 y el arc42; Susana, esta entrada y el modelo de
+  amenazas; Josué, `aspectos.md`, el C4 y el README. El PR lo revisan María, el código, y Josué, los
+  documentos.
 - **Qué se aceptó:**
   - **Las cuentas en una variable del servidor**, cifradas con scrypt, en vez de una tabla en
     Postgres, que sigue sin uso (R-06).
