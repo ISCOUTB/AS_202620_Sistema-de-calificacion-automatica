@@ -307,7 +307,7 @@ class _PantallaPautaState extends State<PantallaPauta> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const QAvisoDatosEjemplo(
-          detalle: 'Estas preguntas son de ejemplo. El generador de distractores sí funciona.',
+          detalle: 'Estas preguntas son de ejemplo.',
         ),
         const SizedBox(height: QEspacios.lg),
         const QTituloSeccion(

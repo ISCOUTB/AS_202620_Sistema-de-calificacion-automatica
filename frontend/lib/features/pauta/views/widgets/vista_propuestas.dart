@@ -104,8 +104,8 @@ class VistaPropuestas extends StatelessWidget {
               const SizedBox(width: QEspacios.sm),
               Expanded(
                 child: Text(
-                  'Ninguna propuesta entra al examen sin su aprobación. Por ahora, sus '
-                  'decisiones no se guardan.',
+                  'Ninguna propuesta entra al examen sin su aprobación. Las que elija no quedan '
+                  'guardadas aquí; cópielas a su examen.',
                   style: textos.bodySmall,
                 ),
               ),

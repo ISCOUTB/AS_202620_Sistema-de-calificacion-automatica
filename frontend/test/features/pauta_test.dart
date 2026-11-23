@@ -198,6 +198,28 @@ void main() {
     expect(find.textContaining('Repite la función sin derivar'), findsOneWidget);
   });
 
+  testWidgets('El aviso de los datos de ejemplo solo dice que las preguntas son de ejemplo',
+      (tester) async {
+    await _montar(tester);
+
+    expect(find.textContaining('Estas preguntas son de ejemplo.'), findsOneWidget);
+    expect(find.textContaining('sí funciona'), findsNothing);
+  });
+
+  testWidgets('La nota de las propuestas dice que las elegidas se copian al examen',
+      (tester) async {
+    await _montar(tester);
+    await _tocar(tester, _pregunta(2));
+    await _tocar(tester, _botonProponer);
+
+    expect(
+      find.text('Ninguna propuesta entra al examen sin su aprobación. Las que elija no quedan '
+          'guardadas aquí; cópielas a su examen.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Por ahora'), findsNothing);
+  });
+
   testWidgets('Usar y Descartar registran la decisión del docente y se pueden deshacer',
       (tester) async {
     await _montar(tester);
