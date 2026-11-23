@@ -46,7 +46,10 @@ def test_la_cifrada_no_contiene_la_contrasena_ni_signos_que_dokploy_interprete()
 
 def test_la_misma_contrasena_se_cifra_distinto_cada_vez():
     """Cada cifrada lleva su sal: dos docentes con la misma contraseña no se delatan entre sí."""
-    assert cifrar("calculo-diferencial") != cifrar("calculo-diferencial")
+    primera = cifrar("calculo-diferencial")
+    segunda = cifrar("calculo-diferencial")
+
+    assert primera != segunda
 
 
 @pytest.mark.parametrize(
