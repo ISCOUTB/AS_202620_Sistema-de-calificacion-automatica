@@ -30,10 +30,37 @@ __all__ = [
     "RevisionesDelProfesor",
     "RevisionesEnDisco",
     "RUTA_REVISIONES_POR_OMISION",
+    "hecho_de_resoluciones",
+    "resolucion_desde",
 ]
 
 # Dónde está el registro si no lo dice `RUTA_REVISIONES`.
 RUTA_REVISIONES_POR_OMISION = "resultados/revisiones-del-profesor.jsonl"
+
+
+def hecho_de_resoluciones(
+    hoja_id: str, examen_id: str, resoluciones: Iterable[ResolucionDelProfesor]
+) -> dict[str, Any]:
+    """El hecho `resuelta` tal como lo guarda cualquier adaptador (disco o Postgres)."""
+    lista = [
+        {
+            "numero": resolucion.numero,
+            "veredicto": resolucion.veredicto,
+            "opcion": resolucion.opcion,
+            "por": resolucion.por,
+            "en": resolucion.en.isoformat(),
+        }
+        for resolucion in resoluciones
+    ]
+    if not lista:
+        raise ValueError("No hay resoluciones que registrar")
+    return {
+        "hecho": "resuelta",
+        "hoja_id": hoja_id,
+        "examen_id": examen_id,
+        "resoluciones": lista,
+        "momento": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 class RegistroDeRevisiones(Protocol):
@@ -72,29 +99,10 @@ class RevisionesEnDisco:
     def registrar_resoluciones(
         self, hoja_id: str, examen_id: str, resoluciones: Iterable[ResolucionDelProfesor]
     ) -> None:
-        lista = [
-            {
-                "numero": resolucion.numero,
-                "veredicto": resolucion.veredicto,
-                "opcion": resolucion.opcion,
-                "por": resolucion.por,
-                "en": resolucion.en.isoformat(),
-            }
-            for resolucion in resoluciones
-        ]
-        if not lista:
-            raise ValueError("No hay resoluciones que registrar")
-        self.ruta.parent.mkdir(parents=True, exist_ok=True)
         linea = json.dumps(
-            {
-                "hecho": "resuelta",
-                "hoja_id": hoja_id,
-                "examen_id": examen_id,
-                "resoluciones": lista,
-                "momento": datetime.now(timezone.utc).isoformat(),
-            },
-            ensure_ascii=False,
+            hecho_de_resoluciones(hoja_id, examen_id, resoluciones), ensure_ascii=False
         )
+        self.ruta.parent.mkdir(parents=True, exist_ok=True)
         with open(self.ruta, "a", encoding="utf-8") as archivo:
             archivo.write(linea + "\n")
             archivo.flush()
@@ -117,14 +125,14 @@ class RevisionesEnDisco:
                     hecho = json.loads(linea)
                     if hecho.get("examen_id") != examen_id:
                         continue
-                    resoluciones = [_resolucion_desde(datos) for datos in hecho["resoluciones"]]
+                    resoluciones = [resolucion_desde(datos) for datos in hecho["resoluciones"]]
                 except (ValueError, KeyError, TypeError, AttributeError):
                     continue
                 por_hoja.setdefault(hecho["hoja_id"], []).extend(resoluciones)
         return {hoja_id: tuple(lista) for hoja_id, lista in por_hoja.items()}
 
 
-def _resolucion_desde(datos: dict[str, Any]) -> ResolucionDelProfesor:
+def resolucion_desde(datos: dict[str, Any]) -> ResolucionDelProfesor:
     return ResolucionDelProfesor(
         numero=int(datos["numero"]),
         veredicto=str(datos["veredicto"]),

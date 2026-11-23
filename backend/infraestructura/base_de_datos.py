@@ -1,0 +1,345 @@
+"""Los registros en Postgres: los mismos puertos, otro adaptador (ADR-0027, cierra R-06).
+
+**Qué cambia y qué no.** La bitácora de recepción, el registro de resultados y el de revisiones
+siguen siendo de solo agregado, con un único escritor cada uno (ADR-0006, ADR-0018 y ADR-0023,
+punto 9). Antes cada hecho era una línea de un archivo `.jsonl`; aquí es una fila. Los puertos
+(`BitacoraDeRecepcion`, `LectorDeRecepciones`, `RegistroDeResultados`, `LectorDeResultados`,
+`RegistroDeRevisiones` y `LectorDeRevisiones`) no cambian, así que `ingesta`, `dashboard`,
+`calificacion`, la API y el worker tampoco: quien arma las dependencias elige este adaptador
+cuando existe `DATABASE_URL`, y el de disco cuando no.
+
+**Cada fila guarda el hecho completo** en una columna `jsonb`, el mismo documento que escribe el
+adaptador de disco (`hecho_de_lectura`, `hecho_ilegible`, `hecho_de_resoluciones`). Las columnas
+sueltas (`examen_id`, `hoja_id`, `estado`, `nota_en_decimas`...) son las que se consultan y se
+indexan. Así los dos adaptadores devuelven exactamente lo mismo, y las pruebas de los puertos
+valen para los dos.
+
+**Lo que siguen siendo archivos.** Las imágenes de las hojas y sus recortes (el almacén) y las
+claves de respuestas, que registra la aplicación (ADR-0026).
+
+**Conexiones reusadas, sin biblioteca de pool.** Cada proceso guarda hasta cuatro conexiones
+libres por base y las presta, una por operación, con su transacción. Cada una se prueba antes de
+prestarla, por si la base se reinició. Sin sentencias preparadas (`prepare_threshold=None`), para
+que funcione también detrás de un pooler en modo transacción, como el de Supabase.
+
+**Un fallo de conexión sube como `ConnectionError`**, que es un `OSError`: el worker ya trata el
+`OSError` del registro como transitorio y reintenta el trabajo (ADR-0020), igual que con el disco.
+"""
+
+from __future__ import annotations
+
+import queue
+import threading
+from collections.abc import Iterable, Iterator, Mapping
+from contextlib import contextmanager
+from datetime import datetime, timezone
+from typing import Any
+
+import psycopg
+from psycopg.types.json import Jsonb
+
+from infraestructura.bitacora import RecepcionDeHoja
+from infraestructura.modelo import (
+    CalificacionDeHoja,
+    EntradaDeBitacora,
+    LecturaDeHoja,
+    ResolucionDelProfesor,
+)
+from infraestructura.resultados import hecho_de_lectura, hecho_ilegible
+from infraestructura.revisiones import hecho_de_resoluciones, resolucion_desde
+
+__all__ = [
+    "ESQUEMA",
+    "crear_esquema",
+    "BitacoraEnPostgres",
+    "ResultadosEnPostgres",
+    "RevisionesEnPostgres",
+]
+
+# El esquema completo. Es idempotente: cada proceso lo aplica la primera vez que abre la base, así
+# que no hace falta un paso de migración aparte para levantar el sistema.
+ESQUEMA = """
+CREATE TABLE IF NOT EXISTS bitacora_de_recepcion (
+    id              BIGSERIAL PRIMARY KEY,
+    hecho           TEXT        NOT NULL CHECK (hecho IN ('recibida', 'encolada')),
+    trabajo_id      TEXT        NOT NULL,
+    hoja_id         TEXT,
+    examen_id       TEXT,
+    referencia      TEXT,
+    nombre_archivo  TEXT,
+    momento         TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS bitacora_por_examen ON bitacora_de_recepcion (examen_id);
+CREATE INDEX IF NOT EXISTS bitacora_por_trabajo ON bitacora_de_recepcion (trabajo_id);
+
+CREATE TABLE IF NOT EXISTS resultados_de_lectura (
+    id               BIGSERIAL PRIMARY KEY,
+    hecho            TEXT        NOT NULL CHECK (hecho IN ('leida', 'ilegible')),
+    hoja_id          TEXT        NOT NULL,
+    trabajo_id       TEXT        NOT NULL,
+    examen_id        TEXT        NOT NULL,
+    estado           TEXT        NOT NULL,
+    nota_en_decimas  INTEGER,
+    provisional      BOOLEAN,
+    documento        JSONB       NOT NULL,
+    momento          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS resultados_por_examen ON resultados_de_lectura (examen_id, id);
+
+CREATE TABLE IF NOT EXISTS revisiones_del_profesor (
+    id          BIGSERIAL PRIMARY KEY,
+    hoja_id     TEXT        NOT NULL,
+    examen_id   TEXT        NOT NULL,
+    documento   JSONB       NOT NULL,
+    momento     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS revisiones_por_examen ON revisiones_del_profesor (examen_id, id);
+"""
+
+_esquemas_aplicados: set[str] = set()
+_candado = threading.Lock()
+
+
+# Conexiones abiertas y libres, por base. Abrir una conexión cuesta más que el INSERT que la usa:
+# con una por operación, un lote de 200 hojas tardó 8,8 s en confirmarse con la API en media CPU,
+# y pasó el plazo de 8 s de la recepción (55 hojas quedaron pendientes de encolar).
+_CONEXIONES_LIBRES_POR_BASE = 4
+_libres: dict[str, queue.LifoQueue[psycopg.Connection]] = {}
+
+
+def _abrir(url: str) -> psycopg.Connection:
+    return psycopg.connect(url, connect_timeout=5, prepare_threshold=None, autocommit=True)
+
+
+def _tomar(url: str) -> psycopg.Connection:
+    """Una conexión libre que todavía responde, o una nueva. Una guardada puede haber muerto si la
+    base se reinició: se prueba con un `SELECT 1` y, si falla, se descarta."""
+    libres = _libres.setdefault(url, queue.LifoQueue(maxsize=_CONEXIONES_LIBRES_POR_BASE))
+    while True:
+        try:
+            conexion = libres.get_nowait()
+        except queue.Empty:
+            return _abrir(url)
+        try:
+            conexion.execute("SELECT 1")
+            return conexion
+        except psycopg.Error:
+            conexion.close()
+
+
+def _devolver(url: str, conexion: psycopg.Connection) -> None:
+    if conexion.closed or conexion.broken:
+        return
+    try:
+        _libres[url].put_nowait(conexion)
+    except queue.Full:
+        conexion.close()
+
+
+@contextmanager
+def _conexion(url: str) -> Iterator[psycopg.Connection]:
+    """Una conexión con su transacción: confirma al salir y deshace si algo falla. Un fallo de
+    red o de la base sube como `ConnectionError` (ver el docstring del módulo)."""
+    try:
+        conexion = _tomar(url)
+    except psycopg.OperationalError as error:
+        raise ConnectionError(f"Postgres no disponible: {error}") from error
+    try:
+        with conexion.transaction():
+            yield conexion
+    except psycopg.OperationalError as error:
+        conexion.close()
+        raise ConnectionError(f"Postgres no disponible: {error}") from error
+    finally:
+        _devolver(url, conexion)
+
+
+def crear_esquema(url: str) -> None:
+    """Aplica `ESQUEMA`. Se puede llamar las veces que sea."""
+    with _conexion(url) as conexion:
+        conexion.execute(ESQUEMA)
+
+
+def _con_esquema(url: str) -> str:
+    """Aplica el esquema una sola vez por proceso y por base."""
+    if url not in _esquemas_aplicados:
+        with _candado:
+            if url not in _esquemas_aplicados:
+                crear_esquema(url)
+                _esquemas_aplicados.add(url)
+    return url
+
+
+def _iso(valor: datetime | None) -> str | None:
+    return None if valor is None else valor.astimezone(timezone.utc).isoformat()
+
+
+class BitacoraEnPostgres:
+    """`BitacoraDeRecepcion` y `LectorDeRecepciones` sobre la tabla `bitacora_de_recepcion`.
+
+    Como en disco, cada fila es un hecho: `recibida` cuando la hoja quedó almacenada y `encolada`
+    cuando su trabajo llegó a la cola. La durabilidad que en disco daba el `fsync` aquí la da el
+    `COMMIT` antes de devolver el control."""
+
+    def __init__(self, url: str) -> None:
+        self.url = url
+
+    def registrar(self, entrada: EntradaDeBitacora) -> None:
+        with _conexion(_con_esquema(self.url)) as conexion:
+            conexion.execute(
+                "INSERT INTO bitacora_de_recepcion"
+                " (hecho, trabajo_id, hoja_id, examen_id, referencia, nombre_archivo)"
+                " VALUES ('recibida', %s, %s, %s, %s, %s)",
+                (
+                    entrada.trabajo_id,
+                    entrada.hoja_id,
+                    entrada.examen_id,
+                    entrada.referencia,
+                    entrada.nombre_archivo,
+                ),
+            )
+
+    def confirmar_encolada(self, trabajo_id: str) -> None:
+        with _conexion(_con_esquema(self.url)) as conexion:
+            conexion.execute(
+                "INSERT INTO bitacora_de_recepcion (hecho, trabajo_id) VALUES ('encolada', %s)",
+                (trabajo_id,),
+            )
+
+    def pendientes(self) -> list[EntradaDeBitacora]:
+        """Las recibidas sin una `encolada` con su mismo trabajo, en el orden en que llegaron."""
+        with _conexion(_con_esquema(self.url)) as conexion:
+            filas = conexion.execute(
+                "SELECT DISTINCT ON (r.trabajo_id)"
+                "       r.trabajo_id, r.examen_id, r.referencia, r.nombre_archivo, r.hoja_id, r.id"
+                "  FROM bitacora_de_recepcion r"
+                " WHERE r.hecho = 'recibida'"
+                "   AND NOT EXISTS (SELECT 1 FROM bitacora_de_recepcion e"
+                "                    WHERE e.hecho = 'encolada' AND e.trabajo_id = r.trabajo_id)"
+                " ORDER BY r.trabajo_id, r.id DESC"
+            ).fetchall()
+        filas.sort(key=lambda fila: fila[5])
+        return [
+            EntradaDeBitacora(
+                trabajo_id=trabajo_id,
+                examen_id=examen_id,
+                referencia=referencia,
+                nombre_archivo=nombre_archivo,
+                hoja_id=hoja_id or trabajo_id,
+            )
+            for trabajo_id, examen_id, referencia, nombre_archivo, hoja_id, _ in filas
+        ]
+
+    def recepciones_del_examen(self, examen_id: str) -> dict[str, RecepcionDeHoja]:
+        """La primera `recibida` de cada hoja del examen: es cuando llegó."""
+        with _conexion(_con_esquema(self.url)) as conexion:
+            filas = conexion.execute(
+                "SELECT COALESCE(hoja_id, trabajo_id), nombre_archivo, momento"
+                "  FROM bitacora_de_recepcion"
+                " WHERE hecho = 'recibida' AND examen_id = %s"
+                " ORDER BY id",
+                (examen_id,),
+            ).fetchall()
+        recepciones: dict[str, RecepcionDeHoja] = {}
+        for hoja_id, nombre_archivo, momento in filas:
+            if hoja_id not in recepciones:
+                recepciones[hoja_id] = RecepcionDeHoja(nombre_archivo or "", momento)
+        return recepciones
+
+
+class ResultadosEnPostgres:
+    """`RegistroDeResultados` y `LectorDeResultados` sobre la tabla `resultados_de_lectura`.
+
+    Solo el worker escribe y la API lee, como con el archivo. La nota vigente de una hoja sigue
+    siendo la de su último hecho."""
+
+    def __init__(self, url: str) -> None:
+        self.url = url
+
+    def registrar_lectura(
+        self,
+        hoja_id: str,
+        trabajo_id: str,
+        examen_id: str,
+        lectura: LecturaDeHoja,
+        calificacion: CalificacionDeHoja | None,
+        motivo_sin_nota: str | None = None,
+        recortes: Mapping[int, str] | None = None,
+    ) -> None:
+        hecho = hecho_de_lectura(
+            hoja_id, trabajo_id, examen_id, lectura, calificacion, motivo_sin_nota, recortes
+        )
+        self._agregar(
+            hecho,
+            None if calificacion is None else calificacion.nota_en_decimas,
+            None if calificacion is None else calificacion.provisional,
+        )
+
+    def registrar_lectura_imposible(
+        self, hoja_id: str, trabajo_id: str, examen_id: str, motivo: str
+    ) -> None:
+        self._agregar(hecho_ilegible(hoja_id, trabajo_id, examen_id, motivo), None, None)
+
+    def hechos_del_examen(self, examen_id: str) -> list[dict[str, Any]]:
+        with _conexion(_con_esquema(self.url)) as conexion:
+            filas = conexion.execute(
+                "SELECT documento FROM resultados_de_lectura WHERE examen_id = %s ORDER BY id",
+                (examen_id,),
+            ).fetchall()
+        return [documento for (documento,) in filas]
+
+    def _agregar(
+        self, hecho: dict[str, Any], nota_en_decimas: int | None, provisional: bool | None
+    ) -> None:
+        with _conexion(_con_esquema(self.url)) as conexion:
+            conexion.execute(
+                "INSERT INTO resultados_de_lectura"
+                " (hecho, hoja_id, trabajo_id, examen_id, estado, nota_en_decimas, provisional,"
+                "  documento)"
+                " VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                (
+                    hecho["hecho"],
+                    hecho["hoja_id"],
+                    hecho["trabajo_id"],
+                    hecho["examen_id"],
+                    hecho["estado"],
+                    nota_en_decimas,
+                    provisional,
+                    Jsonb(hecho),
+                ),
+            )
+
+
+class RevisionesEnPostgres:
+    """`RegistroDeRevisiones` y `LectorDeRevisiones` sobre la tabla `revisiones_del_profesor`.
+    Solo la API escribe; cambiar de opinión es otra fila, y la última manda."""
+
+    def __init__(self, url: str) -> None:
+        self.url = url
+
+    def registrar_resoluciones(
+        self, hoja_id: str, examen_id: str, resoluciones: Iterable[ResolucionDelProfesor]
+    ) -> None:
+        hecho = hecho_de_resoluciones(hoja_id, examen_id, resoluciones)
+        with _conexion(_con_esquema(self.url)) as conexion:
+            conexion.execute(
+                "INSERT INTO revisiones_del_profesor (hoja_id, examen_id, documento)"
+                " VALUES (%s, %s, %s)",
+                (hoja_id, examen_id, Jsonb(hecho)),
+            )
+
+    def resoluciones_del_examen(
+        self, examen_id: str
+    ) -> dict[str, tuple[ResolucionDelProfesor, ...]]:
+        with _conexion(_con_esquema(self.url)) as conexion:
+            filas = conexion.execute(
+                "SELECT hoja_id, documento FROM revisiones_del_profesor"
+                " WHERE examen_id = %s ORDER BY id",
+                (examen_id,),
+            ).fetchall()
+        por_hoja: dict[str, list[ResolucionDelProfesor]] = {}
+        for hoja_id, documento in filas:
+            por_hoja.setdefault(hoja_id, []).extend(
+                resolucion_desde(datos) for datos in documento["resoluciones"]
+            )
+        return {hoja_id: tuple(lista) for hoja_id, lista in por_hoja.items()}

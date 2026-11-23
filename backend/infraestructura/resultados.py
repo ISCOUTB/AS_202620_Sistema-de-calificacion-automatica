@@ -59,6 +59,8 @@ __all__ = [
     "CLAVE_MAL_ESCRITA",
     "estado_tras_la_lectura",
     "calificacion_del_hecho",
+    "hecho_de_lectura",
+    "hecho_ilegible",
 ]
 
 # Dónde está el registro si no lo dice `RUTA_RESULTADOS`.
@@ -105,6 +107,46 @@ def estado_tras_la_lectura(calificacion: CalificacionDeHoja | None) -> str:
     if calificacion is None:
         return SIN_CLAVE_HABILITADA
     return EN_REVISION if calificacion.provisional else CALIFICADA
+
+
+def hecho_de_lectura(
+    hoja_id: str,
+    trabajo_id: str,
+    examen_id: str,
+    lectura: LecturaDeHoja,
+    calificacion: CalificacionDeHoja | None,
+    motivo_sin_nota: str | None = None,
+    recortes: Mapping[int, str] | None = None,
+) -> dict[str, Any]:
+    """El hecho `leida` tal como lo guarda cualquier adaptador: en disco es una línea, y en
+    Postgres, una fila con este mismo documento. Así los dos devuelven lo mismo al leer."""
+    if (calificacion is None) == (motivo_sin_nota is None):
+        raise ValueError("Una hoja leída lleva calificación o motivo para no tenerla, no ambos")
+    return {
+        "hecho": "leida",
+        "hoja_id": hoja_id,
+        "trabajo_id": trabajo_id,
+        "examen_id": examen_id,
+        "estado": estado_tras_la_lectura(calificacion),
+        "motivo_sin_nota": motivo_sin_nota,
+        "lectura": asdict(lectura),
+        "calificacion": None if calificacion is None else asdict(calificacion),
+        "recortes": {str(numero): ref for numero, ref in (recortes or {}).items()},
+        "momento": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+def hecho_ilegible(hoja_id: str, trabajo_id: str, examen_id: str, motivo: str) -> dict[str, Any]:
+    """El hecho `ilegible`, igual para todos los adaptadores."""
+    return {
+        "hecho": "ilegible",
+        "hoja_id": hoja_id,
+        "trabajo_id": trabajo_id,
+        "examen_id": examen_id,
+        "estado": ILEGIBLE,
+        "motivo": motivo,
+        "momento": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 class RegistroDeResultados(Protocol):
@@ -162,37 +204,16 @@ class ResultadosEnDisco:
         motivo_sin_nota: str | None = None,
         recortes: Mapping[int, str] | None = None,
     ) -> None:
-        if (calificacion is None) == (motivo_sin_nota is None):
-            raise ValueError("Una hoja leída lleva calificación o motivo para no tenerla, no ambos")
         self._agregar(
-            {
-                "hecho": "leida",
-                "hoja_id": hoja_id,
-                "trabajo_id": trabajo_id,
-                "examen_id": examen_id,
-                "estado": estado_tras_la_lectura(calificacion),
-                "motivo_sin_nota": motivo_sin_nota,
-                "lectura": asdict(lectura),
-                "calificacion": None if calificacion is None else asdict(calificacion),
-                "recortes": {str(numero): ref for numero, ref in (recortes or {}).items()},
-                "momento": datetime.now(timezone.utc).isoformat(),
-            }
+            hecho_de_lectura(
+                hoja_id, trabajo_id, examen_id, lectura, calificacion, motivo_sin_nota, recortes
+            )
         )
 
     def registrar_lectura_imposible(
         self, hoja_id: str, trabajo_id: str, examen_id: str, motivo: str
     ) -> None:
-        self._agregar(
-            {
-                "hecho": "ilegible",
-                "hoja_id": hoja_id,
-                "trabajo_id": trabajo_id,
-                "examen_id": examen_id,
-                "estado": ILEGIBLE,
-                "motivo": motivo,
-                "momento": datetime.now(timezone.utc).isoformat(),
-            }
-        )
+        self._agregar(hecho_ilegible(hoja_id, trabajo_id, examen_id, motivo))
 
     def hechos_del_examen(self, examen_id: str) -> list[dict[str, Any]]:
         """Recorre el archivo línea por línea y solo decodifica las que nombran al examen.
