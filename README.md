@@ -26,15 +26,15 @@ Detalle en [Entorno desplegado, en detalle](#entorno-desplegado-en-detalle).
 
 ## Evidencia del final
 
-- **Base de datos (ADR-0027):** la bitácora, los resultados y las revisiones en Postgres, detrás de
-  los mismos puertos; lo que había en archivos pasa a la base sin cambios
-  (`docs/evidencia/base-de-datos.md`).
-- **Inicio de sesión (ADR-0025):** correo y contraseña de una lista cifrada en el servidor; sin
-  sesión, las rutas de datos responden 401.
-- **Clave desde la aplicación (ADR-0026):** se registra y se habilita en Pauta a nombre del
-  docente, y no cambia después de la primera nota.
+- **Exámenes por docente (ADR-0028):** cada examen tiene dueño y el de otro docente responde 404;
+  el Panel da sus cifras reales (`docs/evidencia/examenes-por-docente.md`).
+- **Base de datos (ADR-0027):** bitácora, resultados y revisiones en Postgres, detrás de los mismos
+  puertos (`docs/evidencia/base-de-datos.md`).
+- **Inicio de sesión (ADR-0025):** correo y contraseña de una lista cifrada; sin sesión, 401.
+- **Clave desde la aplicación (ADR-0026):** se registra y se habilita en Pauta, y no cambia después
+  de la primera nota.
 - **Revisión con la opción ya elegida (ADR-0024):** la única marca con 40 o más de confianza llega
-  elegida; en las fotos, 25 de 28 bien y 0 equivocadas, y 0 en 1 163 preguntas sintéticas.
+  elegida; en las fotos, 25 de 28 bien y 0 equivocadas.
 
 ## Lectura y calificación de las hojas (A-02, A-03)
 
@@ -60,7 +60,7 @@ La documentación vive en `docs/`. Esta tabla dice dónde está cada cosa.
 
 | Qué | Dónde |
 |---|---|
-| La arquitectura completa | [arc42](docs/arc42/arc42-template-ES.md) · [C4, Niveles 1 a 3](docs/c4/doc-c4.md) · [27 ADR](docs/adr/) |
+| La arquitectura completa | [arc42](docs/arc42/arc42-template-ES.md) · [C4, Niveles 1 a 3](docs/c4/doc-c4.md) · [28 ADR](docs/adr/) |
 | Los aspectos y su trazabilidad | [`docs/aspectos.md`](docs/aspectos.md#tabla-de-trazabilidad) |
 | La lectura y la calificación: EC-01 a EC-04 | [`medicion-lectura-omr.md`](docs/evidencia/medicion-lectura-omr.md) · [`medicion-s14.md`](docs/evidencia/medicion-s14.md), tres repeticiones |
 | La preselección en la revisión | [`preseleccion-omr.md`](docs/evidencia/preseleccion-omr.md) |
@@ -70,6 +70,7 @@ La documentación vive en `docs/`. Esta tabla dice dónde está cada cosa.
 | Los modos de fallo y la cola | [`modos-de-fallo.md`](docs/evidencia/modos-de-fallo.md) · [`taller-mensajeria.md`](docs/evidencia/taller-mensajeria.md) |
 | La consistencia de los datos y la caché | [`consistencia-y-cache.md`](docs/evidencia/consistencia-y-cache.md) |
 | La base de datos | [`base-de-datos.md`](docs/evidencia/base-de-datos.md) |
+| Los exámenes por docente y el Panel | [`examenes-por-docente.md`](docs/evidencia/examenes-por-docente.md) |
 | Las amenazas, las dependencias y la privacidad | [`modelo-de-amenazas.md`](docs/evidencia/modelo-de-amenazas.md) |
 | El despliegue y su costo | [`despliegue-iscoutb.md`](docs/evidencia/despliegue-iscoutb.md) · [`costo-mensual.md`](docs/despliegue/costo-mensual.md) |
 | El contrato de la API y su prueba | [`openapi.json`](docs/contrato/openapi.json) · [`test_contrato.py`](backend/tests/test_contrato.py) · [la prueba que falla](docs/evidencia/prueba-de-contrato-falla.md) |
@@ -366,7 +367,7 @@ se omite.
 Diez son la **prueba de contrato** ([`backend/tests/test_contrato.py`](backend/tests/test_contrato.py)),
 y verifican que el documento de `docs/contrato/openapi.json` y la API que corre no se puedan
 separar: que el archivo versionado sea exactamente el que genera la aplicación de hoy, que su
-número de versión sea el declarado en el código, que sigan estando las doce rutas (y que la de
+número de versión sea el declarado en el código, que sigan estando las trece rutas (y que la de
 distractores publique su 503 y su 429), que la
 respuesta de carga exija sus cuatro campos, que los estados publicados sean los dos del dominio,
 que la revisión no publique la respuesta correcta,
@@ -420,8 +421,10 @@ la lista de exámenes, las notas junto a cada archivo y la pantalla de revisión
   la API; con el límite por minuto hay cuenta regresiva, y con el diario no se ofrece repetir y el
   botón de pedir vuelve cuando pasa la espera. Diez de ellas prueban el servicio contra un
   `MockClient`, código por código, y una, que «Pedir otras propuestas» manda `otras: true`.
-- **Panel (11):** avisa que usa datos de ejemplo y no se desborda a 390 px; no ofrece acciones de
-  IA fuera del alcance, y su porcentaje de aprobación no divide por cero.
+- **Panel (19):** abre el examen más reciente del docente y pide sus cifras; las métricas, la barra
+  de marcas, la distribución de notas con la campana y los aciertos por pregunta salen de la API;
+  elegir otro examen o actualizar vuelve a pedirlas; sin exámenes, sin servidor o si las cifras no
+  llegan, lo dice sin inventar cifras; y no se desborda a 390 ni a 1280 px.
 - **Revisión:** tenía 11 pruebas con datos de ejemplo. Desde RF-08 usa datos reales, y sus
   pruebas verifican que abre primero la hoja con preguntas por revisar, que guarda lo que elige el
   docente con su nombre y recalcula, que una pregunta ya resuelta se puede cambiar, que avisa si el
@@ -535,15 +538,21 @@ El desarrollo sigue Aspect Driven Development (ADD): cada funcionalidad se decla
 | [0021](docs/adr/0021-desplegar-en-el-servidor-del-laboratorio-con-el-sitio-compilado-en-el-ci.md) | Desplegar en el servidor del laboratorio, con el sitio compilado en el CI | aceptado |
 | [0022](docs/adr/0022-poner-un-presupuesto-de-carga-delante-del-almacen.md) | Poner un presupuesto de carga delante del almacén | aceptado |
 | [0023](docs/adr/0023-leer-las-hojas-en-posiciones-fijas-y-mandar-a-revision-lo-que-no-se-ve-bien.md) | Leer las hojas en posiciones fijas y mandar a revisión lo que no se ve bien | aceptado |
+| [0024](docs/adr/0024-preseleccionar-en-la-revision-la-unica-intencion.md) | Preseleccionar en la revisión la única intención | aceptado |
+| [0025](docs/adr/0025-identificar-al-docente-con-una-sesion-firmada-y-una-lista-de-cuentas.md) | Identificar al docente con una sesión firmada y una lista de cuentas | aceptado |
+| [0026](docs/adr/0026-registrar-y-habilitar-la-clave-desde-la-aplicacion.md) | Registrar y habilitar la clave desde la aplicación | aceptado |
+| [0027](docs/adr/0027-guardar-los-registros-en-postgres-detras-de-los-mismos-puertos.md) | Guardar los registros en Postgres detrás de los mismos puertos | aceptado |
+| [0028](docs/adr/0028-dar-a-cada-examen-un-dueno-y-un-identificador-distinto-de-su-nombre.md) | Dar a cada examen un dueño y un identificador distinto de su nombre | aceptado |
 
 Las decisiones de un ADR aceptado no se editan ni se borran: si una decisión cambia, se escribe uno nuevo y el anterior pasa a estado *reemplazado por*. Los ajustes menores que no son de arquitectura, como un enlace roto, se permiten dejando constancia ([ADR-0014](docs/adr/0014-dejar-constancia-del-ajuste-de-enlaces-en-adr-0007.md)).
 
 ## Estado al cierre
 
 - [x] Aspectos A-01 (carga de examen), A-02 (lectura de las hojas), A-03 (calificación, salvo las
-  estadísticas del Panel), A-04 (la clave desde la aplicación) y A-06 (distractores diagnósticos)
-  construidos de punta a punta; A-05, en parte: la entrada con sesión, sin los cursos
-- [x] Documentación completa: arc42 (las doce secciones), C4 Niveles 1, 2 y 3, y ADR 0001 a 0027
+  estadísticas por curso), A-04 (la clave desde la aplicación) y A-06 (distractores diagnósticos)
+  construidos de punta a punta; A-05, en parte: la entrada con sesión y cada examen con su dueño,
+  sin los cursos
+- [x] Documentación completa: arc42 (las doce secciones), C4 Niveles 1, 2 y 3, y ADR 0001 a 0028
 - [x] Escenarios de calidad: EC-01 a EC-04 medidos tres veces sobre hojas sintéticas, y EC-07 a
   EC-09 medidos
 - [x] Monolito modular con cola y worker (ADR-0002): acuse, reintentos y lista de fallidos
@@ -552,12 +561,13 @@ Las decisiones de un ADR aceptado no se editan ni se borran: si una decisión ca
   única marca (ADR-0024)
 - [x] Inicio de sesión (ADR-0025) y la clave registrada y habilitada en la aplicación (ADR-0026)
 - [x] La bitácora, los resultados y las revisiones en Postgres (ADR-0027)
+- [x] Cada examen con su dueño y el Panel con las cifras reales del examen (ADR-0028)
 - [x] Distractores con un modelo de lenguaje, detrás de un puerto, con caché y presupuesto
   (ADR-0013, ADR-0015 y ADR-0019)
 - [x] Contrato de la API versionado y su prueba en el pipeline; análisis estático y de dependencias
 - [x] Despliegue en el servidor del laboratorio, con el sitio compilado en el CI (ADR-0021)
 - [ ] Los cursos y su aislamiento (EC-06): hasta entonces, solo hojas sintéticas (AM-02)
-- [ ] Las estadísticas del Panel con los resultados reales (RF-05) y el banco de preguntas (RF-06)
+- [ ] Las estadísticas por curso (RF-05) y el banco de preguntas (RF-06)
 - [ ] Calibrar el umbral con hojas escaneadas (R-01, R-04) y medir EC-03 y EC-04 en el servidor (R-37)
 - [ ] Detectar una hoja subida dos veces (R-24) y la retención de las imágenes (RNF-14)
 
@@ -567,7 +577,7 @@ Las decisiones de un ADR aceptado no se editan ni se borran: si una decisión ca
 docs/
 ├── arc42/
 │   └── arc42-template-ES.md                            # documento de arquitectura (arc42)
-├── adr/                                                # 0001 a 0027; el 0001, reemplazado por el 0002, y del 0009 al 0012, por el 0021
+├── adr/                                                # 0001 a 0028; el 0001, reemplazado por el 0002, y del 0009 al 0012, por el 0021
 ├── c4/
 │   └── doc-c4.md                                       # modelo C4 (Niveles 1, 2 y 3)
 ├── contrato/

@@ -294,3 +294,20 @@ Lo que [ADR-0025](../adr/0025-identificar-al-docente-con-una-sesion-firmada-y-un
 
 **Por qué AM-02 no se cierra del todo.** La sesión dice quién es el docente, no qué cursos son
 suyos, y el sistema todavía no tiene cursos (A-04). Por eso la condición sigue: ninguna hoja real.
+
+## 10. Actualización: cada examen con su dueño (2026-11-23)
+
+Lo que [ADR-0028](../adr/0028-dar-a-cada-examen-un-dueno-y-un-identificador-distinto-de-su-nombre.md) cambió en el Nivel 2 del C4:
+
+- **Cada examen tiene un dueño**, en un registro nuevo (la tabla `examenes`), y toda ruta de un
+  examen responde 404 al docente que no lo es, con el mismo mensaje que para un examen que no existe.
+- **El identificador lo acuña el sistema** (`000001`), distinto del nombre que escribe el docente.
+- **El panel publica las cifras de un examen,** sin códigos de estudiante ni nombres de archivo.
+
+| ID | STRIDE | Elemento del C4 | Amenaza | P | I | Prioridad | Mitigación | Dueño | Estado |
+|---|---|---|---|---|---|---|---|---|---|
+| **AM-02**, reducida otra vez | Suplantación, manipulación y divulgación | Relación 1 | Lo que queda: sin cursos no hay roles ni aislamiento por curso | Baja | Medio | **2** | Un docente solo ve, carga, califica y revisa sus exámenes; `test_aislamiento_entre_docentes.py` recorre cada ruta con el dueño y con otro docente, y sin la comprobación fallan 10 | Equipo, con A-04 y EC-06 | **Aceptada** con la misma condición: ninguna hoja real antes de los cursos |
+| **AM-22** | Divulgación | Aplicación web: la adopción de los exámenes anteriores | Un examen anterior sin rastro de quién habilitó su clave queda a nombre de otro docente | Baja | Medio | **2** | Va primero a quien habilitó la clave; si no, al correo de `DOCENTE_DE_LOS_EXAMENES_ANTERIORES`, que tiene que estar en `DOCENTES`; el evento `examenes_adoptados` queda en el registro | Sebastián | **Aceptada**: hoy solo hay exámenes de prueba, y se corrige cambiando la fila en la tabla |
+
+**Enumerar exámenes ajenos** no se agrega como amenaza: uno ajeno y uno inexistente responden lo
+mismo, y la lista solo trae los del docente.

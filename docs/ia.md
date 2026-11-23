@@ -6,7 +6,7 @@ Este documento registra el uso de herramientas de IA durante el desarrollo del p
 
 Este registro documenta IA como herramienta de construcción (apoyo para redactar, diseñar y documentar). El modelo de lenguaje que el sistema usa para proponer distractores diagnósticos (RF-11, función opcional que no interviene en la calificación) es IA como componente del sistema: se documenta en el aspecto A-06 y en su evaluación (`docs/evidencia/evaluacion-distractores.md`), no aquí.
 
-**La entrada más reciente es la [25](#entrada-25), la base de datos** (2026-11-22): la bitácora, los resultados y las revisiones en Postgres detrás de los mismos puertos ([ADR-0027](adr/0027-guardar-los-registros-en-postgres-detras-de-los-mismos-puertos.md)), con la migración de los archivos y el quinto contenedor del servidor, construidos con Claude en dos sesiones. **Lo rechazado, con su motivo técnico:** un esquema relacional completo con ORM, porque reescribía la serialización y obligaba a migraciones; y un MCP, porque la aplicación ya habla con Postgres. **Lo corregido al ejecutar:** el cambio se había preparado sobre la versión anterior al inicio de sesión, y numeraba ADR-0025 y la entrada 24, que ya existían; y la prueba con el compose del servidor mostró que una conexión por operación dejaba 55 de 200 hojas pendientes de encolar, así que las conexiones se reusan. **Lo aceptado:** ADR-0027, la base solo con `DATABASE_URL` y los archivos como reversión.
+**La entrada más reciente es la [26](#entrada-26), los exámenes por docente y el Panel** (2026-11-23): cada examen con su dueño y un identificador que acuña el sistema, y el Panel con las cifras reales del examen ([ADR-0028](adr/0028-dar-a-cada-examen-un-dueno-y-un-identificador-distinto-de-su-nombre.md)), construidos con Claude en dos sesiones. **Lo rechazado, con su motivo técnico:** una columna `docente` en las tres tablas, porque obligaba a migrar filas y a tocar al worker; y prefijar el identificador con el correo, que viajaría en las rutas, la cola y el almacén. **Lo corregido al ejecutar:** el sitio se había escrito sin correr Flutter, y al correrlo fallaron dos pruebas, una por un desborde real del Panel a 390 px; `mypy` dio 12 errores de tipos. **Lo aceptado:** ADR-0028, el mismo 404 para un examen ajeno y uno inexistente, y la adopción de los exámenes anteriores por quien habilitó su clave.
 
 **La entrada [21](#entrada-21) es la de la lectura de las hojas y su calificación** (2026-11-02 a 2026-11-06): A-02 y A-03 con la revisión manual de las preguntas dudosas (RF-08), el prototipo de R-05, las mediciones de EC-01 a EC-04 y ADR-0023, construidos con Claude. **Lo rechazado, con su motivo técnico:** detectar los círculos y ordenarlos, como traía el prompt de partida, porque uno que no se detecta corre a todos los siguientes sin aviso; un umbral para toda la hoja, porque con la sombra de una foto las burbujas vacías salían llenas; la burbuja más llena como respuesta, porque elige entre candidatas (RF-03); la hoja A4, porque impresa en carta pierde las marcas de abajo; el resultado en la bitácora, porque tendría dos escritores; y mostrar la respuesta correcta en la revisión, porque las rutas son públicas. **Lo corregido al ejecutar:** el brillo del grafito se detectaba contando puntos claros, que se perdían con un poco de desenfoque; la resolución mínima subió de 3,5 a 7,5 px/mm; y al documentar, un PNG de 120 KB mataba al worker por memoria en cada reinicio (AM-16), y se cerró con un tope por encabezado y con que la muerte del worker cuente como un intento. **Lo aceptado:** ADR-0023, aceptado por el equipo el 6-nov, las fotos preparadas en el navegador, las notas sin el código del estudiante y RF-08 antes de A-05, solo con hojas sintéticas (AM-02).
 
@@ -699,3 +699,27 @@ Fecha, actividad realizada, herramienta utilizada, respuesta obtenida (resumen),
 - **Justificación:** dos lecciones.
   - **Los puertos de la S2 cumplieron:** agregar la base fue escribir adaptadores, no rehacer el sistema.
   - **Una prueba sin los límites del servidor no dice cómo se comporta en el servidor.** Las pruebas del adaptador pasaban; lo que fallaba era el tiempo, y solo se vio con la CPU del despliegue.
+
+### Entrada 26
+
+- **Fecha:** 2026-11-23
+- **Actividad realizada:** que cada examen tenga dueño y que el Panel muestre los datos reales. Con la base en el servidor se vio que, al entrar con la cuenta de un profesor, aparecían los exámenes, las claves y los resultados de otro.
+- **Herramienta utilizada:** Claude (Anthropic) en dos sesiones. Una, con Susana, escribió el cambio sin poder correr Flutter. La otra, Claude Code en el computador de Sebastián, lo revisó y lo probó con Flutter, `mypy` y el compose del servidor.
+- **Prompt utilizado (resumen):** que un docente no vea lo de otro, que dos docentes puedan usar el mismo nombre de examen y que el Panel muestre los datos reales; después, revisar y probar todo antes de repartir los commits.
+- **Respuesta obtenida (resumen):**
+  - Un registro de exámenes aparte, con dueño, nombre e identificador propio, para que el worker, la cola y las tablas que ya tenían datos no cambiaran.
+  - El mismo 404 para un examen ajeno y uno inexistente, la adopción de los exámenes anteriores, `dashboard/panel.py` con su ruta, la pantalla del Panel con sus gráficos y ADR-0028.
+  - La prueba con el compose del servidor: con el código anterior, un docente leía los resultados del otro; con el cambio, sobre la misma base, 39 de 39 comprobaciones ([evidencia](evidencia/examenes-por-docente.md)).
+- **Quién hizo qué con lo generado:** Susana revisó y subió el servidor, sus pruebas y el contrato, y después el ADR, la evidencia y los documentos; Sebastián, el sitio. Cada uno leyó su parte antes de hacer su commit.
+- **Qué se aceptó:**
+  - **Un registro aparte en vez de tocar las tablas existentes:** el dueño se deduce del examen.
+  - **Un identificador que acuña el sistema,** distinto del nombre, para que dos docentes no compartan un examen por llamarlo igual.
+  - **La adopción por quien habilitó la clave,** que ADR-0026 ya guardaba con el correo de la sesión.
+- **Qué se rechazó y se corrigió:**
+  - **Una columna `docente` en las tres tablas:** obligaba a migrar filas con datos y a tocar al worker.
+  - **Prefijar el identificador con el correo:** el correo viajaría en las rutas, en la cola y en las carpetas del almacén.
+  - **Lo que solo se vio al ejecutar:** dos pruebas nuevas del sitio fallaban. Una comparaba registros de Dart con una lista adentro; la otra encontró que las tres leyendas del Panel se desbordaban a 390 px. `mypy` dio 12 errores de tipos, y las descripciones nuevas del contrato estaban sin tildes.
+  - **Una cifra del paquete:** decía que sin la comprobación del dueño fallaban 12 pruebas; al quitarla fallan 10.
+- **Justificación:** dos lecciones.
+  - **Lo que no se ejecutó no está probado:** el sitio se había revisado con un analizador de sintaxis, y los dos fallos solo aparecieron al correr las pruebas.
+  - **Los puertos volvieron a cumplir:** el dueño se agregó con un registro nuevo detrás de un puerto, sin tocar al worker ni a las tablas que ya tenían datos.
