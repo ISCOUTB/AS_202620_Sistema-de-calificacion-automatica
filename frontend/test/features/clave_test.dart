@@ -40,7 +40,9 @@ class _Claves {
 }
 
 Future<void> _montar(WidgetTester tester, _Claves claves,
-    {VoidCallback? alCambiar, Size tamano = const Size(1280, 2400)}) async {
+    {VoidCallback? alCambiar,
+    Future<List<ExamenConClave>> Function()? listar,
+    Size tamano = const Size(1280, 2400)}) async {
   tester.view.physicalSize = tamano;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -49,7 +51,8 @@ Future<void> _montar(WidgetTester tester, _Claves claves,
     home: Scaffold(
       body: SingleChildScrollView(
         child: TarjetaClaveDelExamen(
-          listarExamenes: () async => const [ExamenConClave(examenId: 'QUIZ-1', habilitada: true)],
+          listarExamenes:
+              listar ?? () async => const [ExamenConClave(examenId: 'QUIZ-1', habilitada: true)],
           consultarClave: claves.consultar,
           guardarClave: claves.guardar,
           habilitarClave: claves.habilitar,
@@ -177,6 +180,23 @@ void main() {
     expect(cambios, 1);
     final habilitar = tester.widget<OutlinedButton>(find.widgetWithText(OutlinedButton, 'Habilitar'));
     expect(habilitar.onPressed, isNotNull);
+  });
+
+  testWidgets('Guardar agrega el examen a «Con clave:» sin recargar la página', (tester) async {
+    final claves = _Claves();
+    await _montar(tester, claves, listar: () async => [
+          for (final clave in claves.guardadas.values)
+            ExamenConClave(examenId: clave.examenId, habilitada: clave.habilitadaPor != null),
+        ]);
+    await _escribirExamen(tester, 'NUEVO-1');
+    await _pegar(tester, 'ABC');
+    await tester.tap(find.text('Llenar la cuadrícula'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(ActionChip, 'NUEVO-1'), findsNothing);
+
+    await _tocar(tester, find.text('Guardar clave'));
+
+    expect(find.widgetWithText(ActionChip, 'NUEVO-1'), findsOneWidget);
   });
 
   testWidgets('Habilitar pide confirmación y queda a nombre del docente', (tester) async {

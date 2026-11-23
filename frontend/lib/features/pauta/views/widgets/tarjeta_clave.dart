@@ -77,6 +77,12 @@ class _TarjetaClaveDelExamenState extends State<TarjetaClaveDelExamen> {
     super.initState();
     _examen.addListener(_alCambiarElExamen);
     _numero.addListener(() => setState(() {}));
+    _pedirExamenes();
+  }
+
+  /// La lista de «Con clave:». Se vuelve a pedir después de guardar o habilitar, para que el examen
+  /// recién guardado aparezca sin recargar la página.
+  void _pedirExamenes() {
     widget.listarExamenes?.call().then((lista) {
       if (mounted) setState(() => _examenes = lista);
     }, onError: (_) {});
@@ -191,6 +197,7 @@ class _TarjetaClaveDelExamenState extends State<TarjetaClaveDelExamen> {
       if (!mounted) return;
       setState(() => _guardada = guardada);
       _avisar('Clave guardada. Habilítela para calificar con ella.');
+      _pedirExamenes();
       widget.alCambiar?.call();
     } on ExcepcionDeClave catch (error) {
       if (mounted) _avisar(error.mensaje);
@@ -228,6 +235,7 @@ class _TarjetaClaveDelExamenState extends State<TarjetaClaveDelExamen> {
       if (!mounted) return;
       setState(() => _guardada = habilitada);
       _avisar('Clave habilitada.');
+      _pedirExamenes();
       widget.alCambiar?.call();
     } on ExcepcionDeClave catch (error) {
       if (mounted) _avisar(error.mensaje);
